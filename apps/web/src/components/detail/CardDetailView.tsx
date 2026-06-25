@@ -100,7 +100,12 @@ export function CardDetailView({
         {/* columna imagen */}
         <div>
           <div className="relative mx-auto w-full max-w-[400px] border border-line">
-            <CardArt name={item.card.name} tint={artTintFor(item)} size="lg" />
+            <CardArt
+              name={item.card.name}
+              tint={artTintFor(item)}
+              imageUrl={item.card.imageUrl}
+              size="lg"
+            />
             <ConditionBadge
               condition={item.condition}
               size="md"

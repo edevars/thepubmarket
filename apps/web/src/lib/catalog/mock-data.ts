@@ -3,9 +3,9 @@
  * tipados como `InventoryItem` del contrato real, para que el cableado a D1 en
  * una sesión futura sea cambio de FUENTE de datos, no de tipos.
  *
- * Precios en CENTAVOS MXN (entero). Las imágenes son null a propósito: el
- * `ProductCard` renderiza el placeholder geométrico del diseño (arte real llega
- * con la integración de Scryfall/R2).
+ * Precios en CENTAVOS MXN (entero). Las cartas MTG llevan URL de imagen real de
+ * Scryfall (ver `SCRYFALL_IMAGES`); las no-MTG quedan con `imageUrl: null` y
+ * conservan el placeholder geométrico (Scryfall es MTG-only).
  */
 import {
   ANCHOR_SELLER_ID,
@@ -32,6 +32,57 @@ interface Spec {
   artist: string
 }
 
+/**
+ * URLs de imagen de Scryfall por id de mock (solo MTG; Scryfall es MTG-only).
+ * Las 4 cartas no-MTG (Charizard, Blue-Eyes, Luffy, Elsa) no tienen entrada y
+ * conservan el placeholder geométrico.
+ */
+const SCRYFALL_IMAGES: Record<string, string> = {
+  'sol-ring':
+    'https://cards.scryfall.io/normal/front/4/6/46ca0b66-a000-4483-b916-f5b89e710244.jpg?1689999818',
+  ragavan:
+    'https://cards.scryfall.io/normal/front/a/9/a9738cda-adb1-47fb-9f4c-ecd930228c4d.jpg?1782182183',
+  counterspell:
+    'https://cards.scryfall.io/normal/front/4/f/4f616706-ec97-4923-bb1e-11a69fbaa1f8.jpg?1751282477',
+  bolt: 'https://cards.scryfall.io/normal/front/f/2/f29ba16f-c8fb-42fe-aabf-87089cb214a7.jpg?1673147852',
+  llanowar:
+    'https://cards.scryfall.io/normal/front/5/8/581b7327-3215-4a4f-b4ae-d9d4002ba882.jpg?1562736014',
+  sheoldred:
+    'https://cards.scryfall.io/normal/front/d/6/d67be074-cdd4-41d9-ac89-0a0456c4e4b2.jpg?1674057568',
+  brainstorm:
+    'https://cards.scryfall.io/normal/front/3/e/3e4e6787-af32-44f2-ac56-6f348254aa6d.jpg?1580013886',
+  teferi:
+    'https://cards.scryfall.io/normal/front/5/d/5d10b752-d9cb-419d-a5c4-d4ee1acb655e.jpg?1562736365',
+  'fatal-push':
+    'https://cards.scryfall.io/normal/front/b/5/b5e81649-9954-424c-89d1-f87d73b66047.jpg?1595869185',
+  thoughtseize:
+    'https://cards.scryfall.io/normal/front/b/2/b281a308-ab6b-47b6-bec7-632c9aaecede.jpg?1599706001',
+  snapcaster:
+    'https://cards.scryfall.io/normal/front/4/c/4cbdacc1-7a1b-4633-85f5-eb50c2bf406d.jpg?1593813139',
+  birds:
+    'https://cards.scryfall.io/normal/front/3/0/307d4236-1e54-43e3-83f1-063d49d16dda.jpg?1562637721',
+  'wrenn-six':
+    'https://cards.scryfall.io/normal/front/4/a/4a706ecf-3277-40e3-871c-4ba4ead16e20.jpg?1582053605',
+  'force-of-will':
+    'https://cards.scryfall.io/normal/front/e/b/ebc01ab4-d89a-4d25-bf54-6aed33772f4b.jpg?1580013954',
+  'mana-crypt':
+    'https://cards.scryfall.io/normal/front/4/d/4d960186-4559-4af0-bd22-63baa15f8939.jpg?1727298349',
+  swords:
+    'https://cards.scryfall.io/normal/front/c/c/cc9ece2f-7eda-4fc5-a562-3e16e71560e9.jpg?1623592209',
+  'demonic-tutor':
+    'https://cards.scryfall.io/normal/front/3/0/3009ba46-c9f8-46dc-8ffc-2aa4cef7b17c.jpg?1623779988',
+  'cyclonic-rift':
+    'https://cards.scryfall.io/normal/front/2/0/205c4689-8b02-4d40-9274-3c1fcafa8b82.jpg?1562783580',
+  'path-to-exile':
+    'https://cards.scryfall.io/normal/front/9/5/95ca89ea-1200-4bb4-ae4b-af35d3ccd35b.jpg?1781014043',
+  atraxa:
+    'https://cards.scryfall.io/normal/front/d/0/d0d33d52-3d28-4635-b985-51e126289259.jpg?1599707796',
+  dockside:
+    'https://cards.scryfall.io/normal/front/9/e/9e2e3efb-75cb-430f-b9f4-cb58f3aeb91b.jpg?1727093692',
+  'mother-of-runes':
+    'https://cards.scryfall.io/normal/front/a/5/a5e19147-e459-43a6-8ef0-e37968a462e3.jpg?1674141175',
+}
+
 function listing(s: Spec): InventoryItem {
   return {
     id: s.id,
@@ -48,7 +99,7 @@ function listing(s: Spec): InventoryItem {
       rarity: s.rarity,
       artist: s.artist,
       finishes: s.foil ? ['nonfoil', 'foil'] : ['nonfoil'],
-      imageUrl: null,
+      imageUrl: SCRYFALL_IMAGES[s.id] ?? null,
     },
     condition: s.cond,
     language: s.lang,

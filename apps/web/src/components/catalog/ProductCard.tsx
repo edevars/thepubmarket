@@ -26,7 +26,7 @@ export function ProductCard({ item }: ProductCardProps) {
       className="clip-card group relative flex flex-col border border-line bg-panel transition duration-150 hover:-translate-y-1 hover:border-primary hover:shadow-[0_12px_34px_rgba(0,0,0,0.55),0_0_22px_rgba(59,123,255,0.26)]"
     >
       <div className="relative">
-        <CardArt name={item.card.name} tint={artTintFor(item)} />
+        <CardArt name={item.card.name} tint={artTintFor(item)} imageUrl={item.card.imageUrl} />
 
         <ConditionBadge
           condition={item.condition}
