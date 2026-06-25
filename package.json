@@ -15,7 +15,8 @@
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
     "format": "biome format --write .",
-    "deploy": "turbo run deploy"
+    "deploy": "turbo run deploy",
+    "inventory:load:local": "node scripts/load-inventory.mjs"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.0",

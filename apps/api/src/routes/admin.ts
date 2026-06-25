@@ -95,6 +95,7 @@ admin.post('/inventory', async (c) => {
       collectorNumber: card.collectorNumber,
       cardLang: input.language,
       rarity: card.rarity,
+      artist: card.artist,
       finish: input.finish as 'nonfoil' | 'foil',
       condition: input.condition,
       priceCents: input.priceCents,

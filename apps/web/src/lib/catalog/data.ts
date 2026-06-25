@@ -1,13 +1,22 @@
 /**
- * Frontera de acceso a datos del catálogo. HOY devuelve mocks; en una sesión
- * futura estas mismas funciones llamarán a `apps/api` (GET /catalog). El resto
- * de la app NO debe importar `mock-data` directamente: solo este módulo.
+ * Frontera de acceso a datos del catálogo. Llama a la API real del Worker
+ * (`apps/api`, GET /catalog) vía `lib/api.ts`. El resto de la app consume SOLO
+ * este módulo; nadie importa el cliente HTTP ni los mocks directamente.
  *
- * Las firmas son `async` a propósito para que el cambio a la API real no toque
- * a los consumidores.
+ * Filtrado: en Fase 1 (un solo seller, catálogo pequeño) traemos el inventario
+ * activo en una página y filtramos en cliente con `applyFilters`. La paginación
+ * real / búsqueda externa llegan cuando el catálogo crezca (Fase 5).
+ *
+ * Fallback offline: con `NEXT_PUBLIC_USE_MOCKS=true` se sirven los mocks de
+ * `mock-data.ts` (útil para desarrollar sin la API levantada).
  */
 import type { Condition, InventoryItem, Tcg } from '@thepubmarket/shared'
+import { fetchCatalog, fetchCatalogItem } from '@/lib/api'
 import { MOCK_LISTINGS } from './mock-data'
+
+/** Trae todo el inventario activo en una sola página (tope alto de la API). */
+const FETCH_LIMIT = 200
+const USE_MOCKS = process.env.NEXT_PUBLIC_USE_MOCKS === 'true'
 
 export interface CatalogFilters {
   /** Búsqueda por nombre (substring, case-insensitive). */
@@ -37,43 +46,43 @@ export function applyFilters(items: InventoryItem[], f: CatalogFilters): Invento
   })
 }
 
+/** Carga el inventario activo (API real o mocks según el toggle). */
+async function loadActive(): Promise<InventoryItem[]> {
+  if (USE_MOCKS) return MOCK_LISTINGS.filter((i) => i.status === 'active')
+  const { items } = await fetchCatalog({ limit: FETCH_LIMIT })
+  return items
+}
+
 /** Lista del catálogo. Sin filtros devuelve todo el inventario activo. */
 export async function getCatalog(filters: CatalogFilters = {}): Promise<InventoryItem[]> {
-  const active = MOCK_LISTINGS.filter((i) => i.status === 'active')
-  return applyFilters(active, filters)
+  return applyFilters(await loadActive(), filters)
 }
 
 /** Detalle de un item por id. Null si no existe / no está activo. */
 export async function getItem(id: string): Promise<InventoryItem | null> {
-  const item = MOCK_LISTINGS.find((i) => i.id === id && i.status === 'active')
-  return item ?? null
+  if (USE_MOCKS) return MOCK_LISTINGS.find((i) => i.id === id && i.status === 'active') ?? null
+  return fetchCatalogItem(id)
 }
 
-const FEATURED_IDS = ['ragavan', 'sheoldred', 'charizard', 'luffy', 'teferi']
-const NEW_ARRIVAL_IDS = ['sol-ring', 'counterspell', 'elsa', 'blueeyes', 'bolt']
-
-function pickByIds(items: InventoryItem[], ids: string[]): InventoryItem[] {
-  return ids
-    .map((id) => items.find((i) => i.id === id))
-    .filter((i): i is InventoryItem => i != null)
-}
-
-/** Destacados de la home. */
+/**
+ * Destacados de la home. En Fase 1 son slices del inventario real; la curación
+ * manual de destacados es un refinamiento posterior.
+ */
 export async function getFeatured(): Promise<InventoryItem[]> {
-  return pickByIds(await getCatalog(), FEATURED_IDS)
+  return (await getCatalog()).slice(0, 5)
 }
 
-/** Recién llegados de la home. */
+/** Recién llegados de la home (slice del inventario real). */
 export async function getNewArrivals(): Promise<InventoryItem[]> {
-  return pickByIds(await getCatalog(), NEW_ARRIVAL_IDS)
+  return (await getCatalog()).slice(5, 10)
 }
 
-/** Cartas en abanico del hero (3, con disponibilidad para evitar overlays). */
+/** Cartas en abanico del hero (3 del inventario real). */
 export async function getHeroCards(): Promise<InventoryItem[]> {
-  return pickByIds(await getCatalog(), ['teferi', 'ragavan', 'charizard'])
+  return (await getCatalog()).slice(0, 3)
 }
 
-/** Cartas relacionadas a un item (mismo juego), hasta `limit`. */
+/** Cartas relacionadas a un item (mismo juego primero), hasta `limit`. */
 export async function getRelated(item: InventoryItem, limit = 4): Promise<InventoryItem[]> {
   const all = await getCatalog()
   const sameGame = all.filter((i) => i.tcg === item.tcg && i.id !== item.id)

@@ -97,6 +97,7 @@ export const inventory = sqliteTable(
     collectorNumber: text('collector_number'),
     cardLang: text('card_lang'),
     rarity: text('rarity'),
+    artist: text('artist'),
     finish: text('finish', { enum: ['nonfoil', 'foil'] })
       .notNull()
       .default('nonfoil'),

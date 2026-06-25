@@ -13,7 +13,10 @@ import { rowToInventoryItem } from '../lib/inventory'
 import type { AppEnv } from '../types'
 
 const DEFAULT_LIMIT = 24
-const MAX_LIMIT = 60
+// Tope alto: en Fase 1 (un solo seller, catálogo pequeño) el frontend trae el
+// inventario activo en una página y filtra en cliente. La paginación real / un
+// servicio de búsqueda llegan cuando el catálogo crezca (Fase 5).
+const MAX_LIMIT = 200
 
 /** Parsea un entero de query param dentro de [min, max], con fallback. */
 function parseIntParam(

@@ -21,8 +21,7 @@ export function rowToInventoryItem(row: InventoryRow): InventoryItem {
       collectorNumber: row.collectorNumber ?? '',
       lang: row.cardLang ?? '',
       rarity: row.rarity ?? '',
-      // El esquema de inventory aún no guarda artista; se poblará al integrar Scryfall.
-      artist: null,
+      artist: row.artist,
       finishes: [],
       imageUrl: row.imageUrl,
     },

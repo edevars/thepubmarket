@@ -1,0 +1,164 @@
+[
+  {
+    "name": "Sol Ring",
+    "set": "cmm",
+    "condition": "NM",
+    "finish": "nonfoil",
+    "language": "en",
+    "priceCents": 38900,
+    "quantity": 6
+  },
+  {
+    "name": "Ragavan, Nimble Pilferer",
+    "set": "mh2",
+    "condition": "NM",
+    "finish": "foil",
+    "language": "en",
+    "priceCents": 245000,
+    "quantity": 2
+  },
+  {
+    "name": "Counterspell",
+    "set": "ema",
+    "condition": "LP",
+    "finish": "nonfoil",
+    "language": "en",
+    "priceCents": 9500,
+    "quantity": 14
+  },
+  {
+    "name": "Lightning Bolt",
+    "set": "2x2",
+    "condition": "NM",
+    "finish": "nonfoil",
+    "language": "en",
+    "priceCents": 12000,
+    "quantity": 20
+  },
+  {
+    "name": "Llanowar Elves",
+    "set": "dom",
+    "condition": "MP",
+    "finish": "nonfoil",
+    "language": "es",
+    "priceCents": 3500,
+    "quantity": 9
+  },
+  {
+    "name": "Sheoldred, the Apocalypse",
+    "set": "dmu",
+    "condition": "NM",
+    "finish": "foil",
+    "language": "en",
+    "priceCents": 320000,
+    "quantity": 1
+  },
+  {
+    "name": "Thoughtseize",
+    "set": "2xm",
+    "condition": "NM",
+    "finish": "nonfoil",
+    "language": "en",
+    "priceCents": 35000,
+    "quantity": 3
+  },
+  {
+    "name": "Snapcaster Mage",
+    "set": "mm3",
+    "condition": "LP",
+    "finish": "foil",
+    "language": "en",
+    "priceCents": 48000,
+    "quantity": 2
+  },
+  {
+    "name": "Birds of Paradise",
+    "set": "m12",
+    "condition": "NM",
+    "finish": "nonfoil",
+    "language": "es",
+    "priceCents": 18000,
+    "quantity": 8
+  },
+  {
+    "name": "Brainstorm",
+    "set": "ema",
+    "condition": "HP",
+    "finish": "nonfoil",
+    "language": "es",
+    "priceCents": 2800,
+    "quantity": 11
+  },
+  {
+    "name": "Path to Exile",
+    "set": null,
+    "condition": "NM",
+    "finish": "nonfoil",
+    "language": "es",
+    "priceCents": 9000,
+    "quantity": 11
+  },
+  {
+    "name": "Swords to Plowshares",
+    "set": "sta",
+    "condition": "NM",
+    "finish": "nonfoil",
+    "language": "es",
+    "priceCents": 7500,
+    "quantity": 15
+  },
+  {
+    "name": "Demonic Tutor",
+    "set": "sta",
+    "condition": "NM",
+    "finish": "foil",
+    "language": "en",
+    "priceCents": 24000,
+    "quantity": 4
+  },
+  {
+    "name": "Cyclonic Rift",
+    "set": null,
+    "condition": "NM",
+    "finish": "nonfoil",
+    "language": "es",
+    "priceCents": 32000,
+    "quantity": 6
+  },
+  {
+    "name": "Fatal Push",
+    "set": "aer",
+    "condition": "NM",
+    "finish": "nonfoil",
+    "language": "en",
+    "priceCents": 6000,
+    "quantity": 12
+  },
+  {
+    "name": "Mana Crypt",
+    "set": "2xm",
+    "condition": "NM",
+    "finish": "foil",
+    "language": "en",
+    "priceCents": 210000,
+    "quantity": 1
+  },
+  {
+    "name": "Teferi, Hero of Dominaria",
+    "set": "dom",
+    "condition": "NM",
+    "finish": "foil",
+    "language": "en",
+    "priceCents": 72000,
+    "quantity": 1
+  },
+  {
+    "name": "Mother of Runes",
+    "set": null,
+    "condition": "NM",
+    "finish": "nonfoil",
+    "language": "es",
+    "priceCents": 21000,
+    "quantity": 5
+  }
+]
