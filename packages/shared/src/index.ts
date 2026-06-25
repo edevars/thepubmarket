@@ -28,6 +28,11 @@ export interface HealthResponse {
  */
 export const ANCHOR_SELLER_ID = '00000000-0000-4000-8000-000000000001'
 
+/** Trading Card Game soportado. Códigos estables usados en filtros y URLs. */
+export type Tcg = 'mtg' | 'pokemon' | 'yugioh' | 'onepiece' | 'lorcana' | 'riftbound'
+
+export const TCGS: readonly Tcg[] = ['mtg', 'pokemon', 'yugioh', 'onepiece', 'lorcana', 'riftbound']
+
 /** Estado físico de un single. Orden de mejor a peor. */
 export type Condition = 'NM' | 'LP' | 'MP' | 'HP' | 'DMG'
 
@@ -59,6 +64,8 @@ export interface CardSnapshot {
   lang: string
   /** Rareza (p.ej. 'common', 'rare', 'mythic'). */
   rarity: string
+  /** Artista de la ilustración según Scryfall. Null si no se conoce. */
+  artist: string | null
   /** Acabados disponibles para esta impresión según Scryfall. */
   finishes: string[]
   /**
@@ -77,6 +84,8 @@ export interface InventoryItem {
   id: string
   /** Seller que ofrece el item. */
   sellerId: string
+  /** Juego al que pertenece la carta. */
+  tcg: Tcg
   /** Carta (snapshot de Scryfall). */
   card: CardSnapshot
   /** Condición física. */

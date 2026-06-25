@@ -38,6 +38,7 @@ interface ScryfallCard {
   collector_number: string
   lang: string
   rarity: string
+  artist?: string
   finishes?: string[]
   image_uris?: { normal?: string }
   card_faces?: Array<{ image_uris?: { normal?: string } }>
@@ -72,6 +73,7 @@ export function normalizeCard(raw: ScryfallCard): CardSnapshot {
     collectorNumber: raw.collector_number,
     lang: raw.lang,
     rarity: raw.rarity,
+    artist: raw.artist ?? null,
     finishes: raw.finishes ?? [],
     imageUrl,
   }

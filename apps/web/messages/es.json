@@ -10,30 +10,110 @@
     "lastCheck": "Última verificación",
     "unreachable": "No se pudo contactar al Worker"
   },
+  "common": {
+    "brand": "THE PUB MARKET",
+    "brandTag": "TCG · CDMX",
+    "navCatalog": "Catálogo",
+    "navMagic": "Magic",
+    "navMore": "Juegos",
+    "navStore": "La Tienda",
+    "search": "Buscar",
+    "searchPlaceholder": "Busca una carta por nombre…",
+    "mxn": "MXN",
+    "soon": "Pronto",
+    "footerTag": "THE PUB MARKET · CDMX · MXN",
+    "footerNote": "Descubrimiento y catálogo · Fase 1",
+    "lang": {
+      "es": "Español",
+      "en": "Inglés",
+      "jp": "Japonés"
+    }
+  },
+  "condition": {
+    "nm": "Casi Nueva",
+    "lp": "Poco Jugada",
+    "mp": "Moderada",
+    "hp": "Muy Jugada",
+    "dmg": "Dañada"
+  },
+  "home": {
+    "heroEyebrow": "The Pub Game Store · CDMX",
+    "heroTitle": "Singles de TCG, curados por jugadores que conocen el hobby.",
+    "heroSub": "Una selección con criterio de cartas individuales y producto sellado. Vendedores conocidos, condición verificada, precios en pesos. Arrancamos con Magic: The Gathering.",
+    "popular": "POPULARES:",
+    "featuredEyebrow": "Selección de la casa",
+    "featuredTitle": "Destacados de la semana",
+    "viewAll": "Ver todo",
+    "browseTitle": "Explora por juego",
+    "newTitle": "Recién llegados",
+    "pubEyebrow": "No solo un marketplace",
+    "pubTitle": "Nacido en una tienda de juegos real.",
+    "pubBody": "The Pub Market hereda la comunidad de The Pub Game Store en CDMX: restaurante casual, tienda TCG y mesas llenas de jugadores. Aquí compras con la misma confianza que en el mostrador.",
+    "pubCta": "Conoce la tienda",
+    "trust": {
+      "curated": {
+        "title": "Curado, no masivo",
+        "body": "Cada single pasa por revisión. Nada de bazar sin filtro."
+      },
+      "condition": {
+        "title": "Condición verificada",
+        "body": "Escala NM a DMG aplicada con criterio consistente."
+      },
+      "sellers": {
+        "title": "Vendedores conocidos",
+        "body": "Comunidad real de The Pub Game Store en CDMX."
+      }
+    }
+  },
   "catalog": {
+    "eyebrow": "Catálogo",
     "title": "Catálogo",
     "subtitle": "Singles de Magic: The Gathering",
-    "searchPlaceholder": "Buscar por nombre de carta…",
-    "searchButton": "Buscar",
+    "sort": "ORDEN",
+    "sortRelevance": "Relevancia",
+    "filters": "Filtros",
+    "clear": "Limpiar",
+    "clearAll": "Limpiar filtros",
+    "fGame": "Juego",
+    "fCondition": "Condición",
+    "fLanguage": "Idioma",
+    "fFoil": "Solo Foil",
+    "fPrice": "Rango de precio (MXN)",
     "resultsCount": "{count, plural, =0 {Sin resultados} one {# resultado} other {# resultados}}",
-    "empty": "No encontramos cartas con esos criterios.",
+    "onlineCount": "{count} singles en línea",
     "loadError": "No se pudo cargar el catálogo. Intenta de nuevo.",
-    "prev": "Anterior",
-    "next": "Siguiente",
-    "pageInfo": "Página {page} de {pages}",
-    "available": "{count} disponible(s)",
-    "viewDetails": "Ver detalle",
-    "set": "Set",
-    "collectorNumber": "Número",
-    "rarity": "Rareza",
-    "language": "Idioma",
-    "condition": "Condición",
-    "finish": "Acabado",
-    "quantity": "Cantidad",
-    "price": "Precio",
+    "available": "{count, plural, =0 {Agotado} one {# disponible} other {# disponibles}}"
+  },
+  "detail": {
+    "attributes": "Atributos",
+    "otherListings": "Otras condiciones disponibles",
+    "related": "Cartas relacionadas",
+    "choose": "Elegir",
+    "attrSet": "Set",
+    "attrNumber": "N.º de coleccionista",
+    "attrLang": "Idioma",
+    "attrFoil": "Foil",
+    "attrRarity": "Rareza",
+    "attrGame": "Juego",
+    "attrArtist": "Artista",
+    "addCart": "Agregar al carrito",
+    "soldOut": "Agotado",
+    "inStock": "{count, plural, one {# disponible} other {# disponibles}}",
+    "lastOne": "¡Última disponible!",
+    "yes": "Sí",
+    "no": "No",
     "foil": "Foil",
-    "nonfoil": "Normal",
+    "nonfoil": "No foil",
     "notFound": "Este item no está disponible.",
     "backToCatalog": "← Volver al catálogo"
+  },
+  "states": {
+    "loadingMsg": "Cargando catálogo…",
+    "emptyTitle": "El catálogo está vacío",
+    "emptyBody": "Aún no hay cartas publicadas en esta sección. Vuelve pronto: la selección se actualiza cada semana.",
+    "emptyCta": "Volver al inicio",
+    "noResultsTitle": "Sin resultados",
+    "noResultsBody": "No encontramos cartas que coincidan con tu búsqueda y filtros. Prueba con otro nombre o quita algún filtro.",
+    "trySuggest": "PRUEBA:"
   }
 }

@@ -1,0 +1,125 @@
+@import "tailwindcss";
+
+/*
+ * Tema oficial de The Pub Market. Paleta extraída del diseño de Claude Design:
+ * fondo navy muy oscuro, azules eléctricos y cian, estética angular con glows.
+ * Los tokens de `@theme` generan utilidades Tailwind (bg-bg, text-ink, etc.).
+ * Las fuentes se inyectan vía next/font (variables --font-*), ver layout.
+ */
+@theme {
+  /* superficies */
+  --color-bg: #060911;
+  --color-surface: #070b15;
+  --color-panel: #0c1322;
+  --color-panel-2: #08101c;
+  --color-input: #0a1120;
+
+  /* líneas / bordes */
+  --color-line: #1e2a44;
+  --color-line-soft: #15203a;
+  --color-line-strong: #2a3a5e;
+
+  /* acentos */
+  --color-primary: #3b7bff;
+  --color-primary-hover: #4d8bff;
+  --color-cyan: #35e0ee;
+
+  /* texto */
+  --color-ink: #eef3ff;
+  --color-ink-2: #c0cce8;
+  --color-muted: #9aa7c4;
+  --color-muted-2: #7a88a8;
+  --color-faint: #5d6a89;
+  --color-faint-2: #3f4d70;
+
+  /* condición de carta (NM mejor → DMG peor) */
+  --color-cond-nm: #46c98a;
+  --color-cond-lp: #9ec94e;
+  --color-cond-mp: #e0b341;
+  --color-cond-hp: #e08a3c;
+  --color-cond-dmg: #d6584f;
+
+  /* tipografía */
+  --font-display: var(--font-rajdhani), "Rajdhani", sans-serif;
+  --font-sans: var(--font-inter), "Inter", system-ui, sans-serif;
+  --font-mono: var(--font-plex-mono), "IBM Plex Mono", monospace;
+}
+
+html {
+  color-scheme: dark;
+}
+
+body {
+  background: var(--color-bg);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+}
+
+::selection {
+  background: rgba(59, 123, 255, 0.35);
+}
+
+input::placeholder {
+  color: var(--color-faint-2);
+}
+
+/* Scrollbar fino acorde al tema */
+.tpm-scroll::-webkit-scrollbar {
+  height: 8px;
+  width: 8px;
+}
+.tpm-scroll::-webkit-scrollbar-thumb {
+  background: var(--color-line);
+}
+
+/* ----- formas angulares reutilizables (clip-path) ----- */
+.clip-card {
+  clip-path: polygon(
+    11px 0,
+    100% 0,
+    100% calc(100% - 11px),
+    calc(100% - 11px) 100%,
+    0 100%,
+    0 11px
+  );
+}
+.clip-btn {
+  clip-path: polygon(7px 0, 100% 0, 100% calc(100% - 7px), calc(100% - 7px) 100%, 0 100%, 0 7px);
+}
+.clip-btn-lg {
+  clip-path: polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px);
+}
+.clip-tile {
+  clip-path: polygon(0 0, 100% 0, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0 100%);
+}
+.clip-rhombus {
+  clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
+}
+
+/* ----- glow del logo / acentos ----- */
+.glow-primary {
+  box-shadow: 0 0 18px rgba(59, 123, 255, 0.4);
+}
+
+/* ----- skeleton shimmer ----- */
+@keyframes tpmShimmer {
+  0% {
+    background-position: -420px 0;
+  }
+  100% {
+    background-position: 420px 0;
+  }
+}
+.tpm-shimmer {
+  background: linear-gradient(90deg, #0e1626 0, #16213a 40px, #0e1626 80px);
+  background-size: 420px 100%;
+  animation: tpmShimmer 1.4s linear infinite;
+}
+
+/* FOIL: texto con gradiente cian → violeta → cian */
+.foil-text {
+  background-image: linear-gradient(90deg, #35e0ee, #9b7bff, #35e0ee);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}

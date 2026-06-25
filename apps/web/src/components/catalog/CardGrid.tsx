@@ -1,25 +1,22 @@
 import type { InventoryItem } from '@thepubmarket/shared'
-import { useTranslations } from 'next-intl'
-import { CardItem } from './CardItem'
+import { ProductCard } from './ProductCard'
 
-/** Grilla responsiva de items del catálogo. Muestra estado vacío si no hay. */
-export function CardGrid({ items }: { items: InventoryItem[] }) {
-  const t = useTranslations('catalog')
+interface CardGridProps {
+  items: InventoryItem[]
+  /** `grid` (catálogo) o `row` (filas de la home, tarjetas algo más anchas). */
+  variant?: 'grid' | 'row'
+}
 
-  if (items.length === 0) {
-    return <p style={{ color: '#666', padding: '2rem 0' }}>{t('empty')}</p>
-  }
+const LAYOUT = {
+  grid: 'gap-2.5 [grid-template-columns:repeat(auto-fill,minmax(150px,1fr))] sm:gap-4 sm:[grid-template-columns:repeat(auto-fill,minmax(175px,1fr))]',
+  row: 'gap-2.5 [grid-template-columns:repeat(auto-fill,minmax(150px,1fr))] sm:gap-3.5 sm:[grid-template-columns:repeat(auto-fill,minmax(190px,1fr))]',
+}
 
+export function CardGrid({ items, variant = 'grid' }: CardGridProps) {
   return (
-    <div
-      style={{
-        display: 'grid',
-        gap: '1rem',
-        gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))',
-      }}
-    >
+    <div className={`grid ${LAYOUT[variant]}`}>
       {items.map((item) => (
-        <CardItem key={item.id} item={item} />
+        <ProductCard key={item.id} item={item} />
       ))}
     </div>
   )

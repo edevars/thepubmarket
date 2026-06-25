@@ -4,13 +4,14 @@
  */
 
 import type { InventoryRow } from '@thepubmarket/db'
-import type { Condition, InventoryItem } from '@thepubmarket/shared'
+import type { Condition, InventoryItem, Tcg } from '@thepubmarket/shared'
 
 /** Convierte una fila de Drizzle al contrato público `InventoryItem`. */
 export function rowToInventoryItem(row: InventoryRow): InventoryItem {
   return {
     id: row.id,
     sellerId: row.sellerId,
+    tcg: row.tcg as Tcg,
     card: {
       scryfallId: row.scryfallId ?? '',
       oracleId: row.oracleId ?? '',
@@ -20,6 +21,8 @@ export function rowToInventoryItem(row: InventoryRow): InventoryItem {
       collectorNumber: row.collectorNumber ?? '',
       lang: row.cardLang ?? '',
       rarity: row.rarity ?? '',
+      // El esquema de inventory aún no guarda artista; se poblará al integrar Scryfall.
+      artist: null,
       finishes: [],
       imageUrl: row.imageUrl,
     },
