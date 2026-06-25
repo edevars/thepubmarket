@@ -1,0 +1,44 @@
+name: Deploy
+
+# Deploy vía GitHub Actions.
+#
+# RUTA RECOMENDADA: usar Workers Builds (integración Git nativa de Cloudflare,
+# ver README) para deploy de producción en `main` + previews por rama. En ese
+# caso este workflow NO es necesario y queda como manual (workflow_dispatch).
+#
+# Si prefieres deploy desde GitHub en vez de Workers Builds, descomenta el
+# trigger `push: branches: [main]` de abajo. NO uses ambos a la vez para el
+# mismo Worker: provocarían deploys duplicados.
+on:
+  workflow_dispatch:
+  # push:
+  #   branches: [main]
+
+jobs:
+  deploy:
+    name: Deploy api + web
+    runs-on: ubuntu-latest
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Apply D1 migrations (remote)
+        run: pnpm --filter @thepubmarket/api db:migrate:remote
+
+      - name: Deploy API Worker
+        run: pnpm --filter @thepubmarket/api deploy
+
+      - name: Deploy Web (OpenNext)
+        run: pnpm --filter @thepubmarket/web deploy

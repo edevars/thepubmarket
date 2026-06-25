@@ -1,0 +1,30 @@
+{
+  "name": "@thepubmarket/web",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "tsc --noEmit",
+    "preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
+    "deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy",
+    "cf-typegen": "wrangler types"
+  },
+  "dependencies": {
+    "@thepubmarket/shared": "workspace:*",
+    "next": "^15.3.0",
+    "next-intl": "^4.1.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@opennextjs/cloudflare": "^1.3.0",
+    "@types/node": "^22.10.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "typescript": "^5.7.3",
+    "wrangler": "^4.83.0"
+  }
+}

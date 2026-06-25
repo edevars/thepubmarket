@@ -1,0 +1,13 @@
+{
+  "health": {
+    "title": "The Pub Market — Estado del sistema",
+    "subtitle": "Verificación del wiring end-to-end con el Worker",
+    "checking": "Consultando el Worker…",
+    "serviceUp": "Servicio operativo",
+    "serviceDown": "Servicio con problemas",
+    "dbUp": "D1 conectada",
+    "dbDown": "D1 inaccesible",
+    "lastCheck": "Última verificación",
+    "unreachable": "No se pudo contactar al Worker"
+  }
+}

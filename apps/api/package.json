@@ -1,0 +1,25 @@
+{
+  "name": "@thepubmarket/api",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "build": "wrangler deploy --dry-run --outdir dist",
+    "typecheck": "tsc --noEmit",
+    "cf-typegen": "wrangler types",
+    "db:migrate:local": "wrangler d1 migrations apply thepubmarket-db --local",
+    "db:migrate:remote": "wrangler d1 migrations apply thepubmarket-db --remote",
+    "db:migrate:create": "wrangler d1 migrations create thepubmarket-db"
+  },
+  "dependencies": {
+    "@thepubmarket/shared": "workspace:*",
+    "hono": "^4.6.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "typescript": "^5.7.3",
+    "wrangler": "^4.83.0"
+  }
+}

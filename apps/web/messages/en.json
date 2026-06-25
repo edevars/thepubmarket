@@ -1,0 +1,13 @@
+{
+  "health": {
+    "title": "The Pub Market — System status",
+    "subtitle": "End-to-end wiring check against the Worker",
+    "checking": "Querying the Worker…",
+    "serviceUp": "Service operational",
+    "serviceDown": "Service degraded",
+    "dbUp": "D1 connected",
+    "dbDown": "D1 unreachable",
+    "lastCheck": "Last check",
+    "unreachable": "Could not reach the Worker"
+  }
+}

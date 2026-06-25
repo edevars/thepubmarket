@@ -1,0 +1,40 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build outputs
+dist/
+.next/
+.open-next/
+.turbo/
+out/
+
+# Cloudflare / Wrangler
+.wrangler/
+.dev.vars
+.dev.vars.*
+wrangler.local.jsonc
+
+# Env
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# OS / editor
+.DS_Store
+*.swp
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# TypeScript
+*.tsbuildinfo
+
+# Next.js
+next-env.d.ts
+.next-env.d.ts

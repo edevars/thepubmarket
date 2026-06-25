@@ -1,0 +1,21 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "thepubmarket-web",
+  // Worker generado por OpenNext a partir del build de Next.js.
+  "main": ".open-next/worker.js",
+  "compatibility_date": "2025-06-01",
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  "assets": {
+    "binding": "ASSETS",
+    "directory": ".open-next/assets"
+  },
+  "observability": {
+    "enabled": true
+  }
+  // NOTA: NEXT_PUBLIC_API_URL NO va aquí. Las variables NEXT_PUBLIC_* se inlinan
+  // en BUILD TIME, no en runtime, así que un `var` de wrangler no llegaría al
+  // bundle del cliente. Se configura como variable de entorno del build:
+  //   - Local:  apps/web/.env  (ver .env.example)
+  //   - Workers Builds / CI:  variable de entorno del paso de build
+  // Ver README → "Variables y secrets".
+}

@@ -1,0 +1,40 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "thepubmarket-api",
+  "main": "src/index.ts",
+  "compatibility_date": "2025-06-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": {
+    "enabled": true
+  },
+
+  // === Bindings ===
+  // Los IDs reales se generan al crear cada recurso con Wrangler (ver README).
+  // Pega aquí los IDs que devuelvan los comandos `wrangler ... create`.
+
+  // D1 — base transaccional principal (users, sellers, inventory, orders, order_items).
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "thepubmarket-db",
+      "database_id": "REEMPLAZAR_CON_D1_DATABASE_ID",
+      "migrations_dir": "migrations"
+    }
+  ],
+
+  // KV — sesiones, cache de catálogo, feature flags.
+  "kv_namespaces": [
+    {
+      "binding": "SESSIONS",
+      "id": "REEMPLAZAR_CON_KV_NAMESPACE_ID"
+    }
+  ],
+
+  // R2 — imágenes de cartas y assets (sin costo de egress).
+  "r2_buckets": [
+    {
+      "binding": "ASSETS",
+      "bucket_name": "thepubmarket-assets"
+    }
+  ]
+}
