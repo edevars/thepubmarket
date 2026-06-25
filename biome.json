@@ -15,6 +15,7 @@
       "!**/dist",
       "!**/node_modules",
       "!**/.wrangler",
+      "!**/migrations",
       "!**/worker-configuration.d.ts",
       "!**/.next-env.d.ts"
     ]

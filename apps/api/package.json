@@ -9,16 +9,22 @@
     "build": "wrangler deploy --dry-run --outdir dist",
     "typecheck": "tsc --noEmit",
     "cf-typegen": "wrangler types",
+    "db:generate": "drizzle-kit generate",
     "db:migrate:local": "wrangler d1 migrations apply thepubmarket-db --local",
     "db:migrate:remote": "wrangler d1 migrations apply thepubmarket-db --remote",
-    "db:migrate:create": "wrangler d1 migrations create thepubmarket-db"
+    "db:seed:local": "wrangler d1 execute thepubmarket-db --local --file=seed.sql",
+    "db:seed:remote": "wrangler d1 execute thepubmarket-db --remote --file=seed.sql"
   },
   "dependencies": {
+    "@thepubmarket/db": "workspace:*",
     "@thepubmarket/shared": "workspace:*",
-    "hono": "^4.6.0"
+    "drizzle-orm": "^0.45.0",
+    "hono": "^4.6.0",
+    "zod": "^3.24.0"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",
+    "drizzle-kit": "^0.31.0",
     "typescript": "^5.7.3",
     "wrangler": "^4.83.0"
   }

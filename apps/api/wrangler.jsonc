@@ -8,6 +8,15 @@
     "enabled": true
   },
 
+  // === Variables ===
+  // ADMIN_API_KEY protege el admin de carga (ver middleware/admin-auth.ts).
+  // Este valor es solo para desarrollo local. En producción NO usar este valor:
+  // definirlo como secreto con `wrangler secret put ADMIN_API_KEY`.
+  // TODO: reemplazar este gate por Cloudflare Access.
+  "vars": {
+    "ADMIN_API_KEY": "dev-admin-key-change-me"
+  },
+
   // === Bindings ===
   // Los IDs reales se generan al crear cada recurso con Wrangler (ver README).
   // Pega aquí los IDs que devuelvan los comandos `wrangler ... create`.

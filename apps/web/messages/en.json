@@ -9,5 +9,31 @@
     "dbDown": "D1 unreachable",
     "lastCheck": "Last check",
     "unreachable": "Could not reach the Worker"
+  },
+  "catalog": {
+    "title": "Catalog",
+    "subtitle": "Magic: The Gathering singles",
+    "searchPlaceholder": "Search by card name…",
+    "searchButton": "Search",
+    "resultsCount": "{count, plural, =0 {No results} one {# result} other {# results}}",
+    "empty": "No cards match those filters.",
+    "loadError": "Could not load the catalog. Please try again.",
+    "prev": "Previous",
+    "next": "Next",
+    "pageInfo": "Page {page} of {pages}",
+    "available": "{count} available",
+    "viewDetails": "View details",
+    "set": "Set",
+    "collectorNumber": "Number",
+    "rarity": "Rarity",
+    "language": "Language",
+    "condition": "Condition",
+    "finish": "Finish",
+    "quantity": "Quantity",
+    "price": "Price",
+    "foil": "Foil",
+    "nonfoil": "Non-foil",
+    "notFound": "This item is not available.",
+    "backToCatalog": "← Back to catalog"
   }
 }

@@ -8,6 +8,7 @@
     "node": ">=22"
   },
   "scripts": {
+    "dev:up": "bash scripts/dev.sh",
     "dev": "turbo run dev",
     "build": "turbo run build",
     "typecheck": "turbo run typecheck",

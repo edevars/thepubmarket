@@ -9,5 +9,31 @@
     "dbDown": "D1 inaccesible",
     "lastCheck": "Última verificación",
     "unreachable": "No se pudo contactar al Worker"
+  },
+  "catalog": {
+    "title": "Catálogo",
+    "subtitle": "Singles de Magic: The Gathering",
+    "searchPlaceholder": "Buscar por nombre de carta…",
+    "searchButton": "Buscar",
+    "resultsCount": "{count, plural, =0 {Sin resultados} one {# resultado} other {# resultados}}",
+    "empty": "No encontramos cartas con esos criterios.",
+    "loadError": "No se pudo cargar el catálogo. Intenta de nuevo.",
+    "prev": "Anterior",
+    "next": "Siguiente",
+    "pageInfo": "Página {page} de {pages}",
+    "available": "{count} disponible(s)",
+    "viewDetails": "Ver detalle",
+    "set": "Set",
+    "collectorNumber": "Número",
+    "rarity": "Rareza",
+    "language": "Idioma",
+    "condition": "Condición",
+    "finish": "Acabado",
+    "quantity": "Cantidad",
+    "price": "Precio",
+    "foil": "Foil",
+    "nonfoil": "Normal",
+    "notFound": "Este item no está disponible.",
+    "backToCatalog": "← Volver al catálogo"
   }
 }
