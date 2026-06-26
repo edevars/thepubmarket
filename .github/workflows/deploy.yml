@@ -16,7 +16,7 @@ on:
 
 jobs:
   deploy:
-    name: Deploy api + web
+    name: Deploy api + web + pitch
     runs-on: ubuntu-latest
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -42,3 +42,6 @@ jobs:
 
       - name: Deploy Web (OpenNext)
         run: pnpm --filter @thepubmarket/web deploy
+
+      - name: Deploy Pitch deck (static Worker)
+        run: pnpm --filter @thepubmarket/pitch deploy
