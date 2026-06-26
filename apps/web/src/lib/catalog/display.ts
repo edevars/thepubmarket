@@ -52,9 +52,14 @@ function hash(s: string): number {
   return Math.abs(h)
 }
 
+/** Tinte radial determinista a partir de un id (para placeholders de arte). */
+export function artTintForId(id: string): string {
+  return ART_TINTS[hash(id) % ART_TINTS.length] ?? 'rgba(150,150,160,0.1)'
+}
+
 /** Tinte radial determinista para el placeholder de arte de una carta. */
 export function artTintFor(item: InventoryItem): string {
-  return ART_TINTS[hash(item.id) % ART_TINTS.length] ?? 'rgba(150,150,160,0.1)'
+  return artTintForId(item.id)
 }
 
 /** Línea de set compacta: `MH2 · #138`. */

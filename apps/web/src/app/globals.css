@@ -101,6 +101,36 @@ input::placeholder {
   box-shadow: 0 0 18px rgba(59, 123, 255, 0.4);
 }
 
+/* ----- spinner / pulso de la pantalla "Redirigiendo a Stripe" ----- */
+@keyframes tpmSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes tpmPulse {
+  0%,
+  100% {
+    opacity: 0.35;
+    transform: scale(0.9);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* ----- entrada del drawer del carrito ----- */
+@keyframes tpmDrawerIn {
+  from {
+    transform: translateX(40px);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
 /* ----- skeleton shimmer ----- */
 @keyframes tpmShimmer {
   0% {

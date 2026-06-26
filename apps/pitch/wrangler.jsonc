@@ -2,6 +2,13 @@
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "thepubmarket-pitch",
   "compatibility_date": "2025-06-01",
+  // Puertos propios para `wrangler dev`: evita el choque con apps/api, que usa
+  // los defaults (8787 / inspector 9229). Sin esto, correr ambos workers a la
+  // vez (p. ej. `pnpm dev:up`) falla con "Address already in use".
+  "dev": {
+    "port": 8788,
+    "inspector_port": 9230
+  },
   // Worker de solo-assets: sirve el deck estático directamente desde ./public,
   // sin código de servidor. Equivalente moderno a un proyecto de Pages.
   "assets": {

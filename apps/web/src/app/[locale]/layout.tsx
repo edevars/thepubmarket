@@ -5,6 +5,7 @@ import { hasLocale, NextIntlClientProvider } from 'next-intl'
 import { setRequestLocale } from 'next-intl/server'
 import type { ReactNode } from 'react'
 import { AuthProvider } from '@/components/auth/AuthProvider'
+import { CartDrawer } from '@/components/cart/CartDrawer'
 import { SiteFooter } from '@/components/layout/SiteFooter'
 import { SiteHeader } from '@/components/layout/SiteHeader'
 import { routing } from '@/i18n/routing'
@@ -63,6 +64,7 @@ export default async function LocaleLayout({
                 <div className="flex-1">{children}</div>
                 <SiteFooter />
               </div>
+              <CartDrawer />
             </CartProvider>
           </AuthProvider>
         </NextIntlClientProvider>

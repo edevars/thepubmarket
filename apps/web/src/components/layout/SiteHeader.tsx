@@ -52,7 +52,7 @@ export function SiteHeader() {
   const pathname = usePathname()
   const router = useRouter()
   const { user, signOut } = useAuth()
-  const { count } = useCart()
+  const { count, openDrawer } = useCart()
   const [search, setSearch] = useState('')
   const isHome = pathname === '/'
 
@@ -104,8 +104,9 @@ export function SiteHeader() {
       )}
 
       <div className={`flex shrink-0 items-center gap-2.5 ${isHome ? 'ml-auto' : 'ml-2'}`}>
-        <Link
-          href="/cart"
+        <button
+          type="button"
+          onClick={openDrawer}
           className="relative flex items-center px-2 py-1.5 font-display text-sm font-semibold uppercase tracking-[0.06em] text-ink-2 hover:text-primary-hover"
         >
           {t('cart')}
@@ -114,7 +115,7 @@ export function SiteHeader() {
               {count}
             </span>
           )}
-        </Link>
+        </button>
 
         {user ? (
           <button

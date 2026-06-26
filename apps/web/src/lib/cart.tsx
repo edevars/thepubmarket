@@ -1,6 +1,6 @@
 'use client'
 
-import type { InventoryItem } from '@thepubmarket/shared'
+import type { Condition, Finish, InventoryItem } from '@thepubmarket/shared'
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 
 export interface CartItem {
@@ -12,6 +12,24 @@ export interface CartItem {
   /** Máximo disponible al momento de agregar (para topar la cantidad). */
   maxQuantity: number
   quantity: number
+  // --- Campos de display (opcionales: retrocompat con carritos ya guardados) ---
+  /** Condición física, para el badge de la línea. */
+  condition?: Condition
+  /** Acabado ofrecido; `'foil'` muestra el tag FOIL. */
+  finish?: Finish
+  /** Idioma del single ofrecido (p. ej. 'es', 'en'). */
+  language?: string
+  /** Código de set (p. ej. 'MH2') para la línea de set. */
+  setCode?: string
+  /** Número de coleccionista para la línea de set. */
+  collectorNumber?: string
+  /**
+   * Nombre y verificación del vendedor. El modelo `InventoryItem` aún no los
+   * expone (solo `sellerId`), así que hoy llegan `undefined` y la fila de
+   * vendedor se omite. Punto de extensión para cuando el catálogo los provea.
+   */
+  sellerName?: string
+  sellerVerified?: boolean
 }
 
 interface CartContextValue {
@@ -22,6 +40,10 @@ interface CartContextValue {
   setQuantity: (inventoryId: string, quantity: number) => void
   remove: (inventoryId: string) => void
   clear: () => void
+  /** Estado del carrito deslizable (drawer). */
+  drawerOpen: boolean
+  openDrawer: () => void
+  closeDrawer: () => void
 }
 
 const CartContext = createContext<CartContextValue | null>(null)
@@ -39,6 +61,7 @@ function load(): CartItem[] {
 
 export function CartProvider({ children }: { children: React.ReactNode }) {
   const [items, setItems] = useState<CartItem[]>([])
+  const [drawerOpen, setDrawerOpen] = useState(false)
 
   // Hidrata desde localStorage tras el montaje (evita desajuste SSR).
   useEffect(() => {
@@ -66,6 +89,11 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
           sellerId: item.sellerId,
           maxQuantity: item.quantity,
           quantity: Math.min(quantity, item.quantity),
+          condition: item.condition,
+          finish: item.finish,
+          language: item.language,
+          setCode: item.card.setCode,
+          collectorNumber: item.card.collectorNumber,
         },
       ]
     })
@@ -87,11 +115,25 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
 
   const clear = useCallback(() => setItems([]), [])
 
+  const openDrawer = useCallback(() => setDrawerOpen(true), [])
+  const closeDrawer = useCallback(() => setDrawerOpen(false), [])
+
   const value = useMemo<CartContextValue>(() => {
     const count = items.reduce((s, i) => s + i.quantity, 0)
     const subtotalCents = items.reduce((s, i) => s + i.priceCents * i.quantity, 0)
-    return { items, count, subtotalCents, add, setQuantity, remove, clear }
-  }, [items, add, setQuantity, remove, clear])
+    return {
+      items,
+      count,
+      subtotalCents,
+      add,
+      setQuantity,
+      remove,
+      clear,
+      drawerOpen,
+      openDrawer,
+      closeDrawer,
+    }
+  }, [items, add, setQuantity, remove, clear, drawerOpen, openDrawer, closeDrawer])
 
   return <CartContext.Provider value={value}>{children}</CartContext.Provider>
 }
