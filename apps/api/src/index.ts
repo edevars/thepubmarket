@@ -5,6 +5,7 @@ import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { adminAuth } from './middleware/admin-auth'
 import { admin } from './routes/admin'
+import { auth } from './routes/auth'
 import { catalog } from './routes/catalog'
 import type { AppEnv } from './types'
 
@@ -42,6 +43,9 @@ app.get('/health', async (c) => {
     return c.json(body, 503)
   }
 })
+
+// Auth de compradores (magic link passwordless + sesiones en KV).
+app.route('/auth', auth)
 
 // Catálogo público (solo lectura, sin auth).
 app.route('/catalog', catalog)

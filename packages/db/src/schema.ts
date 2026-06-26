@@ -191,9 +191,7 @@ export const orderItems = sqliteTable(
 export const webhookEvents = sqliteTable('webhook_events', {
   id: text('id').primaryKey(),
   type: text('type').notNull(),
-  createdAt: integer('created_at')
-    .notNull()
-    .default(sql`(unixepoch())`),
+  createdAt: integer('created_at').notNull().default(sql`(unixepoch())`),
 })
 
 /** Todas las tablas, para pasarle el schema al cliente Drizzle. */

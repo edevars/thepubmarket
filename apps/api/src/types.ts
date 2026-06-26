@@ -1,11 +1,20 @@
 import type { Db } from '@thepubmarket/db'
 
+/** Usuario autenticado resuelto desde la sesión (KV) por el middleware buyerAuth. */
+export interface SessionUser {
+  id: string
+  email: string
+  role: 'buyer' | 'admin'
+  displayName: string | null
+}
+
 /**
  * Tipado del contexto Hono para toda la app.
- *   - Bindings: el `Env` generado por wrangler (DB, SESSIONS, ASSETS, vars).
- *   - Variables: el cliente Drizzle inyectado por request (ver middleware en index.ts).
+ *   - Bindings: el `Env` generado por wrangler (DB, SESSIONS, ASSETS, RESERVATION,
+ *     POST_PAYMENT, secrets de Stripe, vars).
+ *   - Variables: cliente Drizzle por request y, tras buyerAuth, el usuario de sesión.
  */
 export type AppEnv = {
   Bindings: Env
-  Variables: { db: Db }
+  Variables: { db: Db; user?: SessionUser }
 }
