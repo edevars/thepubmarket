@@ -25,7 +25,7 @@
     {
       "binding": "DB",
       "database_name": "thepubmarket-db",
-      "database_id": "REEMPLAZAR_CON_D1_DATABASE_ID",
+      "database_id": "0b1c4d58-08b7-42f0-9609-3611f5a94e24",
       "migrations_dir": "migrations"
     }
   ],
@@ -34,7 +34,7 @@
   "kv_namespaces": [
     {
       "binding": "SESSIONS",
-      "id": "REEMPLAZAR_CON_KV_NAMESPACE_ID"
+      "id": "e87f05f8ba18435e948ed4fed03e4e8d"
     }
   ],
 
