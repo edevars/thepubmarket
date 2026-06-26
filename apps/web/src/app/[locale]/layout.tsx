@@ -4,9 +4,11 @@ import { notFound } from 'next/navigation'
 import { hasLocale, NextIntlClientProvider } from 'next-intl'
 import { setRequestLocale } from 'next-intl/server'
 import type { ReactNode } from 'react'
+import { AuthProvider } from '@/components/auth/AuthProvider'
 import { SiteFooter } from '@/components/layout/SiteFooter'
 import { SiteHeader } from '@/components/layout/SiteHeader'
 import { routing } from '@/i18n/routing'
+import { CartProvider } from '@/lib/cart'
 import '../globals.css'
 
 const rajdhani = Rajdhani({
@@ -54,11 +56,15 @@ export default async function LocaleLayout({
     <html lang={locale} className={`${rajdhani.variable} ${inter.variable} ${plexMono.variable}`}>
       <body className="min-h-screen bg-bg text-ink antialiased">
         <NextIntlClientProvider>
-          <div className="flex min-h-screen flex-col">
-            <SiteHeader />
-            <div className="flex-1">{children}</div>
-            <SiteFooter />
-          </div>
+          <AuthProvider>
+            <CartProvider>
+              <div className="flex min-h-screen flex-col">
+                <SiteHeader />
+                <div className="flex-1">{children}</div>
+                <SiteFooter />
+              </div>
+            </CartProvider>
+          </AuthProvider>
         </NextIntlClientProvider>
       </body>
     </html>

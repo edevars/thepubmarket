@@ -21,6 +21,9 @@
     "searchPlaceholder": "Search a card by name…",
     "mxn": "MXN",
     "soon": "Soon",
+    "cart": "Cart",
+    "login": "Sign in",
+    "logout": "Sign out",
     "footerTag": "THE PUB MARKET · CDMX · MXN",
     "footerNote": "Discovery & catalog · Phase 1",
     "lang": {
@@ -28,6 +31,46 @@
       "en": "English",
       "jp": "Japanese"
     }
+  },
+  "auth": {
+    "signInTitle": "Sign in to your account",
+    "signInSubtitle": "We'll email you a sign-in link. No passwords.",
+    "emailPlaceholder": "you@email.com",
+    "sendLink": "Send link",
+    "sending": "Sending…",
+    "linkSent": "If {email} has an account, we sent you a sign-in link.",
+    "linkSentHint": "Check your inbox and open the link to sign in.",
+    "alreadySignedIn": "You're already signed in as {email}.",
+    "backHome": "Back to home",
+    "verifying": "Verifying your link…",
+    "verifyOk": "Done! Signing you in…",
+    "verifyError": "The link is invalid or expired.",
+    "tryAgain": "Request a new one"
+  },
+  "cart": {
+    "title": "Your cart",
+    "empty": "Your cart is empty.",
+    "browse": "Browse catalog",
+    "remove": "Remove",
+    "subtotal": "Subtotal",
+    "goToCart": "View cart",
+    "signInToCheckout": "Sign in to complete your purchase.",
+    "checkoutError": "Couldn't start payment. Please try again.",
+    "redirecting": "Redirecting…",
+    "checkout": "Checkout",
+    "signInAndCheckout": "Sign in & checkout"
+  },
+  "checkout": {
+    "successTitle": "Thank you for your purchase!",
+    "successSubtitle": "Your payment was processed successfully.",
+    "loadingOrder": "Loading your order…",
+    "orderRef": "Order",
+    "total": "Total",
+    "orderUnavailable": "Your payment completed. Order details will appear shortly.",
+    "keepBrowsing": "Keep browsing",
+    "cancelTitle": "Payment cancelled",
+    "cancelSubtitle": "No charge was made. Your cart is still here.",
+    "backToCart": "Back to cart"
   },
   "condition": {
     "nm": "Near Mint",

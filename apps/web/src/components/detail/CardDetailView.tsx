@@ -1,8 +1,8 @@
 import { CONDITIONS, type Condition, type InventoryItem } from '@thepubmarket/shared'
 import { useLocale, useTranslations } from 'next-intl'
+import { AddToCartButton } from '@/components/cart/AddToCartButton'
 import { CardArt } from '@/components/catalog/CardArt'
 import { CardGrid } from '@/components/catalog/CardGrid'
-import { angularButtonClasses } from '@/components/ui/AngularButton'
 import { ConditionBadge } from '@/components/ui/ConditionBadge'
 import { FoilTag } from '@/components/ui/FoilTag'
 import { Link } from '@/i18n/navigation'
@@ -171,17 +171,7 @@ export function CardDetailView({
                   {stockText}
                 </div>
               </div>
-              <button
-                type="button"
-                disabled={soldOut}
-                className={
-                  soldOut
-                    ? 'clip-btn-lg cursor-not-allowed border border-line bg-[#10192e] px-7 py-3.5 font-display text-sm font-bold uppercase tracking-[0.1em] text-faint'
-                    : angularButtonClasses('primary', 'lg')
-                }
-              >
-                {soldOut ? t('soldOut') : t('addCart')}
-              </button>
+              <AddToCartButton item={item} />
             </div>
           </div>
 

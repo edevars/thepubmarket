@@ -21,6 +21,9 @@
     "searchPlaceholder": "Busca una carta por nombre…",
     "mxn": "MXN",
     "soon": "Pronto",
+    "cart": "Carrito",
+    "login": "Entrar",
+    "logout": "Salir",
     "footerTag": "THE PUB MARKET · CDMX · MXN",
     "footerNote": "Descubrimiento y catálogo · Fase 1",
     "lang": {
@@ -28,6 +31,46 @@
       "en": "Inglés",
       "jp": "Japonés"
     }
+  },
+  "auth": {
+    "signInTitle": "Entra a tu cuenta",
+    "signInSubtitle": "Te enviamos un enlace de acceso por correo. Sin contraseñas.",
+    "emailPlaceholder": "tu@correo.com",
+    "sendLink": "Enviar enlace",
+    "sending": "Enviando…",
+    "linkSent": "Si {email} tiene cuenta, te enviamos un enlace de acceso.",
+    "linkSentHint": "Revisa tu correo y abre el enlace para entrar.",
+    "alreadySignedIn": "Ya tienes sesión como {email}.",
+    "backHome": "Volver al inicio",
+    "verifying": "Verificando tu enlace…",
+    "verifyOk": "¡Listo! Entrando…",
+    "verifyError": "El enlace no es válido o expiró.",
+    "tryAgain": "Solicitar uno nuevo"
+  },
+  "cart": {
+    "title": "Tu carrito",
+    "empty": "Tu carrito está vacío.",
+    "browse": "Explorar catálogo",
+    "remove": "Quitar",
+    "subtotal": "Subtotal",
+    "goToCart": "Ver carrito",
+    "signInToCheckout": "Inicia sesión para completar tu compra.",
+    "checkoutError": "No se pudo iniciar el pago. Intenta de nuevo.",
+    "redirecting": "Redirigiendo…",
+    "checkout": "Pagar",
+    "signInAndCheckout": "Entrar y pagar"
+  },
+  "checkout": {
+    "successTitle": "¡Gracias por tu compra!",
+    "successSubtitle": "Tu pago se procesó correctamente.",
+    "loadingOrder": "Cargando tu orden…",
+    "orderRef": "Orden",
+    "total": "Total",
+    "orderUnavailable": "Tu pago se completó. Pronto verás el detalle de la orden.",
+    "keepBrowsing": "Seguir explorando",
+    "cancelTitle": "Pago cancelado",
+    "cancelSubtitle": "No se realizó ningún cargo. Tu carrito sigue disponible.",
+    "backToCart": "Volver al carrito"
   },
   "condition": {
     "nm": "Casi Nueva",

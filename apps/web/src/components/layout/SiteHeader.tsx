@@ -2,7 +2,9 @@
 
 import { useTranslations } from 'next-intl'
 import { useState } from 'react'
+import { useAuth } from '@/components/auth/AuthProvider'
 import { Link, usePathname, useRouter } from '@/i18n/navigation'
+import { useCart } from '@/lib/cart'
 
 /** Logo angular con glow, fiel al diseño. */
 function Logo() {
@@ -49,6 +51,8 @@ export function SiteHeader() {
   const t = useTranslations('common')
   const pathname = usePathname()
   const router = useRouter()
+  const { user, signOut } = useAuth()
+  const { count } = useCart()
   const [search, setSearch] = useState('')
   const isHome = pathname === '/'
 
@@ -100,6 +104,36 @@ export function SiteHeader() {
       )}
 
       <div className={`flex shrink-0 items-center gap-2.5 ${isHome ? 'ml-auto' : 'ml-2'}`}>
+        <Link
+          href="/cart"
+          className="relative flex items-center px-2 py-1.5 font-display text-sm font-semibold uppercase tracking-[0.06em] text-ink-2 hover:text-primary-hover"
+        >
+          {t('cart')}
+          {count > 0 && (
+            <span className="ml-1.5 inline-flex min-w-[18px] items-center justify-center bg-primary px-1 font-mono text-[10px] font-bold text-[#06121f]">
+              {count}
+            </span>
+          )}
+        </Link>
+
+        {user ? (
+          <button
+            type="button"
+            onClick={() => signOut()}
+            title={user.email}
+            className="hidden px-2 py-1.5 font-display text-sm font-semibold uppercase tracking-[0.06em] text-ink-2 hover:text-primary-hover sm:block"
+          >
+            {t('logout')}
+          </button>
+        ) : (
+          <Link
+            href="/login"
+            className="hidden px-2 py-1.5 font-display text-sm font-semibold uppercase tracking-[0.06em] text-ink-2 hover:text-primary-hover sm:block"
+          >
+            {t('login')}
+          </Link>
+        )}
+
         <LangSwitch />
         <Link
           href="/catalog"
