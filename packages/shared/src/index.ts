@@ -110,3 +110,45 @@ export interface CatalogListResponse {
   limit: number
   offset: number
 }
+
+// =====================================================================
+// Órdenes / checkout (Fase 2)
+// =====================================================================
+
+/** Estado de una orden. */
+export type OrderStatus = 'pending' | 'paid' | 'fulfilled' | 'cancelled' | 'refunded'
+
+/** Línea de una orden (snapshot de título y precio al momento de la compra). */
+export interface OrderItemSummary {
+  id: string
+  inventoryId: string | null
+  titleSnapshot: string
+  unitPriceCents: number
+  quantity: number
+  lineTotalCents: number
+}
+
+/** Orden con sus líneas, tal como la devuelve la API al comprador. */
+export interface OrderSummary {
+  id: string
+  status: OrderStatus
+  sellerId: string
+  subtotalCents: number
+  platformFeeCents: number
+  totalCents: number
+  currency: string
+  createdAt: number
+  items: OrderItemSummary[]
+}
+
+/** Cuerpo de `POST /checkout`: líneas del carrito (todas del mismo seller). */
+export interface CheckoutRequest {
+  items: Array<{ inventoryId: string; quantity: number }>
+}
+
+/** Respuesta de `POST /checkout`: a dónde redirigir para pagar. */
+export interface CheckoutResponse {
+  orderId: string
+  /** URL de Stripe Checkout (hospedado) a la que redirige el frontend. */
+  url: string
+}

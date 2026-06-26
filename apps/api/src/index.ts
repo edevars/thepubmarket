@@ -7,6 +7,9 @@ import { adminAuth } from './middleware/admin-auth'
 import { admin } from './routes/admin'
 import { auth } from './routes/auth'
 import { catalog } from './routes/catalog'
+import { checkout } from './routes/checkout'
+import { ordersRoutes } from './routes/orders'
+import { webhooks } from './routes/webhooks'
 import type { AppEnv } from './types'
 
 // `Env` es el tipo global generado por `wrangler types` en
@@ -49,6 +52,13 @@ app.route('/auth', auth)
 
 // Catálogo público (solo lectura, sin auth).
 app.route('/catalog', catalog)
+
+// Checkout y órdenes (requieren comprador autenticado; auth dentro de cada router).
+app.route('/checkout', checkout)
+app.route('/orders', ordersRoutes)
+
+// Webhooks de Stripe (público, protegido por firma; NO lleva admin auth).
+app.route('/webhooks', webhooks)
 
 // Admin interno de carga. Protegido; NO exponer público.
 // TODO: mover a Cloudflare Access (ver middleware/admin-auth.ts).
