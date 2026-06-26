@@ -141,6 +141,7 @@ export const orders = sqliteTable(
     totalCents: integer('total_cents').notNull(),
     currency: text('currency').notNull().default('MXN'),
     stripePaymentIntentId: text('stripe_payment_intent_id'),
+    stripeCheckoutSessionId: text('stripe_checkout_session_id'),
     ...timestamps,
   },
   (t) => [
@@ -182,5 +183,18 @@ export const orderItems = sqliteTable(
   ],
 )
 
+// =====================================================================
+// webhook_events — ledger de idempotencia de webhooks de Stripe. La PK es el id
+// del evento (`evt_…`); insertar con conflicto = evento ya procesado. Garantiza
+// que un webhook reintentado no re-ejecute efectos (no doble descuento de stock).
+// =====================================================================
+export const webhookEvents = sqliteTable('webhook_events', {
+  id: text('id').primaryKey(),
+  type: text('type').notNull(),
+  createdAt: integer('created_at')
+    .notNull()
+    .default(sql`(unixepoch())`),
+})
+
 /** Todas las tablas, para pasarle el schema al cliente Drizzle. */
-export const schema = { users, sellers, inventory, orders, orderItems }
+export const schema = { users, sellers, inventory, orders, orderItems, webhookEvents }

@@ -52,3 +52,7 @@ app.use('/admin/*', adminAuth)
 app.route('/admin', admin)
 
 export default app
+
+// Clases exportadas requeridas por los bindings de wrangler.jsonc.
+export { InventoryReservation } from './durable-objects/inventory-reservation'
+export { PostPaymentWorkflow } from './workflows/post-payment'

@@ -6,7 +6,7 @@
 export { createDb, type Db } from './client'
 export * from './schema'
 
-import type { inventory, orderItems, orders, sellers, users } from './schema'
+import type { inventory, orderItems, orders, sellers, users, webhookEvents } from './schema'
 
 // Tipos de fila inferidos del esquema (fuente única de verdad).
 export type UserRow = typeof users.$inferSelect
@@ -19,3 +19,5 @@ export type OrderRow = typeof orders.$inferSelect
 export type NewOrder = typeof orders.$inferInsert
 export type OrderItemRow = typeof orderItems.$inferSelect
 export type NewOrderItem = typeof orderItems.$inferInsert
+export type WebhookEventRow = typeof webhookEvents.$inferSelect
+export type NewWebhookEvent = typeof webhookEvents.$inferInsert

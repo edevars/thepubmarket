@@ -15,10 +15,22 @@
   //   - Local:  apps/api/.dev.vars  (gitignored)
   //   - Prod:   `wrangler secret put ADMIN_API_KEY`
   // TODO: reemplazar este gate por Cloudflare Access.
+  //
+  // Secretos de Stripe (NO van aquí, son secrets):
+  //   - Local: apps/api/.dev.vars (STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET)
+  //   - Prod:  wrangler secret put STRIPE_SECRET_KEY / STRIPE_WEBHOOK_SECRET
+
+  // === Config no-secreta ===
+  // PLATFORM_FEE_BPS: comisión de la plataforma en puntos básicos (800 = 8%).
+  // WEB_BASE_URL: origen del frontend (success/cancel de Checkout, redirect de
+  // magic link). En local se sobreescribe vía .dev.vars.
+  "vars": {
+    "PLATFORM_FEE_BPS": "800",
+    "WEB_BASE_URL": "https://thepubmarket-web.enrique-devars-cee.workers.dev"
+  },
 
   // === Bindings ===
   // Los IDs reales se generan al crear cada recurso con Wrangler (ver README).
-  // Pega aquí los IDs que devuelvan los comandos `wrangler ... create`.
 
   // D1 — base transaccional principal (users, sellers, inventory, orders, order_items).
   "d1_databases": [
@@ -43,6 +55,33 @@
     {
       "binding": "ASSETS",
       "bucket_name": "thepubmarket-assets"
+    }
+  ],
+
+  // Durable Objects — reserva de inventario (un single no se vende dos veces).
+  // Un DO por item de inventario; serialización single-threaded evita doble venta.
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "RESERVATION",
+        "class_name": "InventoryReservation"
+      }
+    ]
+  },
+  // DO con almacenamiento SQLite (disponible en plan free; sin costo extra).
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["InventoryReservation"]
+    }
+  ],
+
+  // Workflows — flujo durable post-pago (confirmar orden, descontar inventario).
+  "workflows": [
+    {
+      "name": "post-payment",
+      "binding": "POST_PAYMENT",
+      "class_name": "PostPaymentWorkflow"
     }
   ]
 }
