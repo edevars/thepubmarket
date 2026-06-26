@@ -1,0 +1,13 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "thepubmarket-pitch",
+  "compatibility_date": "2025-06-01",
+  // Worker de solo-assets: sirve el deck estático directamente desde ./public,
+  // sin código de servidor. Equivalente moderno a un proyecto de Pages.
+  "assets": {
+    "directory": "./public"
+  },
+  "observability": {
+    "enabled": true
+  }
+}

@@ -52,6 +52,12 @@ importers:
         specifier: ^4.83.0
         version: 4.105.0(@cloudflare/workers-types@4.20260625.1)
 
+  apps/pitch:
+    devDependencies:
+      wrangler:
+        specifier: ^4.83.0
+        version: 4.105.0(@cloudflare/workers-types@4.20260625.1)
+
   apps/web:
     dependencies:
       '@thepubmarket/shared':
