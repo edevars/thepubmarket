@@ -112,6 +112,60 @@ export interface CatalogListResponse {
 }
 
 // =====================================================================
+// Sellers / tiendas (perfil público de escaparate)
+// =====================================================================
+
+/** Clave de rango de días para los horarios de una tienda (i18n en el front). */
+export type HoursKey = 'weekday' | 'friSat' | 'sunday' | 'holidays'
+
+/** Una fila de horario. `open`/`close` en 'HH:MM' 24h; null = cerrado. */
+export interface SellerHours {
+  key: HoursKey
+  open: string | null
+  close: string | null
+}
+
+/**
+ * Perfil público de un seller (tienda), tal como lo devuelve `GET /sellers`.
+ * SOLO vitrina: nada de pagos, payouts ni Stripe Connect. `singlesCount` es
+ * derivado del inventario activo (lo calcula la API, no es editable).
+ */
+export interface Seller {
+  /** UUID del seller (tabla `sellers`; el ancla es ANCHOR_SELLER_ID). */
+  id: string
+  name: string
+  /** Slug único usado en la URL `/tiendas/{slug}`. */
+  slug: string
+  status: 'invited' | 'active' | 'suspended'
+  /** Vendedor verificado / tienda física vetada (modelo curado). */
+  verified: boolean
+  /** Monograma de 2 letras para el placeholder ("BC"). */
+  monogram: string
+  city: string
+  neighborhood: string
+  /** Año de alta en el market (para "En el market desde 2023"). */
+  memberSince: number
+  /** Descripción corta del hero. */
+  blurb: string
+  favoriteGames: Tcg[]
+  yearsInHobby: number
+  funFact: string
+  address: string
+  hours: SellerHours[]
+  /** Número de WhatsApp en formato internacional (solo dígitos, con lada). */
+  whatsapp: string
+  /** Handle de Instagram sin arroba. */
+  instagram: string
+  /** Total de singles activos del vendedor (derivado del inventario). */
+  singlesCount: number
+}
+
+/** Respuesta de `GET /sellers`. Sin paginación: lista curada por invitación. */
+export interface SellerListResponse {
+  items: Seller[]
+}
+
+// =====================================================================
 // Órdenes / checkout (Fase 2)
 // =====================================================================
 

@@ -9,6 +9,7 @@ import { auth } from './routes/auth'
 import { catalog } from './routes/catalog'
 import { checkout } from './routes/checkout'
 import { ordersRoutes } from './routes/orders'
+import { sellersRoutes } from './routes/sellers'
 import { webhooks } from './routes/webhooks'
 import type { AppEnv } from './types'
 
@@ -52,6 +53,9 @@ app.route('/auth', auth)
 
 // Catálogo público (solo lectura, sin auth).
 app.route('/catalog', catalog)
+
+// Tiendas públicas (perfil de vendedor, solo lectura, sin auth).
+app.route('/sellers', sellersRoutes)
 
 // Checkout y órdenes (requieren comprador autenticado; auth dentro de cada router).
 app.route('/checkout', checkout)

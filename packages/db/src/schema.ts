@@ -14,6 +14,7 @@
  * `orders.platformFeeCents`.
  */
 
+import type { SellerHours, Tcg } from '@thepubmarket/shared'
 import { sql } from 'drizzle-orm'
 import { check, index, integer, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core'
 
@@ -58,6 +59,22 @@ export const sellers = sqliteTable(
       .notNull()
       .default('invited'),
     stripeConnectAccountId: text('stripe_connect_account_id'),
+    // --- Perfil público de escaparate (solo vitrina; nada de pagos) ---
+    // Columnas nullable a propósito: el alta mínima de un seller no las exige y
+    // así la migración es puro ALTER TABLE ADD COLUMN (D1-friendly).
+    verified: integer('verified', { mode: 'boolean' }).notNull().default(false),
+    monogram: text('monogram'),
+    city: text('city'),
+    neighborhood: text('neighborhood'),
+    memberSince: integer('member_since'),
+    blurb: text('blurb'),
+    favoriteGames: text('favorite_games', { mode: 'json' }).$type<Tcg[]>(),
+    yearsInHobby: integer('years_in_hobby'),
+    funFact: text('fun_fact'),
+    address: text('address'),
+    hours: text('hours', { mode: 'json' }).$type<SellerHours[]>(),
+    whatsapp: text('whatsapp'),
+    instagram: text('instagram'),
     ...timestamps,
   },
   (t) => [

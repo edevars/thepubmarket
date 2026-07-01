@@ -34,13 +34,14 @@ export const catalog = new Hono<AppEnv>()
 
 /**
  * GET /catalog — lista paginada de inventario disponible.
- * Query: q (nombre, LIKE), set (set_code exacto), limit, offset.
+ * Query: q (nombre, LIKE), set (set_code exacto), seller (id exacto), limit, offset.
  * Disponible = status 'active' y quantity > 0.
  */
 catalog.get('/', async (c) => {
   const db = c.get('db')
   const q = c.req.query('q')?.trim()
   const set = c.req.query('set')?.trim()
+  const seller = c.req.query('seller')?.trim()
   const limit = parseIntParam(c.req.query('limit'), DEFAULT_LIMIT, 1, MAX_LIMIT)
   const offset = parseIntParam(c.req.query('offset'), 0, 0, Number.MAX_SAFE_INTEGER)
 
@@ -48,6 +49,7 @@ catalog.get('/', async (c) => {
   // SQLite LIKE es case-insensitive para ASCII; el índice usa COLLATE NOCASE.
   if (q) filters.push(like(inventory.title, `%${q}%`))
   if (set) filters.push(eq(inventory.setCode, set))
+  if (seller) filters.push(eq(inventory.sellerId, seller))
   const where = and(...filters)
 
   const totalRow = await db.select({ total: count() }).from(inventory).where(where).get()

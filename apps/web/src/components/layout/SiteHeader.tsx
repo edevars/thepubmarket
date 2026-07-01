@@ -82,9 +82,12 @@ export function SiteHeader() {
         <span className="cursor-default px-2.5 py-1.5 font-display text-sm font-semibold uppercase tracking-[0.06em] text-faint">
           {t('navMore')}
         </span>
-        <span className="cursor-default px-2.5 py-1.5 font-display text-sm font-semibold uppercase tracking-[0.06em] text-faint">
-          {t('navStore')}
-        </span>
+        <Link
+          href="/tiendas"
+          className="px-2.5 py-1.5 font-display text-sm font-semibold uppercase tracking-[0.06em] text-ink-2 hover:text-primary-hover"
+        >
+          {t('navStores')}
+        </Link>
       </nav>
 
       {!isHome && (

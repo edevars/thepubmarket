@@ -2,7 +2,12 @@
  * Capa de acceso a la API del Worker desde la web. Solo lectura del catálogo
  * público en Fase 1 (sin carrito ni checkout).
  */
-import type { CatalogListResponse, InventoryItem } from '@thepubmarket/shared'
+import type {
+  CatalogListResponse,
+  InventoryItem,
+  Seller,
+  SellerListResponse,
+} from '@thepubmarket/shared'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8787'
 
@@ -11,6 +16,8 @@ export const CATALOG_PAGE_SIZE = 24
 export interface CatalogQuery {
   q?: string
   set?: string
+  /** Filtra por id de seller (inventario de una tienda). */
+  seller?: string
   page?: number
   /** Tamaño de página explícito. Default `CATALOG_PAGE_SIZE`. La API topa en 200. */
   limit?: number
@@ -23,6 +30,7 @@ export async function fetchCatalog(query: CatalogQuery): Promise<CatalogListResp
   const params = new URLSearchParams()
   if (query.q) params.set('q', query.q)
   if (query.set) params.set('set', query.set)
+  if (query.seller) params.set('seller', query.seller)
   params.set('limit', String(limit))
   params.set('offset', String((page - 1) * limit))
 
@@ -37,6 +45,23 @@ export async function fetchCatalogItem(id: string): Promise<InventoryItem | null
   if (res.status === 404) return null
   if (!res.ok) throw new Error(`catalog item request failed: ${res.status}`)
   return (await res.json()) as InventoryItem
+}
+
+/** Tiendas activas del market. Lanza si la API responde con error. */
+export async function fetchSellers(): Promise<SellerListResponse> {
+  const res = await fetch(`${API_URL}/sellers`, { cache: 'no-store' })
+  if (!res.ok) throw new Error(`sellers request failed: ${res.status}`)
+  return (await res.json()) as SellerListResponse
+}
+
+/** Perfil de una tienda por slug. Null si no existe / no está activa (404). */
+export async function fetchSellerBySlug(slug: string): Promise<Seller | null> {
+  const res = await fetch(`${API_URL}/sellers/${encodeURIComponent(slug)}`, {
+    cache: 'no-store',
+  })
+  if (res.status === 404) return null
+  if (!res.ok) throw new Error(`seller request failed: ${res.status}`)
+  return (await res.json()) as Seller
 }
 
 /**
