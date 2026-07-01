@@ -3,8 +3,8 @@
 > Snapshot técnico del proyecto. Actualízalo al cerrar cada bloque de trabajo.
 > Léelo junto con `ROADMAP.md` (fases) y `CLAUDE.md` (reglas de decisión).
 
-**Fecha:** 2026-06-26
-**Rama activa:** `fase-2-transaccional`
+**Fecha:** 2026-07-01
+**Rama activa:** `main`
 **Fase del roadmap:** Fase 2 — Núcleo transaccional (código completo; falta Stripe vivo)
 
 ---
@@ -15,6 +15,11 @@ Todo el núcleo transaccional está implementado en código y verificado por
 build/lint. La experiencia de compra corre con **checkout mockeado** (no toca
 fondos, no llama a Stripe). El único bloqueo para transaccionar de verdad es la
 **configuración viva de Stripe Connect** + onboarding del primer seller.
+
+Nuevo desde el 2026-07-01: **tiendas end-to-end** (commit `670fee4`) — galería
+`/tiendas` + perfil Seller Hub `/tiendas/[slug]` conectados a D1 vía
+`GET /sellers`, con 5 tiendas seedeadas e inventario repartido. Desplegado a
+producción (D1 remota + api + web).
 
 ---
 
@@ -51,6 +56,22 @@ crea `.env`, aplica migraciones + seed de D1 local, y levanta los tres servicios
   `apps/web/src/components/cart/` (`CartLine`, `OrderSummary`, `CartDrawer`),
   `apps/web/src/app/[locale]/cart/page.tsx`
 
+### Tiendas — Seller Hub + galería (end-to-end, diseño Seller Hub.dc.html)
+- **D1:** migración `0003_friendly_scourge.sql` añade 13 columnas de perfil
+  público a `sellers` (verified, monogram, blurb, horarios/juegos como JSON,
+  whatsapp, instagram…). Solo vitrina; nada de pagos.
+- **Seed:** `apps/api/seed.sql` upserta 5 tiendas vetted (ancla + 4) con
+  `INSERT … ON CONFLICT DO UPDATE` idempotente que **nunca toca** `user_id` ni
+  `stripe_connect_account_id`, y reparte el inventario por título.
+- **API:** `GET /sellers` y `GET /sellers/:slug` (`apps/api/src/routes/sellers.ts`,
+  singlesCount vía LEFT JOIN + `COUNT(inventory.id)`); filtro `?seller=` en
+  `GET /catalog`. Contrato `Seller` en `packages/shared`.
+- **Web:** galería `/tiendas` y perfil `/tiendas/[slug]` (hero + badge
+  verificado, inventario con filtros, conoce al vendedor, ubicación, horarios,
+  contacto). Componentes en `apps/web/src/components/sellers/`; frontera
+  `apps/web/src/lib/sellers/data.ts` (API real; mocks tras
+  `NEXT_PUBLIC_USE_MOCKS=true`). Navbar: link "Tiendas".
+
 ---
 
 ## Lo que falta / está mockeado (⏳)
@@ -62,8 +83,10 @@ crea `.env`, aplica migraciones + seed de D1 local, y levanta los tres servicios
    intacta en `apps/web/src/lib/client-api.ts`.
 3. **Estados items/redirigiendo del `/cart`** solo se ven con sesión iniciada
    (sin usuario, el carrito muestra el auth gate). Verificados por build.
-4. **Gap de datos seller:** `InventoryItem` (en `packages/shared`) no expone
-   nombre ni verificación del vendedor; la fila "Vendido por" del carrito se omite.
+4. **Gap de datos seller en el carrito:** `InventoryItem` (en `packages/shared`)
+   sigue sin exponer nombre/verificación del vendedor; la fila "Vendido por" del
+   carrito se omite. Ahora es fácil de cerrar: existe `GET /sellers` y el contrato
+   `Seller` — falta decidir si se hace join en catálogo o lookup en el front.
 
 ---
 
@@ -76,8 +99,13 @@ crea `.env`, aplica migraciones + seed de D1 local, y levanta los tres servicios
 - **Procesos huérfanos:** wrangler/workerd/next a veces quedan vivos tras un Ctrl+C
   sucio y ocupan puertos. Límpialos: `pkill -f 'thepubmarket/apps' ; pkill -f 'workerd serve'`.
 - **`NEXT_PUBLIC_API_URL`:** en `apps/web/.env` apunta al **API remoto**
-  (`workers.dev`), que sí tiene catálogo. El API local arranca vacío. Para demo
-  100% local con datos, usa `NEXT_PUBLIC_USE_MOCKS=true` (sirve `mock-data.ts`).
+  (`workers.dev`), que sí tiene catálogo y sellers. El API local arranca sin
+  inventario: cárgalo con `pnpm inventory:load:local` (API levantada) y luego
+  re-corre `pnpm -F @thepubmarket/api db:seed:local` para repartirlo entre
+  tiendas. Para demo 100% local sin API, `NEXT_PUBLIC_USE_MOCKS=true`.
+- **`load-inventory.mjs` asigna todo al seller ancla** y no es idempotente: tras
+  cualquier recarga de inventario (local o remota), re-ejecuta `db:seed:*` para
+  que los `UPDATE` por título redistribuyan las cartas entre las 5 tiendas.
 - **Carrito en `localStorage`** (clave `tpm_cart`): persiste entre recargas e
   independiente del API. Campos de display son opcionales (retrocompat).
 
@@ -90,4 +118,5 @@ pnpm -F @thepubmarket/web typecheck   # tipos del front
 pnpm -F @thepubmarket/web build       # build de producción
 pnpm lint                             # biome en todo el repo
 curl -s localhost:8787/health         # API + D1
+curl -s localhost:8787/sellers        # 5 tiendas con singlesCount
 ```

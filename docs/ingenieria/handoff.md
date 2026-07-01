@@ -24,16 +24,19 @@ pnpm dev:up --no-install --no-migrate
 
 ```
 apps/api/src/
-  routes/        checkout.ts · webhooks.ts · auth.ts · catalog.ts · orders.ts · admin.ts
-  lib/           stripe.ts · auth.ts · orders.ts · inventory.ts · scryfall.ts · email.ts
+  routes/        checkout.ts · webhooks.ts · auth.ts · catalog.ts · sellers.ts · orders.ts · admin.ts
+  lib/           stripe.ts · auth.ts · orders.ts · inventory.ts · sellers.ts · scryfall.ts · email.ts
   durable-objects/inventory-reservation.ts   # reserva con TTL (anti doble venta)
   workflows/     post-payment.ts             # confirma orden tras payment_intent.succeeded
+apps/api/seed.sql                # 5 tiendas (upsert) + reparto de inventario por título
 apps/web/src/
-  app/[locale]/  cart/ · checkout/{success,cancel}/ · login/ · catalog/ · auth/verify/
+  app/[locale]/  cart/ · checkout/{success,cancel}/ · login/ · catalog/ · tiendas/ · auth/verify/
   components/cart/CartLine.tsx · OrderSummary.tsx · CartDrawer.tsx
+  components/sellers/            # SellerHubView, SellerInventory, SellerGallery…
   lib/           cart.tsx (contexto + drawer) · client-api.ts (createCheckout) · session.ts
   lib/catalog/   display.ts · data.ts · mock-data.ts
-packages/shared/src/index.ts   # contrato (InventoryItem, CheckoutRequest, OrderSummary…)
+  lib/sellers/   data.ts (frontera API/mocks) · mock-data.ts · types.ts
+packages/shared/src/index.ts   # contrato (InventoryItem, Seller, CheckoutRequest, OrderSummary…)
 ```
 
 ## 3. Próximo objetivo: cerrar Fase 2 (Stripe vivo)
@@ -62,9 +65,15 @@ application fee, nunca separate charges & transfers):
 
 ## 4. Backlog técnico menor (no bloquea Fase 2)
 
-- **Seller en el carrito:** añadir `sellerName`/`verified` al contrato
-  `InventoryItem` y al endpoint de catálogo para mostrar la fila "Vendido por"
-  (hoy omitida). Campos ya previstos como opcionales en `CartItem` (`lib/cart.tsx`).
+- **Seller en el carrito:** mostrar la fila "Vendido por" (hoy omitida). Ya existe
+  `GET /sellers` y el contrato `Seller` (tiendas end-to-end, commit `670fee4`);
+  falta decidir si el catálogo hace join de `sellerName`/`verified` en
+  `InventoryItem` o el front hace lookup. Campos ya previstos como opcionales en
+  `CartItem` (`lib/cart.tsx`).
+- **Inventario propio por tienda:** el reparto actual es un `UPDATE` por título en
+  `seed.sql` (los 18 singles del ancla repartidos entre 5 tiendas). Cuando haya
+  carga real por seller, extender `scripts/load-inventory.mjs` para aceptar
+  `sellerId` por entrada y retirar los UPDATE del seed.
 - **Migrar imágenes a R2** (hoy se referencian URLs de Scryfall directo).
 - **Estados items/redirigiendo del carrito:** solo visibles con sesión; documentar
   un usuario de prueba o un atajo de dev para revisarlos sin magic link.
