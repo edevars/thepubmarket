@@ -24,20 +24,27 @@ pnpm dev:up --no-install --no-migrate
 
 ```
 apps/api/src/
-  routes/        checkout.ts · webhooks.ts · auth.ts · catalog.ts · sellers.ts · orders.ts · admin.ts
-  lib/           stripe.ts · auth.ts · orders.ts · inventory.ts · sellers.ts · scryfall.ts · email.ts
+  routes/        checkout.ts · webhooks.ts · auth.ts · catalog.ts · sellers.ts · seller-panel.ts · orders.ts · admin.ts
+  middleware/    admin-auth.ts · buyer-auth.ts · seller-auth.ts  # seller = sesión + sellers.user_id
+  lib/           stripe.ts · auth.ts · orders.ts · inventory.ts (createListing) · sellers.ts · scryfall.ts · email.ts
   durable-objects/inventory-reservation.ts   # reserva con TTL (anti doble venta)
   workflows/     post-payment.ts             # confirma orden tras payment_intent.succeeded
-apps/api/seed.sql                # 5 tiendas (upsert) + reparto de inventario por título
+apps/api/seed.sql                # 5 tiendas (upsert) + reparto de inventario + link dueño→ancla
 apps/web/src/
-  app/[locale]/  cart/ · checkout/{success,cancel}/ · login/ · catalog/ · tiendas/ · auth/verify/
+  app/[locale]/  cart/ · checkout/{success,cancel}/ · login/ · catalog/ · tiendas/ · panel/{,inventario,agregar,ordenes} · auth/verify/
   components/cart/CartLine.tsx · OrderSummary.tsx · CartDrawer.tsx
   components/sellers/            # SellerHubView, SellerInventory, SellerGallery…
-  lib/           cart.tsx (contexto + drawer) · client-api.ts (createCheckout) · session.ts
+  components/panel/              # PanelShell (guard+sidebar), PanelProvider, 4 vistas
+  lib/           cart.tsx (contexto + drawer) · client-api.ts (checkout + /seller/*) · session.ts
   lib/catalog/   display.ts · data.ts · mock-data.ts
   lib/sellers/   data.ts (frontera API/mocks) · mock-data.ts · types.ts
-packages/shared/src/index.ts   # contrato (InventoryItem, Seller, CheckoutRequest, OrderSummary…)
+packages/shared/src/index.ts   # contrato (InventoryItem, Seller, SellerOrder, CheckoutRequest…)
 ```
+
+Panel del Vendedor (`/panel`): acceso = magic link con un email vinculado en
+`sellers.user_id` (seed vincula al dueño con el ancla; invitar otros:
+`POST /admin/sellers/:id/link {email}` con `x-admin-key`). El chrome del
+marketplace se oculta en `/panel/*` vía `MarketplaceChrome` (layout del locale).
 
 ## 3. Próximo objetivo: cerrar Fase 2 (Stripe vivo)
 

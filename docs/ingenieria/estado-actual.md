@@ -3,7 +3,7 @@
 > Snapshot técnico del proyecto. Actualízalo al cerrar cada bloque de trabajo.
 > Léelo junto con `ROADMAP.md` (fases) y `CLAUDE.md` (reglas de decisión).
 
-**Fecha:** 2026-07-01
+**Fecha:** 2026-07-04
 **Rama activa:** `main`
 **Fase del roadmap:** Fase 2 — Núcleo transaccional (código completo; falta Stripe vivo)
 
@@ -20,6 +20,15 @@ Nuevo desde el 2026-07-01: **tiendas end-to-end** (commit `670fee4`) — galerí
 `/tiendas` + perfil Seller Hub `/tiendas/[slug]` conectados a D1 vía
 `GET /sellers`, con 5 tiendas seedeadas e inventario repartido. Desplegado a
 producción (D1 remota + api + web).
+
+Nuevo desde el 2026-07-04: **Panel del Vendedor** (`/panel`) end-to-end —
+autoservicio de inventario (alta vía Scryfall, precio/cantidad inline, pausa) y
+órdenes con envío (Pagada → Enviada con guía → Entregada). API `/seller/*` con
+`sellerAuth` (sesión magic-link + `sellers.user_id`, por fin en uso). Migración
+0005-ready: 0004 añadió `tracking_number/shipped_at/delivered_at` a `orders`
+(el enum de status NO se tocó; enviado/entregado se derivan, entregada fija
+`fulfilled`). Vinculación de sellers: seed (dueño→ancla) +
+`POST /admin/sellers/:id/link`. Desplegado a producción.
 
 ---
 
