@@ -10,13 +10,13 @@
  * (centavos MXN). Sin pagos ni reservas aquí.
  */
 
-import { inventory } from '@thepubmarket/db'
-import { ANCHOR_SELLER_ID, type CardSnapshot, CONDITIONS, FINISHES } from '@thepubmarket/shared'
+import { inventory, sellers, users } from '@thepubmarket/db'
+import { ANCHOR_SELLER_ID, CONDITIONS, FINISHES } from '@thepubmarket/shared'
 import { eq, sql } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { z } from 'zod'
-import { rowToInventoryItem } from '../lib/inventory'
-import { getCardById, ScryfallError, searchCards } from '../lib/scryfall'
+import { createListing, type ListingInput, rowToInventoryItem } from '../lib/inventory'
+import { ScryfallError, searchCards } from '../lib/scryfall'
 import type { AppEnv } from '../types'
 
 const createSchema = z.object({
@@ -61,53 +61,50 @@ admin.post('/inventory', async (c) => {
   if (!parsed.success) {
     return c.json({ error: 'invalid_body', issues: parsed.error.issues }, 400)
   }
-  const input = parsed.data
+  const { sellerId, ...offer } = parsed.data
 
-  // Trae el snapshot canónico de la carta (cache KV → Scryfall).
-  let card: CardSnapshot
-  try {
-    card = await getCardById(input.scryfallId, c.env.SESSIONS)
-  } catch (err) {
-    if (err instanceof ScryfallError) {
-      const code = err.status === 404 ? 404 : 502
-      return c.json({ error: 'card_not_found_or_scryfall_error', status: err.status }, code)
-    }
-    throw err
+  // Lógica de alta compartida con el panel del seller (lib/inventory).
+  const result = await createListing(c.get('db'), c.env.SESSIONS, offer as ListingInput, sellerId)
+  if (!result.ok) {
+    return c.json({ error: result.error, ...result.extra }, result.status)
   }
+  return c.json(rowToInventoryItem(result.row), 201)
+})
 
-  // El acabado pedido debe existir para esa impresión (cuando Scryfall lo informa).
-  if (card.finishes.length > 0 && !card.finishes.includes(input.finish)) {
-    return c.json({ error: 'finish_not_available', available: card.finishes }, 400)
+/**
+ * POST /admin/sellers/:id/link — vincula (invita) un seller con el usuario
+ * dueño de un email. Crea el usuario si no existe (el magic link lo encontrará
+ * por email al iniciar sesión). Modelo vetted: la invitación es manual, no hay
+ * auto-registro de sellers.
+ */
+const linkSchema = z.object({ email: z.string().email() })
+
+admin.post('/sellers/:id/link', async (c) => {
+  const sellerId = c.req.param('id')
+  const parsed = linkSchema.safeParse(await c.req.json().catch(() => null))
+  if (!parsed.success) {
+    return c.json({ error: 'invalid_body', issues: parsed.error.issues }, 400)
   }
+  const email = parsed.data.email.trim().toLowerCase()
+  const db = c.get('db')
 
-  const [row] = await c
-    .get('db')
-    .insert(inventory)
-    .values({
-      id: crypto.randomUUID(),
-      sellerId: input.sellerId,
-      tcg: 'mtg',
-      title: card.name,
-      scryfallId: card.scryfallId,
-      oracleId: card.oracleId,
-      setCode: card.setCode,
-      setName: card.setName,
-      collectorNumber: card.collectorNumber,
-      cardLang: input.language,
-      rarity: card.rarity,
-      artist: card.artist,
-      finish: input.finish as 'nonfoil' | 'foil',
-      condition: input.condition,
-      priceCents: input.priceCents,
-      quantity: input.quantity,
-      status: 'active',
-      // Snapshot de la URL de Scryfall. TODO: migrar imágenes a R2.
-      imageUrl: card.imageUrl,
-    })
-    .returning()
+  const seller = await db.select().from(sellers).where(eq(sellers.id, sellerId)).get()
+  if (!seller) return c.json({ error: 'not_found' }, 404)
 
-  if (!row) return c.json({ error: 'insert_failed' }, 500)
-  return c.json(rowToInventoryItem(row), 201)
+  const existing = await db.select().from(users).where(eq(users.email, email)).get()
+  const user =
+    existing ??
+    (
+      await db.insert(users).values({ id: crypto.randomUUID(), email, role: 'buyer' }).returning()
+    )[0]
+  if (!user) return c.json({ error: 'insert_failed' }, 500)
+
+  await db
+    .update(sellers)
+    .set({ userId: user.id, updatedAt: sql`(unixepoch())` })
+    .where(eq(sellers.id, sellerId))
+
+  return c.json({ ok: true, sellerId, userId: user.id, email })
 })
 
 /** PATCH /admin/inventory/:id — edita precio, cantidad, condición o estado. */

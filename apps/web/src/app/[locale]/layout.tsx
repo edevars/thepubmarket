@@ -6,6 +6,7 @@ import { setRequestLocale } from 'next-intl/server'
 import type { ReactNode } from 'react'
 import { AuthProvider } from '@/components/auth/AuthProvider'
 import { CartDrawer } from '@/components/cart/CartDrawer'
+import { MarketplaceChrome } from '@/components/layout/MarketplaceChrome'
 import { SiteFooter } from '@/components/layout/SiteFooter'
 import { SiteHeader } from '@/components/layout/SiteHeader'
 import { routing } from '@/i18n/routing'
@@ -60,11 +61,17 @@ export default async function LocaleLayout({
           <AuthProvider>
             <CartProvider>
               <div className="flex min-h-screen flex-col">
-                <SiteHeader />
+                <MarketplaceChrome>
+                  <SiteHeader />
+                </MarketplaceChrome>
                 <div className="flex-1">{children}</div>
-                <SiteFooter />
+                <MarketplaceChrome>
+                  <SiteFooter />
+                </MarketplaceChrome>
               </div>
-              <CartDrawer />
+              <MarketplaceChrome>
+                <CartDrawer />
+              </MarketplaceChrome>
             </CartProvider>
           </AuthProvider>
         </NextIntlClientProvider>

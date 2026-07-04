@@ -80,6 +80,8 @@ export const sellers = sqliteTable(
   (t) => [
     uniqueIndex('idx_sellers_slug').on(t.slug),
     uniqueIndex('idx_sellers_stripe_connect_account_id').on(t.stripeConnectAccountId),
+    // Resolución sesión→seller del panel (sellerAuth busca por user_id).
+    index('idx_sellers_user_id').on(t.userId),
     check('sellers_status_check', sql`${t.status} IN ('invited', 'active', 'suspended')`),
   ],
 )
@@ -159,6 +161,14 @@ export const orders = sqliteTable(
     currency: text('currency').notNull().default('MXN'),
     stripePaymentIntentId: text('stripe_payment_intent_id'),
     stripeCheckoutSessionId: text('stripe_checkout_session_id'),
+    // --- Envío (lo gestiona el seller desde su panel; no toca pagos) ---
+    // El estado de UI se DERIVA: paid sin shippedAt = por enviar; shippedAt =
+    // enviada; deliveredAt (y status 'fulfilled') = entregada. El enum de
+    // `status` NO se amplía a propósito: cambiar su CHECK obligaría a recrear
+    // la tabla, patrón que D1 rechaza.
+    trackingNumber: text('tracking_number'),
+    shippedAt: integer('shipped_at'),
+    deliveredAt: integer('delivered_at'),
     ...timestamps,
   },
   (t) => [

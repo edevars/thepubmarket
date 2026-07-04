@@ -4,11 +4,13 @@ import { sql } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { adminAuth } from './middleware/admin-auth'
+import { sellerAuth } from './middleware/seller-auth'
 import { admin } from './routes/admin'
 import { auth } from './routes/auth'
 import { catalog } from './routes/catalog'
 import { checkout } from './routes/checkout'
 import { ordersRoutes } from './routes/orders'
+import { sellerPanel } from './routes/seller-panel'
 import { sellersRoutes } from './routes/sellers'
 import { webhooks } from './routes/webhooks'
 import type { AppEnv } from './types'
@@ -56,6 +58,10 @@ app.route('/catalog', catalog)
 
 // Tiendas públicas (perfil de vendedor, solo lectura, sin auth).
 app.route('/sellers', sellersRoutes)
+
+// Panel del Vendedor (autoservicio; sesión magic-link + fila activa en sellers).
+app.use('/seller/*', sellerAuth)
+app.route('/seller', sellerPanel)
 
 // Checkout y órdenes (requieren comprador autenticado; auth dentro de cada router).
 app.route('/checkout', checkout)

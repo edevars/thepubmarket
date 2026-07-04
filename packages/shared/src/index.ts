@@ -206,3 +206,72 @@ export interface CheckoutResponse {
   /** URL de Stripe Checkout (hospedado) a la que redirige el frontend. */
   url: string
 }
+
+// =====================================================================
+// Panel del Vendedor (API /seller, autenticada por sesión + fila en sellers)
+// =====================================================================
+
+/**
+ * Estado DERIVADO de una orden para el panel del seller. La columna
+ * `orders.status` conserva su enum original; 'shipped'/'delivered' se derivan
+ * de `shippedAt`/`deliveredAt` (entregada además fija status 'fulfilled').
+ */
+export type SellerOrderStatus =
+  | 'pending'
+  | 'paid'
+  | 'shipped'
+  | 'delivered'
+  | 'cancelled'
+  | 'refunded'
+
+/** Orden vista por su seller, con envío y liquidación desglosada. */
+export interface SellerOrder {
+  id: string
+  /** Folio corto para UI ("#TPM-3F2A"). */
+  shortId: string
+  status: SellerOrderStatus
+  createdAt: number
+  shippedAt: number | null
+  deliveredAt: number | null
+  trackingNumber: string | null
+  /** Comprador enmascarado (displayName o local-part truncado del email). */
+  buyerLabel: string
+  subtotalCents: number
+  /** Envío cobrado al comprador (total − subtotal; 0 en Fase 2). */
+  shippingCents: number
+  totalCents: number
+  platformFeeCents: number
+  /** Lo que recibe el seller: subtotal − comisión (application fee). */
+  netCents: number
+  items: OrderItemSummary[]
+}
+
+/** Respuesta de `GET /seller/orders`. */
+export interface SellerOrdersResponse {
+  items: SellerOrder[]
+}
+
+/** Respuesta de `GET /seller/me`: identidad de tienda + comisión vigente. */
+export interface SellerPanelMe {
+  seller: Seller
+  /** Comisión de la plataforma en basis points (800 = 8%). */
+  feeBps: number
+}
+
+/** Cuerpo de `POST /seller/inventory` (el sellerId lo fija la sesión). */
+export interface CreateListingRequest {
+  scryfallId: string
+  condition: Condition
+  finish: Finish
+  language: string
+  priceCents: number
+  quantity: number
+}
+
+/** Cuerpo de `PATCH /seller/inventory/:id`. Pausar = status 'inactive'. */
+export interface UpdateListingRequest {
+  priceCents?: number
+  quantity?: number
+  condition?: Condition
+  status?: 'active' | 'inactive'
+}

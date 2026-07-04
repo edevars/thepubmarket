@@ -151,6 +151,21 @@ ON CONFLICT(id) DO UPDATE SET
   updated_at = unixepoch();
 
 -- =====================================================================
+-- Vínculo usuario→seller para el Panel del Vendedor (pruebas del dueño).
+-- Crea el usuario si no existe (el login por magic link lo encontrará por
+-- email) y lo asocia al ancla SOLO si el ancla no tiene dueño ya (nunca pisa
+-- un vínculo real). Invitaciones futuras: POST /admin/sellers/:id/link.
+-- =====================================================================
+
+INSERT OR IGNORE INTO users (id, email, role)
+VALUES ('00000000-0000-4000-8000-00000000e001', 'enrique.devars@gmail.com', 'buyer');
+
+UPDATE sellers
+SET user_id = (SELECT id FROM users WHERE email = 'enrique.devars@gmail.com'),
+    updated_at = unixepoch()
+WHERE id = '00000000-0000-4000-8000-000000000001' AND user_id IS NULL;
+
+-- =====================================================================
 -- Reparto de inventario entre tiendas (determinista por título, idempotente).
 -- El ancla conserva: Ragavan, Sheoldred, Path to Exile, Teferi, Mother of Runes.
 -- =====================================================================
