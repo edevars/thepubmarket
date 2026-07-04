@@ -191,7 +191,7 @@
     "gallerySubtitle": "Vendedores vetados de la comunidad de The Pub Game Store. Cada tienda entra por invitación, con condición verificada y trato de jugador a jugador.",
     "galleryLoading": "Cargando tiendas…",
     "verified": "Vendedor verificado",
-    "verifiedSub": "Tienda física vetada",
+    "verifiedSub": "Tienda física verificada",
     "verifiedShort": "Verificado",
     "singles": "{count, plural, =0 {Sin singles} one {# single} other {# singles}}",
     "memberSince": "En el market desde {year}",
