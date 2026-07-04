@@ -275,3 +275,46 @@ export interface UpdateListingRequest {
   condition?: Condition
   status?: 'active' | 'inactive'
 }
+
+// =====================================================================
+// Mis Compras (vista del comprador: rastreo de sus órdenes)
+// =====================================================================
+
+/**
+ * Línea de orden enriquecida para el comprador. Los campos extra vienen de un
+ * JOIN al inventario original; son null si el listing ya no existe (el FK es
+ * set-null al borrar).
+ */
+export interface BuyerOrderItem extends OrderItemSummary {
+  condition: Condition | null
+  setCode: string | null
+  imageUrl: string | null
+}
+
+/**
+ * Orden vista por su comprador. Mismo estado derivado que el panel del seller
+ * (paid/shipped/delivered + terminales). SIN `platformFeeCents`: la comisión
+ * es información del vendedor, el comprador solo ve lo que pagó.
+ */
+export interface BuyerOrder {
+  id: string
+  /** Folio corto para UI ("#TPM-3F2A"). */
+  shortId: string
+  status: SellerOrderStatus
+  createdAt: number
+  shippedAt: number | null
+  deliveredAt: number | null
+  trackingNumber: string | null
+  /** Tienda vendedora (una orden = un seller). */
+  seller: { name: string; slug: string; verified: boolean }
+  subtotalCents: number
+  /** Envío cobrado al comprador (total − subtotal; 0 en Fase 2). */
+  shippingCents: number
+  totalCents: number
+  items: BuyerOrderItem[]
+}
+
+/** Respuesta de `GET /orders` (lista del comprador). */
+export interface BuyerOrdersResponse {
+  items: BuyerOrder[]
+}

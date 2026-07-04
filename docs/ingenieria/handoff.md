@@ -31,10 +31,11 @@ apps/api/src/
   workflows/     post-payment.ts             # confirma orden tras payment_intent.succeeded
 apps/api/seed.sql                # 5 tiendas (upsert) + reparto de inventario + link dueño→ancla
 apps/web/src/
-  app/[locale]/  cart/ · checkout/{success,cancel}/ · login/ · catalog/ · tiendas/ · panel/{,inventario,agregar,ordenes} · auth/verify/
+  app/[locale]/  cart/ · checkout/{success,cancel}/ · login/ · catalog/ · tiendas/ · panel/{,inventario,agregar,ordenes} · compras/ · auth/verify/
   components/cart/CartLine.tsx · OrderSummary.tsx · CartDrawer.tsx
   components/sellers/            # SellerHubView, SellerInventory, SellerGallery…
   components/panel/              # PanelShell (guard+sidebar), PanelProvider, 4 vistas
+  components/compras/            # ComprasView (rastreo del comprador, sin comisión)
   lib/           cart.tsx (contexto + drawer) · client-api.ts (checkout + /seller/*) · session.ts
   lib/catalog/   display.ts · data.ts · mock-data.ts
   lib/sellers/   data.ts (frontera API/mocks) · mock-data.ts · types.ts

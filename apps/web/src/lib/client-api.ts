@@ -4,6 +4,8 @@
  * en `lib/api.ts`.
  */
 import type {
+  BuyerOrder,
+  BuyerOrdersResponse,
   CardSnapshot,
   CheckoutRequest,
   CheckoutResponse,
@@ -43,6 +45,13 @@ export async function createCheckout(
     ok: false,
     error: (await res.json().catch(() => ({ error: 'checkout_failed' }))) as CheckoutError,
   }
+}
+
+/** Órdenes del comprador para "Mis compras" (con tienda, tracking y estado). */
+export async function fetchBuyerOrders(token: string): Promise<BuyerOrder[]> {
+  const res = await fetch(`${API}/orders`, { headers: { Authorization: `Bearer ${token}` } })
+  if (!res.ok) throw new Error(`orders request failed: ${res.status}`)
+  return ((await res.json()) as BuyerOrdersResponse).items
 }
 
 /** Detalle de una orden propia (página de éxito). */

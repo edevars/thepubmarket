@@ -2,8 +2,10 @@
  * Helpers de órdenes: cálculo de comisión (application fee) y mapeo a DTO.
  * Dinero SIEMPRE en centavos enteros.
  */
-import type { OrderItemRow, OrderRow } from '@thepubmarket/db'
+import type { InventoryRow, OrderItemRow, OrderRow, SellerRow } from '@thepubmarket/db'
 import type {
+  BuyerOrder,
+  Condition,
   OrderItemSummary,
   OrderStatus,
   OrderSummary,
@@ -69,6 +71,45 @@ export function maskBuyer(displayName: string | null, email: string): string {
   }
   const local = email.split('@')[0] ?? ''
   return local.length > 9 ? `${local.slice(0, 9)}…` : `${local}…`
+}
+
+/**
+ * Mapea orden + líneas + tienda al DTO del comprador `BuyerOrder`.
+ * SIN comisión: el comprador solo ve lo que pagó. Las líneas se enriquecen con
+ * el inventario original cuando la fila sigue viva (cond/set/imagen).
+ */
+export function orderToBuyerOrder(
+  order: OrderRow,
+  items: OrderItemRow[],
+  seller: SellerRow | undefined,
+  inventoryById: Map<string, InventoryRow>,
+): BuyerOrder {
+  return {
+    id: order.id,
+    shortId: `#TPM-${order.id.slice(0, 4).toUpperCase()}`,
+    status: deriveSellerOrderStatus(order),
+    createdAt: order.createdAt,
+    shippedAt: order.shippedAt,
+    deliveredAt: order.deliveredAt,
+    trackingNumber: order.trackingNumber,
+    seller: {
+      name: seller?.name ?? '—',
+      slug: seller?.slug ?? '',
+      verified: seller?.verified ?? false,
+    },
+    subtotalCents: order.subtotalCents,
+    shippingCents: Math.max(0, order.totalCents - order.subtotalCents),
+    totalCents: order.totalCents,
+    items: items.map((row) => {
+      const inv = row.inventoryId ? inventoryById.get(row.inventoryId) : undefined
+      return {
+        ...itemToSummary(row),
+        condition: (inv?.condition as Condition | undefined) ?? null,
+        setCode: inv?.setCode ?? null,
+        imageUrl: inv?.imageUrl ?? null,
+      }
+    }),
+  }
 }
 
 /** Mapea orden + líneas + comprador al DTO del panel `SellerOrder`. */

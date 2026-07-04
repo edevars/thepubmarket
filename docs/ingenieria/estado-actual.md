@@ -21,6 +21,14 @@ Nuevo desde el 2026-07-01: **tiendas end-to-end** (commit `670fee4`) — galerí
 `GET /sellers`, con 5 tiendas seedeadas e inventario repartido. Desplegado a
 producción (D1 remota + api + web).
 
+Nuevo desde el 2026-07-04 (2): **Mis Compras** (`/compras`) — el comprador ve
+sus órdenes con tienda (nombre + verificada), estado derivado, timeline con
+fechas y **guía de rastreo copiable**. `GET /orders` ahora devuelve
+`{items: BuyerOrder[]}` (sin comisión — info solo del vendedor); líneas
+enriquecidas con cond/set/imagen vía JOIN a inventory (null si el listing
+murió). Link "Mis compras" en el header con sesión. `GET /orders/:id`
+(checkout/success) intacto. Desplegado a producción.
+
 Nuevo desde el 2026-07-04: **Panel del Vendedor** (`/panel`) end-to-end —
 autoservicio de inventario (alta vía Scryfall, precio/cantidad inline, pausa) y
 órdenes con envío (Pagada → Enviada con guía → Entregada). API `/seller/*` con

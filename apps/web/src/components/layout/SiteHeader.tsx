@@ -121,14 +121,22 @@ export function SiteHeader() {
         </button>
 
         {user ? (
-          <button
-            type="button"
-            onClick={() => signOut()}
-            title={user.email}
-            className="hidden px-2 py-1.5 font-display text-sm font-semibold uppercase tracking-[0.06em] text-ink-2 hover:text-primary-hover sm:block"
-          >
-            {t('logout')}
-          </button>
+          <>
+            <Link
+              href="/compras"
+              className="hidden px-2 py-1.5 font-display text-sm font-semibold uppercase tracking-[0.06em] text-ink-2 hover:text-primary-hover sm:block"
+            >
+              {t('navPurchases')}
+            </Link>
+            <button
+              type="button"
+              onClick={() => signOut()}
+              title={user.email}
+              className="hidden px-2 py-1.5 font-display text-sm font-semibold uppercase tracking-[0.06em] text-ink-2 hover:text-primary-hover sm:block"
+            >
+              {t('logout')}
+            </button>
+          </>
         ) : (
           <Link
             href="/login"
