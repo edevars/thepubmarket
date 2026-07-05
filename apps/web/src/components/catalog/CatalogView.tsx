@@ -29,6 +29,12 @@ function pesosToCents(v: string): number | undefined {
   return Number.isFinite(n) ? Math.round(n) * 100 : undefined
 }
 
+function priceLabel(minPesos: string, maxPesos: string): string {
+  if (minPesos && maxPesos) return `$${minPesos}-$${maxPesos}`
+  if (minPesos) return `$${minPesos}+`
+  return `$0-$${maxPesos}`
+}
+
 interface CatalogViewProps {
   items: InventoryItem[]
   initialQuery?: string
@@ -50,6 +56,23 @@ export function CatalogView({ items, initialQuery = '' }: CatalogViewProps) {
     }))
   }, [items])
 
+  const conditionCounts = useMemo(() => {
+    const counts = Object.fromEntries(['NM', 'LP', 'MP', 'HP', 'DMG'].map((c) => [c, 0])) as Record<
+      Condition,
+      number
+    >
+    for (const item of items) counts[item.condition] += 1
+    return counts
+  }, [items])
+
+  const languageCounts = useMemo(() => {
+    const counts: Record<string, number> = {}
+    for (const item of items) counts[item.language] = (counts[item.language] ?? 0) + 1
+    return counts
+  }, [items])
+
+  const foilCount = useMemo(() => items.filter((item) => item.finish === 'foil').length, [items])
+
   const visible = useMemo(() => {
     const assembled: CatalogFilters = {
       q,
@@ -62,6 +85,14 @@ export function CatalogView({ items, initialQuery = '' }: CatalogViewProps) {
     }
     return applyFilters(items, assembled)
   }, [items, q, filters])
+
+  const activeFilterCount =
+    filters.tcgs.length +
+    filters.conditions.length +
+    filters.languages.length +
+    (filters.foilOnly ? 1 : 0) +
+    (filters.minPesos || filters.maxPesos ? 1 : 0) +
+    (q ? 1 : 0)
 
   function clearAll() {
     setQ('')
@@ -93,6 +124,15 @@ export function CatalogView({ items, initialQuery = '' }: CatalogViewProps) {
           },
         ]
       : []),
+    ...(filters.minPesos || filters.maxPesos
+      ? [
+          {
+            key: 'price',
+            label: priceLabel(filters.minPesos, filters.maxPesos),
+            onRemove: () => setFilters((f) => ({ ...f, minPesos: '', maxPesos: '' })),
+          },
+        ]
+      : []),
     ...(q ? [{ key: 'q', label: `"${q}"`, onRemove: () => setQ('') }] : []),
   ]
 
@@ -116,9 +156,9 @@ export function CatalogView({ items, initialQuery = '' }: CatalogViewProps) {
           <button
             type="button"
             onClick={() => setMobileFiltersOpen((v) => !v)}
-            className="border border-line-strong bg-panel px-3.5 py-2 font-display text-[13px] font-semibold uppercase tracking-[0.06em] text-ink md:hidden"
+            className="clip-btn border border-line-strong bg-panel px-3.5 py-2 font-display text-[13px] font-semibold uppercase tracking-[0.06em] text-ink md:hidden"
           >
-            {t('filters')} ({chips.length})
+            {t('filters')} ({activeFilterCount})
           </button>
           <div className="flex items-center gap-2 border border-line bg-input px-3 py-2">
             <span className="font-mono text-[9px] tracking-[0.1em] text-faint">{t('sort')}</span>
@@ -129,11 +169,18 @@ export function CatalogView({ items, initialQuery = '' }: CatalogViewProps) {
 
       <div className="md:grid md:grid-cols-[232px_1fr] md:items-start md:gap-6">
         <aside
-          className={`${mobileFiltersOpen ? 'mb-5 block' : 'hidden'} md:sticky md:top-[74px] md:block md:self-start`}
+          className={`${
+            mobileFiltersOpen ? 'fixed inset-0 z-40 block bg-bg/80 p-4 backdrop-blur-sm' : 'hidden'
+          } md:sticky md:top-[74px] md:z-auto md:block md:bg-transparent md:p-0 md:backdrop-blur-0 md:self-start`}
         >
           <FilterSidebar
             state={filters}
             tcgCounts={tcgCounts}
+            conditionCounts={conditionCounts}
+            languageCounts={languageCounts}
+            foilCount={foilCount}
+            activeCount={activeFilterCount}
+            resultCount={visible.length}
             onToggleTcg={(tcg) => setFilters((f) => ({ ...f, tcgs: toggle(f.tcgs, tcg) }))}
             onToggleCondition={(c: Condition) =>
               setFilters((f) => ({ ...f, conditions: toggle(f.conditions, c) }))
@@ -144,6 +191,7 @@ export function CatalogView({ items, initialQuery = '' }: CatalogViewProps) {
             onToggleFoil={() => setFilters((f) => ({ ...f, foilOnly: !f.foilOnly }))}
             onPriceChange={(field, value) => setFilters((f) => ({ ...f, [field]: value }))}
             onClear={clearAll}
+            onClose={() => setMobileFiltersOpen(false)}
           />
         </aside>
 
