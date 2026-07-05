@@ -156,6 +156,8 @@
   "detail": {
     "attributes": "Atributos",
     "otherListings": "Otras condiciones disponibles",
+    "soldBy": "Vendido por",
+    "verified": "Verificado",
     "related": "Cartas relacionadas",
     "choose": "Elegir",
     "attrSet": "Set",

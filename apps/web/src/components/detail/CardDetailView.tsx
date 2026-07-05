@@ -1,4 +1,4 @@
-import { CONDITIONS, type Condition, type InventoryItem } from '@thepubmarket/shared'
+import type { Condition, InventoryItem, Seller } from '@thepubmarket/shared'
 import { useLocale, useTranslations } from 'next-intl'
 import { AddToCartButton } from '@/components/cart/AddToCartButton'
 import { CardArt } from '@/components/catalog/CardArt'
@@ -29,10 +29,14 @@ const sectionTitle = 'mb-3 font-display text-sm font-bold uppercase tracking-[0.
 
 export function CardDetailView({
   item,
+  purchaseOptions,
   related,
+  sellers,
 }: {
   item: InventoryItem
+  purchaseOptions: InventoryItem[]
   related: InventoryItem[]
+  sellers: Seller[]
 }) {
   const locale = useLocale()
   const t = useTranslations('detail')
@@ -60,28 +64,7 @@ export function CardDetailView({
     [t('attrArtist'), item.card.artist ?? '—'],
   ]
 
-  // "Otras condiciones": variaciones derivadas del mismo single (mock).
-  const otherConds = CONDITIONS.filter((c) => c !== item.condition)
-  const otherListings = [
-    {
-      cond: item.condition,
-      lang: item.language,
-      foil: item.finish === 'foil',
-      cents: Math.round(item.priceCents * 0.96),
-    },
-    {
-      cond: otherConds[0] ?? item.condition,
-      lang: 'es',
-      foil: false,
-      cents: Math.round(item.priceCents * 0.74),
-    },
-    {
-      cond: otherConds[1] ?? item.condition,
-      lang: 'en',
-      foil: false,
-      cents: Math.round(item.priceCents * 0.55),
-    },
-  ]
+  const sellerById = new Map(sellers.map((seller) => [seller.id, seller]))
 
   return (
     <main className="mx-auto w-full max-w-[1280px] px-5 pb-10 pt-5 sm:px-6">
@@ -192,27 +175,49 @@ export function CardDetailView({
           {/* otras condiciones */}
           <div className={sectionTitle}>{t('otherListings')}</div>
           <div className="flex flex-col gap-2">
-            {otherListings.map((o) => (
-              <div
-                key={`${o.cond}-${o.cents}`}
-                className="flex flex-wrap items-center gap-3 border border-line-soft bg-input px-4 py-3"
-              >
-                <ConditionDot condition={o.cond} />
-                <span className="text-[12.5px] text-muted">{langFull(o.lang)}</span>
-                <span className="text-[11.5px] text-faint">
-                  {o.foil ? t('foil') : t('nonfoil')}
-                </span>
-                <span className="ml-auto text-[15px] font-bold text-white">
-                  {formatMoneyCents(o.cents, locale)}
-                </span>
-                <button
-                  type="button"
-                  className="border border-line-strong px-2.5 py-1.5 font-display text-[11px] font-semibold uppercase tracking-[0.06em] text-primary-hover hover:border-primary hover:text-ink"
+            {purchaseOptions.map((option) => {
+              const seller = sellerById.get(option.sellerId)
+              const sellerLabel = seller?.name ?? option.sellerId
+              return (
+                <div
+                  key={option.id}
+                  className="flex flex-wrap items-center gap-3 border border-line-soft bg-input px-4 py-3"
                 >
-                  {t('choose')}
-                </button>
-              </div>
-            ))}
+                  <ConditionDot condition={option.condition} />
+                  <span className="text-[12.5px] text-muted">{langFull(option.language)}</span>
+                  <span className="text-[11.5px] text-faint">
+                    {option.finish === 'foil' ? t('foil') : t('nonfoil')}
+                  </span>
+                  <span className="min-w-0 text-[12px] text-muted-2">
+                    {t('soldBy')}{' '}
+                    {seller?.slug ? (
+                      <Link
+                        href={`/tiendas/${seller.slug}`}
+                        className="font-semibold text-primary-hover hover:text-cyan"
+                      >
+                        {sellerLabel}
+                      </Link>
+                    ) : (
+                      <span className="font-semibold text-ink-2">{sellerLabel}</span>
+                    )}
+                    {seller?.verified && (
+                      <span className="ml-1.5 font-mono text-[10px] uppercase tracking-[0.06em] text-[#46c98a]">
+                        {t('verified')}
+                      </span>
+                    )}
+                  </span>
+                  <span className="ml-auto text-[15px] font-bold text-white">
+                    {formatMoneyCents(option.priceCents, locale)}
+                  </span>
+                  <Link
+                    href={`/catalog/${option.id}`}
+                    className="border border-line-strong px-2.5 py-1.5 font-display text-[11px] font-semibold uppercase tracking-[0.06em] text-primary-hover hover:border-primary hover:text-ink"
+                  >
+                    {t('choose')}
+                  </Link>
+                </div>
+              )
+            })}
           </div>
         </div>
       </div>

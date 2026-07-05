@@ -1,7 +1,8 @@
 import { notFound } from 'next/navigation'
 import { setRequestLocale } from 'next-intl/server'
 import { CardDetailView } from '@/components/detail/CardDetailView'
-import { getItem, getRelated } from '@/lib/catalog/data'
+import { getItem, getPurchaseOptions, getRelated } from '@/lib/catalog/data'
+import { getSellers } from '@/lib/sellers/data'
 
 interface ItemPageProps {
   params: Promise<{ locale: string; id: string }>
@@ -15,7 +16,18 @@ export default async function CatalogItemPage({ params }: ItemPageProps) {
   const item = await getItem(id)
   if (!item) notFound()
 
-  const related = await getRelated(item)
+  const [related, purchaseOptions, sellers] = await Promise.all([
+    getRelated(item),
+    getPurchaseOptions(item),
+    getSellers(),
+  ])
 
-  return <CardDetailView item={item} related={related} />
+  return (
+    <CardDetailView
+      item={item}
+      purchaseOptions={purchaseOptions}
+      related={related}
+      sellers={sellers}
+    />
+  )
 }

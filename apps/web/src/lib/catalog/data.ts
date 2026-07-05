@@ -89,3 +89,22 @@ export async function getRelated(item: InventoryItem, limit = 4): Promise<Invent
   const rest = all.filter((i) => i.tcg !== item.tcg && i.id !== item.id)
   return [...sameGame, ...rest].slice(0, limit)
 }
+
+/** Ofertas reales de la misma carta para comparar condición/precio/tienda. */
+export async function getPurchaseOptions(item: InventoryItem, limit = 6): Promise<InventoryItem[]> {
+  const all = await getCatalog()
+  const sameCard = all.filter((i) => {
+    if (i.id === item.id) return false
+    if (item.card.oracleId && i.card.oracleId === item.card.oracleId) return true
+    return i.card.name.toLowerCase() === item.card.name.toLowerCase()
+  })
+
+  return [item, ...sameCard]
+    .filter((i) => i.status === 'active')
+    .sort((a, b) => {
+      if (a.id === item.id) return -1
+      if (b.id === item.id) return 1
+      return a.priceCents - b.priceCents
+    })
+    .slice(0, limit)
+}
