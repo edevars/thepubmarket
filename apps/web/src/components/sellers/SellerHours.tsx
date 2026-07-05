@@ -34,7 +34,6 @@ export function SellerHours({ seller }: { seller: SellerProfile }) {
     setOpen(isOpenNow(seller.hours, new Date()))
   }, [seller.hours])
 
-  const waUrl = `https://wa.me/${seller.whatsapp}`
   const igUrl = `https://instagram.com/${seller.instagram}`
 
   return (
