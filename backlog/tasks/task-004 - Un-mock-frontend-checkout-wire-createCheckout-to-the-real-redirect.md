@@ -4,11 +4,14 @@ title: 'Un-mock frontend checkout: wire createCheckout to the real redirect'
 status: To Do
 assignee: []
 created_date: '2026-07-22 22:31'
+updated_date: '2026-07-22 22:32'
 labels:
   - 'epic:checkout-golive'
   - feature
 milestone: m-0
-dependencies: []
+dependencies:
+  - TASK-002
+  - TASK-003
 priority: high
 ordinal: 4000
 ---
