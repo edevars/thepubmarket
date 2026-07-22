@@ -6,11 +6,13 @@ title: >-
 status: To Do
 assignee: []
 created_date: '2026-07-22 22:31'
+updated_date: '2026-07-22 22:32'
 labels:
   - 'epic:connect-onboarding'
   - feature
 milestone: m-1
-dependencies: []
+dependencies:
+  - TASK-002
 priority: high
 ordinal: 7000
 ---
