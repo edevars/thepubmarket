@@ -4,11 +4,13 @@ title: Validate end-to-end Stripe transaction flow in test mode
 status: To Do
 assignee: []
 created_date: '2026-07-22 22:31'
+updated_date: '2026-07-22 22:32'
 labels:
   - 'epic:e2e-validation'
   - spike
 milestone: m-0
-dependencies: []
+dependencies:
+  - TASK-004
 priority: high
 ordinal: 5000
 ---
