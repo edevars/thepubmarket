@@ -4,11 +4,13 @@ title: Show read-only seller payout status/history in the seller portal (/panel)
 status: To Do
 assignee: []
 created_date: '2026-07-22 22:32'
+updated_date: '2026-07-22 22:32'
 labels:
   - 'epic:connect-onboarding'
   - feature
 milestone: m-1
-dependencies: []
+dependencies:
+  - TASK-007
 priority: medium
 ordinal: 8000
 ---
