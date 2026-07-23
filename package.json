@@ -9,7 +9,7 @@
   },
   "scripts": {
     "dev:up": "bash scripts/dev.sh",
-    "dev": "turbo run dev",
+    "dev": "turbo run dev --filter=!@thepubmarket/pitch",
     "build": "turbo run build",
     "typecheck": "turbo run typecheck",
     "lint": "biome check .",

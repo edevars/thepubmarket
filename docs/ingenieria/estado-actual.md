@@ -56,10 +56,12 @@ autoservicio de inventario (alta vía Scryfall, precio/cantidad inline, pausa) y
 |---|---|---|---|
 | Web (Next.js) | `pnpm dev` (turbo) | http://localhost:3000 | App bilingüe ES/EN |
 | API (Worker + Hono) | `wrangler dev` | http://localhost:8787 | D1/KV/R2/DO locales |
-| Pitch deck (Worker assets) | `wrangler dev` | http://localhost:8788 | Interno, ajeno al marketplace |
 
 Entrypoint único de dev: `pnpm dev:up` (= `bash scripts/dev.sh`) → instala deps,
-crea `.env`, aplica migraciones + seed de D1 local, y levanta los tres servicios.
+crea `.env`, aplica migraciones + seed de D1 local, y levanta los servicios del
+marketplace (`pnpm dev` filtra el workspace `@thepubmarket/pitch` — el pitch
+deck interno ya no arranca con `dev:up`; corre por separado con
+`pnpm --filter @thepubmarket/pitch dev`, puerto 8788).
 
 ---
 
@@ -127,9 +129,12 @@ crea `.env`, aplica migraciones + seed de D1 local, y levanta los tres servicios
 ## Gotchas conocidos
 
 - **Puertos de wrangler:** `api` usa los defaults (8787 / inspector 9229). El
-  worker `pitch` se fijó a `8788` / inspector `9230` en su `wrangler.jsonc` para no
-  chocar. Si agregas otro Worker, asígnale puertos propios o `dev:up` fallará con
-  "Address already in use".
+  worker `pitch` se fijó a `8788` / inspector `9230` en su `wrangler.jsonc` para
+  no chocar, pero `pnpm dev` (y por lo tanto `dev:up`) ya NO lo levanta —
+  root `package.json` filtra `@thepubmarket/pitch` del `turbo run dev`. Si
+  necesitas correrlo, hazlo aparte: `pnpm --filter @thepubmarket/pitch dev`.
+  Si agregas otro Worker al `dev` general, asígnale puertos propios o
+  `dev:up` fallará con "Address already in use".
 - **Procesos huérfanos:** wrangler/workerd/next a veces quedan vivos tras un Ctrl+C
   sucio y ocupan puertos. Límpialos: `pkill -f 'thepubmarket/apps' ; pkill -f 'workerd serve'`.
 - **`NEXT_PUBLIC_API_URL`:** en `apps/web/.env` apunta al **API remoto**
