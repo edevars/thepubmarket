@@ -1,9 +1,10 @@
 ---
 id: TASK-003
 title: Configure real Stripe secrets and webhook endpoint (local and prod)
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-07-22 22:31'
+updated_date: '2026-07-23 00:33'
 labels:
   - 'epic:stripe-platform'
   - ops
