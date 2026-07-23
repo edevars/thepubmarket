@@ -31,6 +31,8 @@ ponerse al día sin recargar todo el contexto.
 | ¿Qué corre hoy y qué está mockeado? | [`estado-actual.md`](./estado-actual.md) |
 | ¿Cómo arranco y por dónde sigo? | [`handoff.md`](./handoff.md) |
 | ¿Qué reglas no puedo romper? | [`../../CLAUDE.md`](../../CLAUDE.md) |
+| ¿Qué falta para cobrar dinero real (no test)? | [`checklist-go-live-real.md`](./checklist-go-live-real.md) |
+| ¿Qué se validó del flujo E2E (pago fallido, idempotencia, TTL)? | [`validacion-e2e-task-005.md`](./validacion-e2e-task-005.md) |
 
 ---
 

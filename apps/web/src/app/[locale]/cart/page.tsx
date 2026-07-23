@@ -9,9 +9,8 @@ import { OrderSummary } from '@/components/cart/OrderSummary'
 import { Link, useRouter } from '@/i18n/navigation'
 import { useCart } from '@/lib/cart'
 import { formatMoneyCents } from '@/lib/catalog/display'
-
-/** Tiempo del "redirect" simulado a Stripe antes de aterrizar en éxito. */
-const MOCK_REDIRECT_MS = 1800
+import { createCheckout } from '@/lib/client-api'
+import { getToken } from '@/lib/session'
 
 export default function CartPage() {
   return (
@@ -28,18 +27,24 @@ function CartPageInner() {
   const { user, loading } = useAuth()
   const { items, count, subtotalCents } = useCart()
   const [phase, setPhase] = useState<'browse' | 'redirecting'>('browse')
-  const redirectTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [checkoutError, setCheckoutError] = useState(false)
   const autoPayDone = useRef(false)
 
-  // Mock de checkout: sin Stripe ni fondos. Solo simula el redirect y aterriza
-  // en /checkout/success, que ya vacía el carrito. `createCheckout` se mantiene
-  // intacto en lib/client-api para reconectar cuando Stripe esté configurado.
-  const startCheckout = useCallback(() => {
+  const startCheckout = useCallback(async () => {
+    const token = getToken()
+    if (!token) return
+    setCheckoutError(false)
     setPhase('redirecting')
-    redirectTimer.current = setTimeout(() => {
-      router.push('/checkout/success')
-    }, MOCK_REDIRECT_MS)
-  }, [router])
+    const res = await createCheckout(token, {
+      items: items.map((i) => ({ inventoryId: i.inventoryId, quantity: i.quantity })),
+    })
+    if (res.ok) {
+      window.location.href = res.data.url
+      return
+    }
+    setCheckoutError(true)
+    setPhase('browse')
+  }, [items])
 
   // Entrada desde el drawer (`/cart?pay=1`): arranca el checkout si hay sesión.
   useEffect(() => {
@@ -50,11 +55,7 @@ function CartPageInner() {
     }
   }, [params, user, loading, items.length, startCheckout])
 
-  // Limpia el timer si el componente se desmonta a mitad del redirect.
-  useEffect(() => () => clearTimeout(redirectTimer.current ?? undefined), [])
-
   const cancelRedirect = () => {
-    clearTimeout(redirectTimer.current ?? undefined)
     setPhase('browse')
   }
 
@@ -78,6 +79,12 @@ function CartPageInner() {
         </div>
         <span className="text-[13px] text-muted-2">{countLine}</span>
       </div>
+
+      {checkoutError && (
+        <p className="mb-[18px] border border-red-500/40 bg-red-500/10 px-4 py-2.5 text-sm text-red-400">
+          {t('checkoutError')}
+        </p>
+      )}
 
       <div className="grid grid-cols-1 gap-[18px] md:grid-cols-[1fr_320px] md:gap-6 md:items-start">
         <div className="flex flex-col gap-2.5">

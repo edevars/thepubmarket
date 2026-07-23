@@ -9,12 +9,22 @@
 
 ---
 
+## ⚠️ "Producción" hoy = Stripe en modo TEST
+
+Desde el 2026-07-23, el checkout E2E funciona de punta a punta **incluso en
+los Workers desplegados** (`thepubmarket-api`, `thepubmarket-web`): llaves y
+webhook de Stripe subidos vía `wrangler secret put`, `sellers.stripe_connect_account_id`
+poblado en D1 remoto. Pero son credenciales y cuentas **de modo test** — no se
+mueve dinero real. No confundir "está desplegado" con "ya se puede cobrar de
+verdad". Todo lo que falta para cruzar esa línea está en
+[`checklist-go-live-real.md`](./checklist-go-live-real.md).
+
 ## TL;DR
 
 Todo el núcleo transaccional está implementado en código y verificado por
-build/lint. La experiencia de compra corre con **checkout mockeado** (no toca
-fondos, no llama a Stripe). El único bloqueo para transaccionar de verdad es la
-**configuración viva de Stripe Connect** + onboarding del primer seller.
+build/lint, y el checkout ya no está mockeado en el frontend (TASK-004): llama
+al `POST /checkout` real y redirige a Stripe. Probado E2E en local y en el
+entorno desplegado, ambos en modo test.
 
 Nuevo desde el 2026-07-01: **tiendas end-to-end** (commit `670fee4`) — galería
 `/tiendas` + perfil Seller Hub `/tiendas/[slug]` conectados a D1 vía
@@ -93,11 +103,18 @@ crea `.env`, aplica migraciones + seed de D1 local, y levanta los tres servicios
 
 ## Lo que falta / está mockeado (⏳)
 
-1. **Stripe Connect vivo** — el bloqueo real. Sin keys reales ni Connect account
-   ni `sellers.connect_account_id` poblado. Ver pasos en `handoff.md`.
-2. **Checkout mockeado en el front:** `cart/page.tsx` simula el redirect (~1.8 s →
-   `/checkout/success`) en vez de llamar a `createCheckout`. La ruta real sigue
-   intacta en `apps/web/src/lib/client-api.ts`.
+1. **Ir a modo live de verdad.** TASK-001/002/003/004 cerraron el flujo
+   completo en modo test (cuenta plataforma, onboarding del ancla, secrets,
+   checkout real). Falta todo lo de
+   [`checklist-go-live-real.md`](./checklist-go-live-real.md): onboarding live
+   de Stripe (test y live son cuentas separadas, no hay migración automática),
+   dominio propio, envío real de email, Cloudflare Access, legal/fiscal.
+2. **Bug real, bloqueante para live (TASK-013):** un pago exitoso tras
+   reintentar en la misma Checkout Session (después de un rechazo previo) se
+   pierde — la orden queda `cancelled` y el inventario nunca se decrementa,
+   pese a que Stripe sí cobró (charge + application fee reales). Encontrado y
+   documentado en TASK-005, ver
+   [`validacion-e2e-task-005.md`](./validacion-e2e-task-005.md).
 3. **Estados items/redirigiendo del `/cart`** solo se ven con sesión iniciada
    (sin usuario, el carrito muestra el auth gate). Verificados por build.
 4. **Gap de datos seller en el carrito:** `InventoryItem` (en `packages/shared`)

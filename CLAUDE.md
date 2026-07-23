@@ -74,3 +74,48 @@ Antes de proponer algo, verifica:
 3. ¿Se queda dentro del **ecosistema Cloudflare** salvo justificación clara?
 4. ¿Toca algo **regulatorio**? Si sí, señálalo explícitamente.
 5. ¿Respeta el modelo **vetted sellers / no auto-registro**?
+
+## Task management
+
+**Backlog.md is the single source of truth for tasks.** Any work that requires
+planning or decision-making — features, fixes, hardening, spikes — must be
+tracked as a Backlog.md task via the MCP tools (see guidelines below), not in
+ad-hoc notes, comments, or conversation history alone.
+
+- `ROADMAP.md` defines phases and strategy; Backlog.md tracks the concrete,
+  actionable tasks within each phase (milestone = phase, `epic:<slug>` label =
+  epic within a phase).
+- Before starting non-trivial work, search Backlog.md first — do not duplicate
+  or silently redo something already tracked there.
+- Task status in Backlog.md reflects real project status; don't let it drift
+  from what's actually shipped.
+
+<!-- BACKLOG.MD MCP GUIDELINES START -->
+<!-- backlog.md-instructions-version: 1.48.0 -->
+
+<CRITICAL_INSTRUCTION>
+
+## BACKLOG WORKFLOW INSTRUCTIONS
+
+This project uses Backlog.md MCP for all task and project management activities.
+
+**CRITICAL GUIDANCE**
+
+- If your client supports MCP resources, read `backlog://workflow/overview` to understand when and how to use Backlog for this project.
+- If your client only supports tools or the above request fails, call `backlog.get_backlog_instructions()` to load the tool-oriented overview. Use the `instruction` selector when you need `task-creation`, `task-execution`, or `task-finalization`.
+
+- **First time working here?** Read the overview resource IMMEDIATELY to learn the workflow
+- **Already familiar?** You should have the overview cached ("## Backlog.md Overview (MCP)")
+- **When to read it**: BEFORE creating tasks, or when you're unsure whether to track work
+
+These guides cover:
+- Decision framework for when to create tasks
+- Search-first workflow to avoid duplicates
+- Links to detailed guides for task creation, execution, and finalization
+- MCP tools reference
+
+You MUST read the overview resource to understand the complete workflow. The information is NOT summarized here.
+
+</CRITICAL_INSTRUCTION>
+
+<!-- BACKLOG.MD MCP GUIDELINES END -->

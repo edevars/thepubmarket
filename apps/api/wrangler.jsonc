@@ -21,11 +21,11 @@
   //   - Prod:  wrangler secret put STRIPE_SECRET_KEY / STRIPE_WEBHOOK_SECRET
 
   // === Config no-secreta ===
-  // PLATFORM_FEE_BPS: comisión de la plataforma en puntos básicos (800 = 8%).
+  // PLATFORM_FEE_BPS: comisión de la plataforma en puntos básicos (1000 = 10%).
   // WEB_BASE_URL: origen del frontend (success/cancel de Checkout, redirect de
   // magic link). En local se sobreescribe vía .dev.vars.
   "vars": {
-    "PLATFORM_FEE_BPS": "800",
+    "PLATFORM_FEE_BPS": "1000",
     "WEB_BASE_URL": "https://thepubmarket-web.enrique-devars-cee.workers.dev"
   },
 
