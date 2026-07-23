@@ -4,6 +4,7 @@ title: 'Quitar el pitch deck de dev:up (conflicto de puerto 8788)'
 status: Done
 assignee: []
 created_date: '2026-07-23 06:04'
+updated_date: '2026-07-23 06:04'
 labels:
   - dev-tooling
 dependencies: []
@@ -25,9 +26,9 @@ Se filtró `@thepubmarket/pitch` del script `dev` raíz (`turbo run dev --filter
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 package.json (root) excluye @thepubmarket/pitch del turbo run dev
-- [ ] #2 docs/ingenieria/estado-actual.md refleja que pitch ya no arranca con dev:up y cómo correrlo aparte
-- [ ] #3 pnpm --filter @thepubmarket/pitch dev sigue funcionando para uso manual
+- [x] #1 package.json (root) excluye @thepubmarket/pitch del turbo run dev
+- [x] #2 docs/ingenieria/estado-actual.md refleja que pitch ya no arranca con dev:up y cómo correrlo aparte
+- [x] #3 pnpm --filter @thepubmarket/pitch dev sigue funcionando para uso manual
 <!-- AC:END -->
 
 ## Final Summary
