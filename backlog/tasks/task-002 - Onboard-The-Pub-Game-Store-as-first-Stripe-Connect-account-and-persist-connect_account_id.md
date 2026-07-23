@@ -3,7 +3,7 @@ id: TASK-002
 title: >-
   Onboard The Pub Game Store as first Stripe Connect account and persist
   connect_account_id
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-07-22 22:31'
 updated_date: '2026-07-23 00:30'
