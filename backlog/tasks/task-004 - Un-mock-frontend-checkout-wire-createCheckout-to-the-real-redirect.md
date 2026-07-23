@@ -4,7 +4,7 @@ title: 'Un-mock frontend checkout: wire createCheckout to the real redirect'
 status: In Progress
 assignee: []
 created_date: '2026-07-22 22:31'
-updated_date: '2026-07-23 00:53'
+updated_date: '2026-07-23 00:54'
 labels:
   - 'epic:checkout-golive'
   - feature
@@ -24,9 +24,17 @@ apps/web/src/app/[locale]/cart/page.tsx currently mocks checkout: the startCheck
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 startCheckout() in cart/page.tsx calls the real createCheckout from lib/client-api.ts instead of simulating a redirect
-- [ ] #2 On success, browser redirects to res.data.url returned by the API (the real Stripe Checkout session URL)
-- [ ] #3 The simulated ~1.8s mock redirect and mock comment are removed
+- [x] #1 startCheckout() in cart/page.tsx calls the real createCheckout from lib/client-api.ts instead of simulating a redirect
+- [x] #2 On success, browser redirects to res.data.url returned by the API (the real Stripe Checkout session URL)
+- [x] #3 The simulated ~1.8s mock redirect and mock comment are removed
 - [ ] #4 NEXT_PUBLIC_API_URL confirmed to point at the correct (working) API for the target environment
-- [ ] #5 `pnpm -F @thepubmarket/web typecheck` and `pnpm -F @thepubmarket/web build` pass
+- [x] #5 `pnpm -F @thepubmarket/web typecheck` and `pnpm -F @thepubmarket/web build` pass
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+startCheckout() en cart/page.tsx ahora llama a createCheckout(token, {items}) real vía @/lib/client-api y redirige con window.location.href = res.data.url (dominio externo de Stripe, por eso no se usa el router de Next). Se agrega estado checkoutError con el mensaje ya existente en i18n ('cart.checkoutError'). Se removió MOCK_REDIRECT_MS, el timer y el comentario de mock. typecheck y build pasan limpio.
+
+AC#4: apps/web/.env (gitignored, no se despliega) se apuntó temporalmente a http://localhost:8787 para poder probar el flujo local con la cuenta Connect y las llaves de test ya configuradas (TASK-002/003). Antes de cualquier deploy a producción hay que confirmar que sigue/vuelve a apuntar al Worker remoto correcto — no se toca ninguna config de producción con este cambio.
+<!-- SECTION:NOTES:END -->
