@@ -66,7 +66,7 @@ inmediatamente después de la prueba — sin diff neto en el archivo).
 - Tras esperar >15s sin pagar la orden A, Orden B reintentada → `201 Created`
   (el hold expiró y se liberó; nueva reserva exitosa).
 
-## AC#5 — Problema encontrado (crítico, requiere fix)
+## AC#5 — Problema encontrado (crítico) — ✅ Resuelto 2026-07-23 (TASK-013)
 
 **Un pago exitoso tras un rechazo previo en la misma Checkout Session se
 pierde: dinero real (test-mode) se cobra pero la orden queda `cancelled` y el
@@ -110,6 +110,33 @@ antes de ir a modo live — ver `checklist-go-live-real.md` sección 4
 (producto/operación), este es un bloqueante de facto para el go-live real
 aunque no esté aún en esa lista explícitamente.
 
+### Fix aplicado (2026-07-23)
+
+**Estrategia:** `payment_intent.payment_failed` ya NO cancela la orden ni
+libera el hold — solo se loguea (`console.warn`) para observabilidad. La
+cancelación real (liberar hold + `orders.status = 'cancelled'`) ocurre
+**únicamente** en `checkout.session.expired`, que es el único evento en el que
+Stripe confirma que la Checkout Session ya no admite más intentos. Como el
+guard `if (order.status !== 'pending') return` de `settle-order` en
+`post-payment.ts` ya existía, con la orden permaneciendo `pending` tras el
+rechazo, un pago exitoso posterior en la misma sesión la liquida con el
+camino normal (sin tocar `post-payment.ts`).
+
+Cambios en `apps/api/src/routes/webhooks.ts`: el caso
+`payment_intent.payment_failed` deja de llamar a `releaseAndCancel`.
+
+**Verificado con reproducción sintética de eventos firmados (misma técnica de
+AC#3, dado que `stripe events resend` no soporta eventos Connect):**
+- Orden `e3ab7c8a-...` (Path to Exile x1): `payment_intent.payment_failed`
+  sintético → orden se mantuvo `pending` (antes: `cancelled`). Luego
+  `checkout.session.completed` sintético → orden pasó a `paid`, inventario
+  `10→9`, log `[post-payment] orden ... liquidada`. Sin doble reserva.
+- Orden `5a6840de-...` (caso normal, AC#4 de TASK-013): `payment_intent.payment_failed`
+  sintético (sin retry) seguido de `checkout.session.expired` sintético →
+  orden pasó a `cancelled` correctamente, inventario sin cambios (`9`, sin
+  doble decremento). Confirma que el camino de cancelación real sigue
+  funcionando igual que antes.
+
 ## Resumen
 
 | AC | Resultado |
@@ -118,7 +145,7 @@ aunque no esté aún en esa lista explícitamente.
 | #2 Pago fallido | ✅ (orden/inventario correctos en el rechazo en sí) |
 | #3 Idempotencia de webhook | ✅ |
 | #4 TTL de reserva | ✅ |
-| #5 Documentación | ✅ (este documento) + hallazgo crítico → TASK-013 |
+| #5 Documentación | ✅ (este documento) + hallazgo crítico → TASK-013 (✅ resuelto 2026-07-23) |
 
-Cierra el criterio de Fase 2 de validación E2E, con un bug real descubierto y
-trackeado para arreglo antes de live.
+Cierra el criterio de Fase 2 de validación E2E. El bug real descubierto
+(TASK-013) fue corregido y verificado el mismo día.

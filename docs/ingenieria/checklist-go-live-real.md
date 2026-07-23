@@ -95,12 +95,11 @@ que falta para cruzar esa línea.
 
 ## 4. Producto / operación
 
-- [ ] **Bloqueante — TASK-013:** un pago exitoso al reintentar en la misma
-      Checkout Session tras un rechazo previo se pierde (orden queda
-      `cancelled`, inventario no se decrementa, pese a cobro real). Encontrado
-      en TASK-005 (2026-07-23) — ver
-      [`validacion-e2e-task-005.md`](./validacion-e2e-task-005.md). Debe
-      arreglarse antes de aceptar pagos reales.
+- [x] **TASK-013 (resuelto 2026-07-23):** un pago exitoso al reintentar en la
+      misma Checkout Session tras un rechazo previo se perdía (orden quedaba
+      `cancelled`, inventario no se decrementaba, pese a cobro real).
+      Encontrado en TASK-005 (2026-07-23), corregido el mismo día — ver
+      [`validacion-e2e-task-005.md`](./validacion-e2e-task-005.md).
 - [ ] Confirmar que **TASK-005** (o la que valide el flujo E2E completo) se
       corrió también en modo live antes de anunciar públicamente.
 - [ ] Definir un **plan de rollback**: si algo falla en las primeras

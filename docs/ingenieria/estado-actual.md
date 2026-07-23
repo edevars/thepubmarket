@@ -111,11 +111,13 @@ deck interno ya no arranca con `dev:up`; corre por separado con
    [`checklist-go-live-real.md`](./checklist-go-live-real.md): onboarding live
    de Stripe (test y live son cuentas separadas, no hay migración automática),
    dominio propio, envío real de email, Cloudflare Access, legal/fiscal.
-2. **Bug real, bloqueante para live (TASK-013):** un pago exitoso tras
-   reintentar en la misma Checkout Session (después de un rechazo previo) se
-   pierde — la orden queda `cancelled` y el inventario nunca se decrementa,
-   pese a que Stripe sí cobró (charge + application fee reales). Encontrado y
-   documentado en TASK-005, ver
+2. ~~**Bug real, bloqueante para live (TASK-013)**~~ **Resuelto 2026-07-23.**
+   `payment_intent.payment_failed` ya no cancela la orden ni libera el hold
+   (solo se loguea); la cancelación real solo ocurre en
+   `checkout.session.expired`. Verificado que un pago exitoso tras reintento
+   en la misma Checkout Session ahora sí liquida la orden y decrementa
+   inventario, y que el caso normal (rechazo sin retry, sesión expira) sigue
+   cancelando como antes. Ver
    [`validacion-e2e-task-005.md`](./validacion-e2e-task-005.md).
 3. **Estados items/redirigiendo del `/cart`** solo se ven con sesión iniciada
    (sin usuario, el carrito muestra el auth gate). Verificados por build.
