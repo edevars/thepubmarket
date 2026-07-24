@@ -4,7 +4,7 @@ title: Replace magic-link auth with email+password
 status: Done
 assignee: []
 created_date: '2026-07-24 04:18'
-updated_date: '2026-07-24 04:32'
+updated_date: '2026-07-24 04:40'
 labels:
   - 'epic:identity'
   - feature
@@ -60,6 +60,11 @@ Magic-link passwordless auth (apps/api/src/routes/auth.ts, lib/auth.ts) is being
 created: 2026-07-24 04:32
 ---
 Follow-up: added a confirm-password field to the register page (client-side match check before submit) — apps/web/src/app/[locale]/register/page.tsx, plus confirmPasswordPlaceholder/errorPasswordMismatch i18n keys in es.json/en.json. No API change needed.
+---
+
+created: 2026-07-24 04:40
+---
+Follow-up: added live client-side validation feedback across all four auth pages (login, register, forgot-password, reset-password). Email fields show an inline error + red border once touched/blurred if the format is invalid (new apps/web/src/lib/auth-validation.ts, shared isValidEmail/isPasswordLongEnough helpers mirroring the API's zod rules). Password fields on register/reset-password show a live green checkmark once the 10-char minimum is met; the register confirm-password field shows live red/green match feedback. Verified interactively in the browser (invalid email → red message, valid email → clears; short password → muted hint, valid → green check; mismatched confirm → red, matching → green). New i18n keys errorInvalidEmail/passwordHintOk/passwordsMatch in es.json/en.json. pnpm typecheck and pnpm lint pass.
 ---
 <!-- COMMENTS:END -->
 
