@@ -4,7 +4,7 @@ title: Replace magic-link auth with email+password
 status: Done
 assignee: []
 created_date: '2026-07-24 04:18'
-updated_date: '2026-07-24 04:26'
+updated_date: '2026-07-24 04:32'
 labels:
   - 'epic:identity'
   - feature
@@ -53,6 +53,15 @@ Magic-link passwordless auth (apps/api/src/routes/auth.ts, lib/auth.ts) is being
 - [x] #8 pnpm typecheck and pnpm lint pass across the monorepo
 - [x] #9 TASK-011 and TASK-012 scope updated to reference the new password-based system (done)
 <!-- AC:END -->
+
+## Comments
+
+<!-- COMMENTS:BEGIN -->
+created: 2026-07-24 04:32
+---
+Follow-up: added a confirm-password field to the register page (client-side match check before submit) — apps/web/src/app/[locale]/register/page.tsx, plus confirmPasswordPlaceholder/errorPasswordMismatch i18n keys in es.json/en.json. No API change needed.
+---
+<!-- COMMENTS:END -->
 
 ## Final Summary
 
