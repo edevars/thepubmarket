@@ -7,13 +7,19 @@ status: In Progress
 assignee:
   - claude
 created_date: '2026-07-22 22:31'
-updated_date: '2026-07-24 04:57'
+updated_date: '2026-07-24 05:13'
 labels:
   - 'epic:connect-onboarding'
   - feature
 milestone: m-1
 dependencies:
   - TASK-002
+modified_files:
+  - apps/api/src/middleware/seller-connect-auth.ts
+  - apps/api/src/routes/seller-connect.ts
+  - apps/api/src/index.ts
+  - apps/api/src/routes/webhooks.ts
+  - packages/shared/src/index.ts
 priority: high
 ordinal: 7000
 ---
@@ -57,3 +63,57 @@ Plan:
 
 Out of scope (follow-ups): panel UI button for onboarding (natural fit for TASK-008), formal admin "create new seller row + invite" flow (TASK-010).
 <!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+## Implementación (2026-07-23/24)
+
+Archivos nuevos:
+- apps/api/src/middleware/seller-connect-auth.ts — sellerConnectAuth (permite status invited|active, excluye suspended).
+- apps/api/src/routes/seller-connect.ts — POST /seller/connect/onboarding-link, GET /seller/connect/status.
+
+Archivos modificados:
+- apps/api/src/index.ts — monta sellerConnectAuth + sellerConnect en /seller/connect/* ANTES del sellerAuth general de /seller/*, para que las rutas de connect no queden bloqueadas por el status='active' que exige sellerAuth.
+- apps/api/src/routes/webhooks.ts — nuevo case 'account.updated': flip invited->active cuando charges_enabled && details_submitted. No reactiva 'suspended'. Import `sellers`, `and`.
+- packages/shared/src/index.ts — nuevos tipos ConnectOnboardingLinkResponse, ConnectStatusResponse.
+
+## HALLAZGO DE COMPLIANCE — requiere sign-off antes de sellers reales
+
+Al crear la cuenta con `controller.stripe_dashboard.type = 'express'`, Stripe API RECHAZA cualquier combinación de fees.payer/losses.payments que no sea 'application'/'application':
+
+  "When `stripe_dashboard[type]=express`, your platform must collect fees and
+  be liable for negative balances or refunds and chargebacks."
+
+Verificado en vivo contra la API (no es interpretación de docs). Esto significa que TODO seller Express queda con:
+  - fees.payer = 'application' → la plataforma paga las fees de Stripe del direct charge (no el seller).
+  - losses.payments = 'application' → si la cuenta del seller no puede cubrir un saldo negativo (reembolso post-payout, contracargo), Stripe lo cobra del balance de LA PLATAFORMA, no del seller.
+
+Esto NO rompe la no-custodia de fondos del comprador (el direct charge sigue liquidando 100% en la cuenta del seller; sin transfers; sin balance de plataforma en el flujo de pago). PERO sí es una exposición financiera real de la plataforma a nivel de disputas/contracargos que el texto de la política de "Disputes" (dispute liability sits with the seller) no contemplaba — es un hard constraint del producto Express de Stripe, no una elección de este código.
+
+Comparé contra la cuenta ancla (acct_1TwA3pKpkJIW4eIn, TASK-002, onboarded manual vía Dashboard): esa cuenta terminó siendo Standard-equivalente (`stripe_dashboard.type: 'full'`, `fees.payer: 'account'`, `losses.payments: 'stripe'`) — CERO exposición de la plataforma. O sea, el ancla y los nuevos sellers de este task NO están en el mismo modelo de riesgo. Alternativas a decidir:
+  (a) Aceptar la exposición de Express (comportamiento estándar/esperado del producto; mitigado por el modelo de sellers vetted por invitación) — requiere sign-off.
+  (b) Cambiar el flujo a stripe_dashboard.type='full' (Standard-equivalente, igual que el ancla) para exposición cero — pierde el Dashboard de autoservicio "Express" que pedía el plan; UX ligeramente distinta pero funcionalmente equivalente (Account Link + KYC por Stripe igual).
+
+No tomé esta decisión unilateralmente — dejé el código en (a) porque es literalmente lo que pide el AC#1/título del task ("Express account links"), pero está señalado en comentarios de código y aquí para revisión de compliance-auditor antes de onboardear sellers reales (no de prueba).
+
+## Capabilities solicitadas en accounts.create
+
+`card_payments` + `transfers` (ambas, `requested: true`). Verificado en docs.stripe.com/connect/account-capabilities: "Para que una Account pueda tener la funcionalidad card_payments, debes solicitar card_payments Y transfers" — es un par acoplado en la API, no dos capabilities independientes. NO se solicitó ninguna otra capability (ni métodos de pago alternativos, ni tax_reporting, etc.) — mínimo necesario para direct charge + application_fee en MXN/MX. El código NUNCA llama `stripe.transfers.create` en ningún punto (grep confirma cero usos); la capability `transfers` es solo el prerequisito técnico de card_payments, no se usa para mover fondos.
+
+## Verificación manual (sin browser)
+
+wrangler dev + stripe listen contra Stripe test mode:
+- POST /seller/connect/onboarding-link: creó cuenta Express real en Stripe (MX, controller verificado con curl contra /v1/accounts/{id}), persistió stripe_connect_account_id EN LA MISMA request (antes de que el seller complete nada), devolvió Account Link válido (https://connect.stripe.com/setup/e/...). Llamado 2 veces: mismo account id ambas veces (no duplica cuentas), URL de link distinta cada vez (fresca).
+- GET /seller/connect/status: refleja en vivo charges_enabled/details_submitted desde Stripe (false antes de onboarding).
+- sellerConnectAuth: confirmado que permite 'invited' (que sellerAuth rechazaría con 403) y rechaza 'suspended' con 403 not_a_seller, en ambos endpoints.
+- Webhook account.updated: NO pude completar el onboarding hospedado real (browser-only — Stripe rechaza rellenar KYC vía API cuando requirement_collection='stripe': "This application does not have the required permissions for the parameters 'business_type','individual','tos_acceptance'", confirmado con curl). Verifiqué el pipe completo en dos niveles:
+  1. `stripe trigger account.updated` (evento real firmado por Stripe, forwarded via `stripe listen`) → 200 OK, sin errores (cuenta sintética del fixture, sin seller asociado localmente → warning log, comportamiento esperado).
+  2. Evento account.updated auto-firmado (mismo algoritmo HMAC que usa Stripe, timestamp+payload con STRIPE_WEBHOOK_SECRET) apuntando al account_id real de mi seller de prueba con charges_enabled=details_submitted=true → sellers.status pasó de 'invited' a 'active' en D1; reenviar el MISMO event id devolvió {"duplicate":true} sin reprocesar; un account.updated equivalente contra un seller 'suspended' NO lo reactivó (guard `eq(sellers.status,'invited')` funcionó).
+- AC#3 (onboarding-incomplete invisible/unpayable): confirmé por lectura de código que sellers.ts/catalog.ts ya filtran status='active' — no re-probé E2E porque no requería cambios aquí.
+- Endpoint de webhook existente (we_1TwBD2KpkJAI3F8VdvRptxjn, el mismo referenciado en notas de TASK-003) actualizado con `enabled_events` para incluir `account.updated`, vía API directa con la STRIPE_SECRET_KEY de test — NO se creó un endpoint duplicado.
+- pnpm typecheck (root, turbo) y pnpm lint (biome) verdes en los 5 paquetes tras los cambios.
+- Test data (sellers/users/webhook_events sintéticos, cuenta Stripe de prueba) limpiada al terminar.
+
+No pude verificar con un usuario que complete el formulario hospedado real de Stripe (Account Link) porque eso requiere navegador — está fuera del harness disponible (preferencia explícita de no manejar browser). El resto del flujo (creación de cuenta, persistencia, link fresco, status live, webhook idempotente, flip de status, guard de suspended) sí quedó verificado end-to-end.
+<!-- SECTION:NOTES:END -->
