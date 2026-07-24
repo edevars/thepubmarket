@@ -11,6 +11,14 @@ labels:
   - feature
 milestone: m-0
 dependencies: []
+modified_files:
+  - packages/shared/src/index.ts
+  - apps/api/src/lib/inventory.ts
+  - apps/api/src/routes/catalog.ts
+  - apps/api/src/routes/admin.ts
+  - apps/api/src/routes/seller-panel.ts
+  - apps/web/src/lib/cart.tsx
+  - apps/web/src/lib/catalog/mock-data.ts
 priority: medium
 ordinal: 6000
 ---
