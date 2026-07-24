@@ -3,10 +3,11 @@ id: TASK-007
 title: >-
   Generalize Stripe Connect onboarding to N invited sellers (Express account
   links + KYC)
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - claude
 created_date: '2026-07-22 22:31'
-updated_date: '2026-07-22 22:32'
+updated_date: '2026-07-24 04:54'
 labels:
   - 'epic:connect-onboarding'
   - feature
