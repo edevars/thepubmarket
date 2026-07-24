@@ -1,12 +1,8 @@
 import type { Db, SellerRow } from '@thepubmarket/db'
+import type { AuthUser } from '@thepubmarket/shared'
 
-/** Usuario autenticado resuelto desde la sesión (KV) por el middleware buyerAuth. */
-export interface SessionUser {
-  id: string
-  email: string
-  role: 'buyer' | 'admin'
-  displayName: string | null
-}
+/** Authenticated user resolved from the session (KV) by the buyerAuth middleware. */
+export type SessionUser = AuthUser
 
 /**
  * Tipado del contexto Hono para toda la app.

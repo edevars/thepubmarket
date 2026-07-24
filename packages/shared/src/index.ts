@@ -166,6 +166,44 @@ export interface SellerListResponse {
 }
 
 // =====================================================================
+// Auth (email + password)
+// =====================================================================
+
+/** Authenticated user as resolved from a session. */
+export interface AuthUser {
+  id: string
+  email: string
+  role: 'buyer' | 'admin'
+  displayName: string | null
+}
+
+/** Session created by register/login/reset: Bearer token + user. */
+export interface AuthSessionResponse {
+  sessionToken: string
+  user: AuthUser
+}
+
+export interface RegisterRequest {
+  email: string
+  password: string
+  displayName?: string
+}
+
+export interface LoginRequest {
+  email: string
+  password: string
+}
+
+export interface ForgotPasswordRequest {
+  email: string
+}
+
+export interface ResetPasswordRequest {
+  token: string
+  password: string
+}
+
+// =====================================================================
 // Órdenes / checkout (Fase 2)
 // =====================================================================
 

@@ -1,13 +1,13 @@
 /**
- * Envío de email. En Fase 2 el único correo es el magic link de login.
+ * Email sending. In Phase 2 the only email is the password-reset link.
  *
- * En desarrollo (y mientras no haya dominio de envío verificado) se LOGUEA el
- * link en consola en vez de enviarlo — así el flujo es probable localmente sin
- * infraestructura de email. La integración real (Cloudflare Email Service, con
- * dominio + SPF/DKIM) es un TODO de producción.
+ * In development (and while there's no verified sending domain) the link is
+ * LOGGED to the console instead of sent — this keeps the flow testable
+ * locally without email infrastructure. Real delivery (Cloudflare Email
+ * Service, with a domain + SPF/DKIM) is a production TODO.
  */
 
-export async function sendMagicLink(email: string, link: string): Promise<void> {
-  // TODO(prod): enviar vía Cloudflare Email Service una vez configurado el dominio.
-  console.log(`[auth] magic link para ${email}: ${link}`)
+export async function sendPasswordResetEmail(email: string, link: string): Promise<void> {
+  // TODO(prod): send via Cloudflare Email Service once the domain is verified.
+  console.log(`[auth] password reset link for ${email}: ${link}`)
 }

@@ -1,39 +1,39 @@
 /**
- * Auth de compradores: magic link passwordless + sesiones en KV (binding
- * SESSIONS). Sin contraseñas que custodiar.
+ * Buyer/seller auth: email+password + KV sessions (SESSIONS binding).
  *
- * Cross-origin: la web y la API viven en subdominios distintos, donde las cookies
- * third-party las bloquea Safari. Por eso el token de sesión se entrega al cliente
- * y se envía como `Authorization: Bearer <token>` (no cookie). El token de magic
- * link es de un solo uso y vida corta; el link se envía al email del usuario.
+ * Cross-origin: the web app and the API live on different subdomains, where
+ * third-party cookies get blocked by Safari. So the session token is handed
+ * to the client and sent back as `Authorization: Bearer <token>` (no
+ * cookie). Password-reset tokens are single-use and short-lived, sent to the
+ * user's email as a link.
  */
 import type { SessionUser } from '../types'
 
-const MAGIC_TTL_SECONDS = 60 * 15 // 15 min
-const SESSION_TTL_SECONDS = 60 * 60 * 24 * 7 // 7 días
+const RESET_TTL_SECONDS = 60 * 15 // 15 min
+const SESSION_TTL_SECONDS = 60 * 60 * 24 * 7 // 7 days
 
-const magicKey = (token: string) => `mlt:${token}`
+const resetKey = (token: string) => `pwr:${token}`
 const sessionKey = (token: string) => `sess:${token}`
 
-/** Token aleatorio de 256 bits en hex (seguro con crypto.getRandomValues). */
+/** Random 256-bit token in hex (crypto.getRandomValues-backed). */
 function randomToken(): string {
   const bytes = new Uint8Array(32)
   crypto.getRandomValues(bytes)
   return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('')
 }
 
-/** Crea un token de magic link para `email` (vive 15 min, un solo uso). */
-export async function createMagicToken(kv: KVNamespace, email: string): Promise<string> {
+/** Creates a password-reset token for `email` (lives 15 min, single-use). */
+export async function createResetToken(kv: KVNamespace, email: string): Promise<string> {
   const token = randomToken()
-  await kv.put(magicKey(token), JSON.stringify({ email }), { expirationTtl: MAGIC_TTL_SECONDS })
+  await kv.put(resetKey(token), JSON.stringify({ email }), { expirationTtl: RESET_TTL_SECONDS })
   return token
 }
 
-/** Consume un token de magic link: devuelve el email y lo invalida (un solo uso). */
-export async function consumeMagicToken(kv: KVNamespace, token: string): Promise<string | null> {
-  const raw = await kv.get(magicKey(token))
+/** Consumes a password-reset token: returns the email and invalidates it (single-use). */
+export async function consumeResetToken(kv: KVNamespace, token: string): Promise<string | null> {
+  const raw = await kv.get(resetKey(token))
   if (!raw) return null
-  await kv.delete(magicKey(token))
+  await kv.delete(resetKey(token))
   try {
     return (JSON.parse(raw) as { email: string }).email
   } catch {
@@ -41,14 +41,14 @@ export async function consumeMagicToken(kv: KVNamespace, token: string): Promise
   }
 }
 
-/** Crea una sesión para el usuario y devuelve su token (vive 7 días). */
+/** Creates a session for the user and returns its token (lives 7 days). */
 export async function createSession(kv: KVNamespace, user: SessionUser): Promise<string> {
   const token = randomToken()
   await kv.put(sessionKey(token), JSON.stringify(user), { expirationTtl: SESSION_TTL_SECONDS })
   return token
 }
 
-/** Resuelve la sesión a partir del token; null si no existe o expiró. */
+/** Resolves a session from its token; null if missing or expired. */
 export async function getSession(kv: KVNamespace, token: string): Promise<SessionUser | null> {
   const raw = await kv.get(sessionKey(token))
   if (!raw) return null
@@ -59,12 +59,12 @@ export async function getSession(kv: KVNamespace, token: string): Promise<Sessio
   }
 }
 
-/** Invalida una sesión (logout). */
+/** Invalidates a session (logout). */
 export async function deleteSession(kv: KVNamespace, token: string): Promise<void> {
   await kv.delete(sessionKey(token))
 }
 
-/** Extrae el token Bearer del header Authorization, o null. */
+/** Extracts the Bearer token from the Authorization header, or null. */
 export function bearerToken(header: string | undefined | null): string | null {
   if (!header) return null
   const m = header.match(/^Bearer\s+(.+)$/i)

@@ -36,6 +36,13 @@
       "when": 1783194386944,
       "tag": "0004_legal_karnak",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1784866758830,
+      "tag": "0005_nice_sleeper",
+      "breakpoints": true
     }
   ]
 }

@@ -33,6 +33,9 @@ export const users = sqliteTable(
     id: text('id').primaryKey(),
     email: text('email').notNull(),
     displayName: text('display_name'),
+    // Nullable: NULL means a legacy magic-link account with no password set
+    // yet. Login detects this and routes the user through password reset.
+    passwordHash: text('password_hash'),
     role: text('role', { enum: ['buyer', 'admin'] })
       .notNull()
       .default('buyer'),

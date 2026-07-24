@@ -3,9 +3,33 @@
 > Snapshot técnico del proyecto. Actualízalo al cerrar cada bloque de trabajo.
 > Léelo junto con `ROADMAP.md` (fases) y `CLAUDE.md` (reglas de decisión).
 
-**Fecha:** 2026-07-04
+**Fecha:** 2026-07-24
 **Rama activa:** `main`
-**Fase del roadmap:** Fase 2 — Núcleo transaccional (código completo; falta Stripe vivo)
+**Fase del roadmap:** Fase 2 → Fase 3 — Núcleo transaccional completo; identidad de usuario migrando a email+password
+
+---
+
+## 🔐 Auth de comprador/vendedor: magic link → email+password (2026-07-24)
+
+El login pasó de passwordless (magic link) a **email + contraseña**, para
+compradores y vendedores por igual (comparten `users`). Reemplazo completo,
+no aditivo — `/auth/magic-link` y `/auth/verify` ya no existen.
+
+- **Hashing:** PBKDF2-HMAC-SHA256 vía `crypto.subtle` nativo de Workers (sin
+  dependencia nueva), 210k iteraciones. `apps/api/src/lib/password.ts`.
+- **Endpoints nuevos:** `POST /auth/register`, `POST /auth/login`,
+  `POST /auth/password/forgot`, `POST /auth/password/reset` en
+  `apps/api/src/routes/auth.ts`. `/auth/logout` y `GET /auth/me` intactos.
+- **Rate limiting interino (KV):** `apps/api/src/lib/rate-limit.ts`, mientras
+  no llegue Turnstile (TASK-012).
+- **Usuarios legacy** (creados vía magic link, `password_hash IS NULL`)
+  reciben `password_not_set` al hacer login y se les redirige a
+  restablecer contraseña — sin migración masiva ni batch job.
+- **Frontend:** `login/`, `register/`, `auth/forgot-password/`,
+  `auth/reset-password/` (reemplaza `auth/verify/`) en `apps/web/src/app/[locale]/`.
+- Verificado E2E en local: registro, login, `/auth/me`, rate limit,
+  usuario legacy → reset → login, checkout y `/panel` sin regresión.
+- Ver TASK-015 (implementación) y TASK-011/TASK-012 (scope actualizado).
 
 ---
 
@@ -79,8 +103,10 @@ deck interno ya no arranca con `dev:up`; corre por separado con
 - **Webhooks idempotentes** (verificación de firma + tabla `webhook_events`):
   `apps/api/src/routes/webhooks.ts`
 - **Workflow durable post-pago:** `apps/api/src/workflows/post-payment.ts`
-- **Auth de comprador** (magic link + sesión en KV): `apps/api/src/routes/auth.ts`,
-  `apps/api/src/lib/auth.ts`, `apps/web/src/app/[locale]/login/`
+- **Auth de comprador/vendedor** (email+password + sesión en KV, ver sección
+  arriba): `apps/api/src/routes/auth.ts`, `apps/api/src/lib/auth.ts`,
+  `apps/web/src/app/[locale]/login/`, `register/`, `auth/forgot-password/`,
+  `auth/reset-password/`
 - **Carrito rediseñado (Cart.dc.html)** con drawer + 4 estados de página:
   `apps/web/src/components/cart/` (`CartLine`, `OrderSummary`, `CartDrawer`),
   `apps/web/src/app/[locale]/cart/page.tsx`

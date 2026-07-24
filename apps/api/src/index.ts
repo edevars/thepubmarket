@@ -50,7 +50,7 @@ app.get('/health', async (c) => {
   }
 })
 
-// Auth de compradores (magic link passwordless + sesiones en KV).
+// Buyer/seller auth (email + password + KV sessions).
 app.route('/auth', auth)
 
 // Catálogo público (solo lectura, sin auth).
