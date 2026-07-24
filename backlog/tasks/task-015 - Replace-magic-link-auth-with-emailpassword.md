@@ -1,9 +1,10 @@
 ---
 id: TASK-015
 title: Replace magic-link auth with email+password
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-07-24 04:18'
+updated_date: '2026-07-24 04:18'
 labels:
   - 'epic:identity'
   - feature
