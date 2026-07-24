@@ -356,3 +356,29 @@ export interface BuyerOrder {
 export interface BuyerOrdersResponse {
   items: BuyerOrder[]
 }
+
+// =====================================================================
+// Onboarding de Stripe Connect (self-service para sellers invitados)
+// =====================================================================
+
+/**
+ * Respuesta de `POST /seller/connect/onboarding-link`: URL de Stripe hospedada
+ * (Account Link) a la que se redirige al seller para completar/retomar su
+ * KYC. Expira rápido (minutos) — pedir una nueva en cada intento, nunca
+ * cachear esta URL.
+ */
+export interface ConnectOnboardingLinkResponse {
+  url: string
+}
+
+/**
+ * Respuesta de `GET /seller/connect/status`: estado de onboarding en vivo
+ * (consultado directo a Stripe, no solo el status local en `sellers`).
+ * `chargesEnabled`/`detailsSubmitted` son null si el seller todavía no tiene
+ * cuenta de Stripe creada.
+ */
+export interface ConnectStatusResponse {
+  status: 'invited' | 'active' | 'suspended'
+  chargesEnabled: boolean | null
+  detailsSubmitted: boolean | null
+}

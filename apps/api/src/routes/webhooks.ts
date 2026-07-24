@@ -13,9 +13,13 @@
  *   la MISMA Checkout Session abierta para reintentar tras un rechazo de
  *   tarjeta; cancelar aquí perdía pagos exitosos de un reintento posterior
  *   (TASK-013). Solo se loguea para observabilidad/alerting.
+ * - `account.updated` (TASK-007) → señal AUTORITATIVA de que un seller terminó
+ *   el onboarding de Stripe Connect. El redirect a `return_url` desde el
+ *   Account Link es solo UX; nunca se confía en él para el cambio de estado.
+ *   Si `charges_enabled && details_submitted`, pasa de `invited` a `active`.
  */
-import { orderItems, orders, webhookEvents } from '@thepubmarket/db'
-import { eq } from 'drizzle-orm'
+import { orderItems, orders, sellers, webhookEvents } from '@thepubmarket/db'
+import { and, eq } from 'drizzle-orm'
 import { type Context, Hono } from 'hono'
 import Stripe from 'stripe'
 import { createStripe } from '../lib/stripe'
@@ -100,6 +104,30 @@ webhooks.post('/stripe', async (c) => {
       console.warn(
         `[webhooks] payment_intent.payment_failed order=${orderId ?? 'unknown'} pi=${pi.id} — no se cancela, la sesión sigue abierta para reintento`,
       )
+      break
+    }
+    case 'account.updated': {
+      // Evento Connect: llega con `event.account` (la cuenta conectada), no
+      // con un objeto anidado con account id — el propio objeto ES la Account.
+      const account = event.data.object
+      if (!account.charges_enabled || !account.details_submitted) break
+
+      // Solo hace el flip invited -> active; no toca sellers ya 'active' (idempotente
+      // ante reenvíos/eventos repetidos de la misma cuenta) ni 'suspended'
+      // (un admin la suspendió a propósito; un account.updated no debe reactivarla).
+      const result = await db
+        .update(sellers)
+        .set({ status: 'active' })
+        .where(and(eq(sellers.stripeConnectAccountId, account.id), eq(sellers.status, 'invited')))
+        .returning({ id: sellers.id })
+
+      if (result.length === 0) {
+        // No es error: puede ser un reenvío, una cuenta que ya estaba activa,
+        // o (no debería pasar) una cuenta sin seller asociado todavía.
+        console.warn(
+          `[webhooks] account.updated account=${account.id} — sin seller 'invited' que actualizar`,
+        )
+      }
       break
     }
   }

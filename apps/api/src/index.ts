@@ -5,11 +5,13 @@ import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { adminAuth } from './middleware/admin-auth'
 import { sellerAuth } from './middleware/seller-auth'
+import { sellerConnectAuth } from './middleware/seller-connect-auth'
 import { admin } from './routes/admin'
 import { auth } from './routes/auth'
 import { catalog } from './routes/catalog'
 import { checkout } from './routes/checkout'
 import { ordersRoutes } from './routes/orders'
+import { sellerConnect } from './routes/seller-connect'
 import { sellerPanel } from './routes/seller-panel'
 import { sellersRoutes } from './routes/sellers'
 import { webhooks } from './routes/webhooks'
@@ -58,6 +60,14 @@ app.route('/catalog', catalog)
 
 // Tiendas públicas (perfil de vendedor, solo lectura, sin auth).
 app.route('/sellers', sellersRoutes)
+
+// Onboarding de Stripe Connect (autoservicio; sesión + fila 'invited' o
+// 'active' en sellers — MÁS permisivo que sellerAuth). Se monta ANTES del
+// `/seller/*` de abajo: Hono compone los handlers que matchean en orden de
+// registro, así que estas rutas responden y terminan la cadena antes de que
+// el sellerAuth general (que exige status='active') llegue a rechazarlas.
+app.use('/seller/connect/*', sellerConnectAuth)
+app.route('/seller/connect', sellerConnect)
 
 // Panel del Vendedor (autoservicio; sesión magic-link + fila activa en sellers).
 app.use('/seller/*', sellerAuth)

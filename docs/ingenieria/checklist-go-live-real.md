@@ -35,10 +35,28 @@ que falta para cruzar esa línea.
 - [ ] **Onboarding en modo live de cualquier seller adicional** invitado
       (recordar: modelo vetted, no auto-registro — ver `CLAUDE.md`).
 - [ ] **Nuevo webhook endpoint en modo live** (`stripe.webhook_endpoints.create`
-      o Dashboard, con `connect=true` y los mismos 3 eventos que procesa
+      o Dashboard, con `connect=true` y los 4 eventos que procesa
       `apps/api/src/routes/webhooks.ts`: `checkout.session.completed`,
-      `checkout.session.expired`, `payment_intent.payment_failed`). El
-      `whsec_` de live es distinto al de test.
+      `checkout.session.expired`, `payment_intent.payment_failed`,
+      `account.updated` (TASK-007). El `whsec_` de live es distinto al de test.
+- [ ] **Sign-off explícito: modelo Express de sellers (TASK-007).** Crear una
+      cuenta Connect Express (`controller.stripe_dashboard.type: 'express'`)
+      exige por API que la plataforma sea `fees.payer` y `losses.payments =
+      'application'` — la plataforma absorbe las comisiones de Stripe y queda
+      expuesta a saldos negativos/contracargos que la cuenta del seller no
+      alcance a cubrir (verificado en vivo contra la API; no es una elección
+      del código, es un hard constraint de Stripe). NO es custodia de fondos
+      del comprador (el direct charge sigue liquidando 100% en la cuenta del
+      seller — ver `apps/api/src/routes/seller-connect.ts`), pero SÍ es
+      exposición financiera real de la plataforma. El seller ancla (TASK-002,
+      `acct_1TwA3pKpkJIW4eIn`) quedó en un modelo Standard-equivalente
+      (`fees.payer: 'account'`, `losses.payments: 'stripe'`, cero exposición) —
+      decidir antes de onboardear sellers reales adicionales si se mantiene
+      Express (fricción de onboarding menor, exposición de plataforma) o se
+      cambia a Standard (cero exposición, seller usa su propio Dashboard
+      completo de Stripe). Decisión pendiente — confirmada explícitamente el
+      2026-07-23: por ahora se queda en Express en modo test; revisar antes de
+      invitar sellers reales.
 - [ ] **Reemplazar secrets en el Worker de prod** con las llaves `sk_live_...` /
       `whsec_...` de live vía `wrangler secret put` (mismo mecanismo que hoy,
       solo cambian los valores).
