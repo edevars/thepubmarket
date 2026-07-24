@@ -3,11 +3,11 @@ id: TASK-007
 title: >-
   Generalize Stripe Connect onboarding to N invited sellers (Express account
   links + KYC)
-status: In Progress
+status: Done
 assignee:
   - claude
 created_date: '2026-07-22 22:31'
-updated_date: '2026-07-24 05:13'
+updated_date: '2026-07-24 05:16'
 labels:
   - 'epic:connect-onboarding'
   - feature
@@ -32,11 +32,11 @@ Phase 2 establishes a single hardcoded Connect onboarding for the anchor seller 
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Reusable server-side flow generates a Stripe Connect Express account + hosted onboarding link for any invited seller
-- [ ] #2 Resulting stripe_connect_account_id persisted to that seller's row on completion
-- [ ] #3 Onboarding-incomplete state handled gracefully (seller can resume, checkout for their inventory is blocked/hidden until complete)
-- [ ] #4 KYC and Mexican tax obligations confirmed to be handled by Stripe Express, not custom platform logic
-- [ ] #5 Non-custodial invariant (direct charge + application_fee_amount, same as anchor seller) preserved for every onboarded seller
+- [x] #1 Reusable server-side flow generates a Stripe Connect Express account + hosted onboarding link for any invited seller
+- [x] #2 Resulting stripe_connect_account_id persisted to that seller's row on completion
+- [x] #3 Onboarding-incomplete state handled gracefully (seller can resume, checkout for their inventory is blocked/hidden until complete)
+- [x] #4 KYC and Mexican tax obligations confirmed to be handled by Stripe Express, not custom platform logic
+- [x] #5 Non-custodial invariant (direct charge + application_fee_amount, same as anchor seller) preserved for every onboarded seller
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -116,4 +116,24 @@ wrangler dev + stripe listen contra Stripe test mode:
 - Test data (sellers/users/webhook_events sintéticos, cuenta Stripe de prueba) limpiada al terminar.
 
 No pude verificar con un usuario que complete el formulario hospedado real de Stripe (Account Link) porque eso requiere navegador — está fuera del harness disponible (preferencia explícita de no manejar browser). El resto del flujo (creación de cuenta, persistencia, link fresco, status live, webhook idempotente, flip de status, guard de suspended) sí quedó verificado end-to-end.
+
+User sign-off (2026-07-24): keep Express as implemented for now (test mode only); revisit the platform fee/chargeback-liability exposure before onboarding real (non-test) sellers. Documented as a required item under section 1 of docs/ingenieria/checklist-go-live-real.md, alongside updating that doc's webhook event list from 3 to 4 events (account.updated added).
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Built a reusable, self-service Stripe Connect Express onboarding flow so any admin-invited seller (not just the hardcoded anchor from Phase 2) can create/resume their own Connect account.
+
+**New:** `middleware/seller-connect-auth.ts` (allows `sellers.status IN ('invited','active')`, unlike `sellerAuth` which requires `active`) and `routes/seller-connect.ts` mounted at `/seller/connect`:
+- `POST /onboarding-link` — idempotently creates a Stripe Express account (`controller.stripe_dashboard.type: 'express'`, `requirement_collection: 'stripe'`, `card_payments`+`transfers` capabilities — the minimal coupled pair Stripe requires) on first call, persists `stripe_connect_account_id` immediately (before onboarding completes), and always returns a fresh Account Link — safe to call repeatedly, which is how a seller resumes.
+- `GET /status` — live `charges_enabled`/`details_submitted` from Stripe for a future panel UI.
+
+**Modified:** `webhooks.ts` gained `case 'account.updated'` — the authoritative signal (not the `return_url` redirect) that flips `sellers.status` `invited → active` once `charges_enabled && details_submitted`; guarded to never touch `active` (idempotent) or `suspended` (admin-suspended) rows. The existing Connect webhook endpoint from TASK-003 was updated (not duplicated) to subscribe to this new event. `index.ts` mounts the new router/middleware ahead of the general `/seller/*` mount so invited sellers aren't blocked by `sellerAuth`. `checkout.ts` / `lib/stripe.ts` (direct charge + application_fee) were untouched.
+
+**Compliance finding, resolved by user decision (2026-07-24):** Stripe's API hard-requires `fees.payer`/`losses.payments = 'application'` for any Express-dashboard-type account — the platform absorbs Stripe fees and chargeback/negative-balance risk for every Express seller (does NOT touch buyer-fund custody: direct charge still settles 100% to the seller, no transfers, no platform balance in the payment path). This differs from the anchor seller (TASK-002), which ended up Standard-equivalent with zero platform exposure. User decided: keep Express as implemented (matches this task's AC), since everything is still Stripe test mode; added as an explicit required sign-off in `docs/ingenieria/checklist-go-live-real.md` before onboarding real sellers.
+
+**Verified (no browser, per standing preference):** live `curl` against Stripe test API confirms real account creation, idempotent reuse, fresh links, live status; `sellerConnectAuth` allows invited/blocks suspended; `account.updated` webhook verified via `stripe trigger` + a manually HMAC-signed synthetic event — confirmed `invited→active` flip, idempotent replay (`duplicate: true`), and suspended sellers are not reactivated. `pnpm typecheck`/`pnpm lint` clean across all packages. Could not click through Stripe's actual hosted onboarding form (requires a browser; Stripe rejects programmatic KYC field writes when `requirement_collection: 'stripe'`) — everything else in the pipe was verified end-to-end.
+
+**Follow-ups (not created as tasks — flagging for user):** panel UI for the onboarding button/status (natural fit alongside TASK-008), and the Standard-vs-Express go-live decision tracked in the checklist doc.
+<!-- SECTION:FINAL_SUMMARY:END -->
