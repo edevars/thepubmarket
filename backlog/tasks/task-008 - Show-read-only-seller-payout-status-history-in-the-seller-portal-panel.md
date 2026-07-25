@@ -1,11 +1,11 @@
 ---
 id: TASK-008
 title: Show read-only seller payout status/history in the seller portal (/panel)
-status: In Progress
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-07-22 22:32'
-updated_date: '2026-07-25 00:14'
+updated_date: '2026-07-25 00:15'
 labels:
   - 'epic:connect-onboarding'
   - feature
