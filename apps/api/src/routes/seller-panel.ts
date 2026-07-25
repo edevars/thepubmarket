@@ -84,7 +84,8 @@ sellerPanel.get('/inventory', async (c) => {
     .orderBy(desc(inventory.updatedAt), desc(inventory.id))
     .all()
 
-  return c.json({ items: rows.map(rowToInventoryItem) })
+  const sellerInfo = { name: seller.name, verified: seller.verified }
+  return c.json({ items: rows.map((row) => rowToInventoryItem(row, sellerInfo)) })
 })
 
 /** POST /seller/inventory — publica un single (sellerId = sesión, siempre). */
@@ -106,7 +107,10 @@ sellerPanel.post('/inventory', async (c) => {
   if (!result.ok) {
     return c.json({ error: result.error, ...result.extra }, result.status)
   }
-  return c.json(rowToInventoryItem(result.row), 201)
+  return c.json(
+    rowToInventoryItem(result.row, { name: seller.name, verified: seller.verified }),
+    201,
+  )
 })
 
 /** PATCH /seller/inventory/:id — edita precio/cantidad/condición/estado propio. */
@@ -136,7 +140,7 @@ sellerPanel.patch('/inventory/:id', async (c) => {
     .returning()
 
   if (!row) return c.json({ error: 'not_found' }, 404)
-  return c.json(rowToInventoryItem(row))
+  return c.json(rowToInventoryItem(row, { name: seller.name, verified: seller.verified }))
 })
 
 /** GET /seller/orders — órdenes de la tienda con líneas y comprador enmascarado. */

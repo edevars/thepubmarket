@@ -84,6 +84,10 @@ export interface InventoryItem {
   id: string
   /** Seller que ofrece el item. */
   sellerId: string
+  /** Nombre de la tienda vendedora (para la línea "Vendido por"). */
+  sellerName: string
+  /** Vendedor verificado / tienda física vetada. */
+  sellerVerified: boolean
   /** Juego al que pertenece la carta. */
   tcg: Tcg
   /** Carta (snapshot de Scryfall). */

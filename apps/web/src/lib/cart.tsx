@@ -23,11 +23,7 @@ export interface CartItem {
   setCode?: string
   /** Número de coleccionista para la línea de set. */
   collectorNumber?: string
-  /**
-   * Nombre y verificación del vendedor. El modelo `InventoryItem` aún no los
-   * expone (solo `sellerId`), así que hoy llegan `undefined` y la fila de
-   * vendedor se omite. Punto de extensión para cuando el catálogo los provea.
-   */
+  /** Nombre y verificación del vendedor, para la fila "Vendido por". */
   sellerName?: string
   sellerVerified?: boolean
 }
@@ -94,6 +90,8 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
           language: item.language,
           setCode: item.card.setCode,
           collectorNumber: item.card.collectorNumber,
+          sellerName: item.sellerName,
+          sellerVerified: item.sellerVerified,
         },
       ]
     })

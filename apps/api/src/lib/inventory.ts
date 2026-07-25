@@ -9,10 +9,15 @@ import type { Condition, Finish, InventoryItem, Tcg } from '@thepubmarket/shared
 import { getCardById, ScryfallError } from './scryfall'
 
 /** Convierte una fila de Drizzle al contrato público `InventoryItem`. */
-export function rowToInventoryItem(row: InventoryRow): InventoryItem {
+export function rowToInventoryItem(
+  row: InventoryRow,
+  seller: { name: string; verified: boolean },
+): InventoryItem {
   return {
     id: row.id,
     sellerId: row.sellerId,
+    sellerName: seller.name,
+    sellerVerified: seller.verified,
     tcg: row.tcg as Tcg,
     card: {
       scryfallId: row.scryfallId ?? '',

@@ -87,6 +87,8 @@ function listing(s: Spec): InventoryItem {
   return {
     id: s.id,
     sellerId: ANCHOR_SELLER_ID,
+    sellerName: 'The Pub Game Store',
+    sellerVerified: true,
     tcg: s.tcg,
     card: {
       scryfallId: `mock-${s.id}`,

@@ -6,8 +6,8 @@
  * nombre/set con LIKE + índices (servicio de búsqueda externo llega en Fase 5).
  */
 
-import { inventory } from '@thepubmarket/db'
-import { and, asc, count, eq, gt, like, type SQL } from 'drizzle-orm'
+import { inventory, sellers } from '@thepubmarket/db'
+import { and, asc, count, eq, gt, inArray, like, type SQL } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { rowToInventoryItem } from '../lib/inventory'
 import type { AppEnv } from '../types'
@@ -63,8 +63,21 @@ catalog.get('/', async (c) => {
     .offset(offset)
     .all()
 
+  const sellerIds = [...new Set(rows.map((r) => r.sellerId))]
+  const sellerRows =
+    sellerIds.length > 0
+      ? await db.select().from(sellers).where(inArray(sellers.id, sellerIds)).all()
+      : []
+  const sellerById = new Map(sellerRows.map((s) => [s.id, s]))
+
   return c.json({
-    items: rows.map(rowToInventoryItem),
+    items: rows.map((row) => {
+      const seller = sellerById.get(row.sellerId)
+      return rowToInventoryItem(row, {
+        name: seller?.name ?? '',
+        verified: seller?.verified ?? false,
+      })
+    }),
     total: totalRow?.total ?? 0,
     limit,
     offset,
@@ -88,5 +101,8 @@ catalog.get('/:id', async (c) => {
   if (!row) {
     return c.json({ error: 'not_found' }, 404)
   }
-  return c.json(rowToInventoryItem(row))
+  const seller = await db.select().from(sellers).where(eq(sellers.id, row.sellerId)).get()
+  return c.json(
+    rowToInventoryItem(row, { name: seller?.name ?? '', verified: seller?.verified ?? false }),
+  )
 })

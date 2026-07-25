@@ -62,13 +62,20 @@ admin.post('/inventory', async (c) => {
     return c.json({ error: 'invalid_body', issues: parsed.error.issues }, 400)
   }
   const { sellerId, ...offer } = parsed.data
+  const db = c.get('db')
+
+  const seller = await db.select().from(sellers).where(eq(sellers.id, sellerId)).get()
+  if (!seller) return c.json({ error: 'seller_not_found' }, 404)
 
   // Lógica de alta compartida con el panel del seller (lib/inventory).
-  const result = await createListing(c.get('db'), c.env.SESSIONS, offer as ListingInput, sellerId)
+  const result = await createListing(db, c.env.SESSIONS, offer as ListingInput, sellerId)
   if (!result.ok) {
     return c.json({ error: result.error, ...result.extra }, result.status)
   }
-  return c.json(rowToInventoryItem(result.row), 201)
+  return c.json(
+    rowToInventoryItem(result.row, { name: seller.name, verified: seller.verified }),
+    201,
+  )
 })
 
 /**
@@ -130,7 +137,10 @@ admin.patch('/inventory/:id', async (c) => {
     .returning()
 
   if (!row) return c.json({ error: 'not_found' }, 404)
-  return c.json(rowToInventoryItem(row))
+  const seller = await c.get('db').select().from(sellers).where(eq(sellers.id, row.sellerId)).get()
+  return c.json(
+    rowToInventoryItem(row, { name: seller?.name ?? '', verified: seller?.verified ?? false }),
+  )
 })
 
 /** POST /admin/inventory/:id/deactivate — retira el item del catálogo. */
