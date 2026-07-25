@@ -147,6 +147,11 @@ function PanelSidebar() {
       active: pathname.startsWith('/panel/ordenes'),
       badge: pendingCount,
     },
+    {
+      href: '/panel/pagos',
+      label: t('navPagos'),
+      active: pathname.startsWith('/panel/pagos'),
+    },
   ]
 
   const initials = (user?.displayName ?? user?.email ?? '·')
@@ -237,7 +242,9 @@ function PanelTopbar() {
       ? 'Agregar'
       : pathname.startsWith('/panel/ordenes')
         ? 'Ordenes'
-        : 'Resumen'
+        : pathname.startsWith('/panel/pagos')
+          ? 'Pagos'
+          : 'Resumen'
 
   const today = new Intl.DateTimeFormat(locale === 'en' ? 'en-MX' : 'es-MX', {
     day: 'numeric',

@@ -378,11 +378,33 @@ export interface ConnectOnboardingLinkResponse {
 /**
  * Respuesta de `GET /seller/connect/status`: estado de onboarding en vivo
  * (consultado directo a Stripe, no solo el status local en `sellers`).
- * `chargesEnabled`/`detailsSubmitted` son null si el seller todavía no tiene
- * cuenta de Stripe creada.
+ * `chargesEnabled`/`detailsSubmitted`/`payoutsEnabled` son null si el seller
+ * todavía no tiene cuenta de Stripe creada.
  */
 export interface ConnectStatusResponse {
   status: 'invited' | 'active' | 'suspended'
   chargesEnabled: boolean | null
   detailsSubmitted: boolean | null
+  payoutsEnabled: boolean | null
+}
+
+/**
+ * Un payout leído en vivo desde la cuenta Connect del seller (nunca
+ * almacenado ni agregado por la plataforma — puramente observacional).
+ */
+export interface ConnectPayout {
+  id: string
+  amountCents: number
+  currency: string
+  /** 'paid' | 'pending' | 'in_transit' | 'canceled' | 'failed' (Stripe Payout.status). */
+  status: string
+  /** Unix seconds — fecha estimada/real de llegada a la cuenta bancaria del seller. */
+  arrivalDate: number
+  /** Unix seconds — cuándo Stripe creó el payout. */
+  createdAt: number
+}
+
+/** Respuesta de `GET /seller/connect/payouts`: historial reciente, más nuevo primero. */
+export interface ConnectPayoutsResponse {
+  items: ConnectPayout[]
 }

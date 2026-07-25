@@ -28,7 +28,11 @@
  * todavía, necesita poder llegar aquí.
  */
 import { sellers } from '@thepubmarket/db'
-import type { ConnectOnboardingLinkResponse, ConnectStatusResponse } from '@thepubmarket/shared'
+import type {
+  ConnectOnboardingLinkResponse,
+  ConnectPayoutsResponse,
+  ConnectStatusResponse,
+} from '@thepubmarket/shared'
 import { eq } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { createStripe } from '../lib/stripe'
@@ -129,6 +133,7 @@ sellerConnect.get('/status', async (c) => {
       status: seller.status,
       chargesEnabled: null,
       detailsSubmitted: null,
+      payoutsEnabled: null,
     }
     return c.json(body)
   }
@@ -140,6 +145,41 @@ sellerConnect.get('/status', async (c) => {
     status: seller.status,
     chargesEnabled: account.charges_enabled,
     detailsSubmitted: account.details_submitted,
+    payoutsEnabled: account.payouts_enabled,
+  }
+  return c.json(body)
+})
+
+/**
+ * GET /seller/connect/payouts — historial reciente de payouts, leído en vivo
+ * de la cuenta Connect del seller. Puramente observacional: la plataforma no
+ * almacena ni agrega estos montos, no crea payouts, y no tiene autoridad
+ * sobre cuándo/cómo Stripe libera fondos a la cuenta bancaria del seller.
+ */
+sellerConnect.get('/payouts', async (c) => {
+  const seller = c.get('seller')
+  if (!seller) return c.json({ error: 'not_a_seller' }, 403)
+
+  if (!seller.stripeConnectAccountId) {
+    const body: ConnectPayoutsResponse = { items: [] }
+    return c.json(body)
+  }
+
+  const stripe = createStripe(c.env.STRIPE_SECRET_KEY)
+  const payouts = await stripe.payouts.list(
+    { limit: 20 },
+    { stripeAccount: seller.stripeConnectAccountId },
+  )
+
+  const body: ConnectPayoutsResponse = {
+    items: payouts.data.map((p) => ({
+      id: p.id,
+      amountCents: p.amount,
+      currency: p.currency,
+      status: p.status,
+      arrivalDate: p.arrival_date,
+      createdAt: p.created,
+    })),
   }
   return c.json(body)
 })

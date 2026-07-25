@@ -9,6 +9,10 @@ import type {
   CardSnapshot,
   CheckoutRequest,
   CheckoutResponse,
+  ConnectOnboardingLinkResponse,
+  ConnectPayout,
+  ConnectPayoutsResponse,
+  ConnectStatusResponse,
   CreateListingRequest,
   InventoryItem,
   OrderSummary,
@@ -152,4 +156,32 @@ export async function deliverOrder(token: string, id: string): Promise<boolean> 
     headers: authHeaders(token),
   })
   return res.ok
+}
+
+// =====================================================================
+// Onboarding y payouts de Stripe Connect (self-service)
+// =====================================================================
+
+/** Estado de onboarding en vivo (consultado directo a Stripe). Null si falló. */
+export async function fetchConnectStatus(token: string): Promise<ConnectStatusResponse | null> {
+  const res = await fetch(`${API}/seller/connect/status`, { headers: authHeaders(token) })
+  if (!res.ok) return null
+  return (await res.json()) as ConnectStatusResponse
+}
+
+/** Historial reciente de payouts leído en vivo de la cuenta Connect del seller. */
+export async function fetchConnectPayouts(token: string): Promise<ConnectPayout[]> {
+  const res = await fetch(`${API}/seller/connect/payouts`, { headers: authHeaders(token) })
+  if (!res.ok) return []
+  return ((await res.json()) as ConnectPayoutsResponse).items
+}
+
+/** Pide una Account Link fresca para completar/retomar el onboarding. Null si falló. */
+export async function requestOnboardingLink(token: string): Promise<string | null> {
+  const res = await fetch(`${API}/seller/connect/onboarding-link`, {
+    method: 'POST',
+    headers: authHeaders(token),
+  })
+  if (!res.ok) return null
+  return ((await res.json()) as ConnectOnboardingLinkResponse).url
 }
