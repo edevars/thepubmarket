@@ -1,8 +1,8 @@
 /**
  * Middleware de autenticación de vendedor (Panel del Vendedor).
  *
- * Misma sesión magic-link que buyerAuth; la identidad de seller NO vive en el
- * token: se resuelve EN VIVO buscando la fila de `sellers` con
+ * Misma sesión email+password que buyerAuth (ver `lib/auth.ts`); la
+ * identidad de seller NO vive en el token: se resuelve EN VIVO buscando la fila de `sellers` con
  * `user_id = sesión.user.id` (índice idx_sellers_user_id). Así, vincular a un
  * usuario (seed o /admin/sellers/:id/link) surte efecto sin re-login, y
  * suspender un seller lo saca del panel al instante.

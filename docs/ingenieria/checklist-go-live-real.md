@@ -75,9 +75,24 @@ que falta para cruzar esa línea.
 - [ ] **Envío real de magic links.** Hoy `apps/api/src/lib/email.ts` solo hace
       `console.log` del link (ver comentario en el archivo). Antes de live hay
       que integrar Cloudflare Email Service (o proveedor) con dominio + SPF/DKIM.
-- [ ] **Cloudflare Access / Zero Trust** para el admin de carga y panel — hoy
-      protegido por `ADMIN_API_KEY` de texto plano (TODO ya marcado en
-      `wrangler.jsonc`). Reemplazar antes de invitar sellers reales.
+- [x] **Cloudflare Access / Zero Trust para `/panel`** (TASK-009, 2026-07-24).
+      El código está listo y probado: `apps/web/src/middleware.ts` +
+      `apps/web/src/lib/{cloudflare-access,panel-access-guard}.ts` validan el
+      JWT de Access (`Cf-Access-Jwt-Assertion`) en toda petición a `/panel`,
+      fail-closed si falta config en producción. **Falta el paso manual en el
+      dashboard de Zero Trust** — no se puede hacer desde este repo/agente
+      (no hay credenciales de cuenta de Cloudflare): crear la Access
+      Application + Policy (Allow por lista explícita de emails de sellers
+      vetted) y cargar `CF_ACCESS_TEAM_DOMAIN`/`CF_ACCESS_AUD` reales en
+      `apps/web/wrangler.jsonc`. Ver
+      [`cloudflare-access-panel.md`](./cloudflare-access-panel.md) para el
+      paso a paso y el detalle de por qué NO cubre `apps/api`.
+- [ ] **Cloudflare Access / Zero Trust para `/admin`** (carga de inventario) —
+      hoy sigue protegido solo por `ADMIN_API_KEY` de texto plano (TODO en
+      `apps/api/src/middleware/admin-auth.ts` y `apps/api/wrangler.jsonc`).
+      Mismo patrón que `/panel`, pendiente como tarea futura — el helper
+      `verifyAccessJwt` de `apps/web/src/lib/cloudflare-access.ts` se puede
+      mover a `packages/shared` y reusar desde Hono.
 - [ ] **Turnstile** activo en registro/checkout (mencionado en `CLAUDE.md` como
       parte del stack; confirmar que está realmente wireado, no solo planeado).
 - [ ] **WAF + rate limiting** confirmados activos en el dashboard de Cloudflare

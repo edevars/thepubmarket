@@ -33,6 +33,7 @@ ponerse al día sin recargar todo el contexto.
 | ¿Qué reglas no puedo romper? | [`../../CLAUDE.md`](../../CLAUDE.md) |
 | ¿Qué falta para cobrar dinero real (no test)? | [`checklist-go-live-real.md`](./checklist-go-live-real.md) |
 | ¿Qué se validó del flujo E2E (pago fallido, idempotencia, TTL)? | [`validacion-e2e-task-005.md`](./validacion-e2e-task-005.md) |
+| ¿Cómo queda protegido `/panel` con Cloudflare Access? | [`cloudflare-access-panel.md`](./cloudflare-access-panel.md) |
 
 ---
 

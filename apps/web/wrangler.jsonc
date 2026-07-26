@@ -11,7 +11,32 @@
   },
   "observability": {
     "enabled": true
+  },
+
+  // === Config no-secreta ===
+  // CF_ACCESS_TEAM_DOMAIN / CF_ACCESS_AUD: identificadores públicos de la
+  // Access Application que protege /panel en Cloudflare Zero Trust (NO son
+  // credenciales — no autorizan nada por sí solos, solo le dicen a
+  // `verifyAccessJwt` contra qué JWKS/audiencia validar el JWT que Access ya
+  // puso en el header `Cf-Access-Jwt-Assertion`). Se llenan a mano tras crear
+  // la Access Application en el dashboard de Zero Trust — ver
+  // docs/ingenieria/cloudflare-access-panel.md para el paso a paso.
+  //   - Team domain: Zero Trust → Settings → Custom Pages (o la URL del
+  //     equipo, forma `<team-name>.cloudflareaccess.com`).
+  //   - AUD tag: la Access Application de /panel → "Application Audience (AUD) Tag".
+  // Runtime: OpenNext puebla `process.env` con cada `var`/binding del Worker
+  // al inicio de cada request (`populateProcessEnv` en
+  // `@opennextjs/cloudflare/dist/cli/templates/init.js`), así que
+  // `process.env.CF_ACCESS_TEAM_DOMAIN` funciona tal cual dentro de
+  // `src/middleware.ts` — no hace falta `getCloudflareContext().env`. Eso
+  // aplica al Worker real (`pnpm preview` / prod); en `next dev` (sin
+  // Worker) estas vars se leen del `.env` local vía el loader nativo de
+  // Next.js. Ver runbook para el detalle completo.
+  "vars": {
+    "CF_ACCESS_TEAM_DOMAIN": "",
+    "CF_ACCESS_AUD": ""
   }
+
   // NOTA: NEXT_PUBLIC_API_URL NO va aquí. Las variables NEXT_PUBLIC_* se inlinan
   // en BUILD TIME, no en runtime, así que un `var` de wrangler no llegaría al
   // bundle del cliente. Se configura como variable de entorno del build:
