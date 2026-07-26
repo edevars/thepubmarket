@@ -1,5 +1,10 @@
 /**
- * Admin interno de carga de inventario (Fase 1). Protegido por `adminAuth`.
+ * Admin interno: carga de inventario e invitación de vendedores vetted.
+ * Todo aquí está protegido por `adminAuth` (clave compartida `x-admin-key`).
+ *
+ * Es el ÚNICO lugar del API que puede convertir a un usuario en vendedor
+ * (`POST /sellers/:id/link` escribe `sellers.user_id`). No existe ruta pública
+ * equivalente: el modelo es vetted, por invitación, sin auto-registro.
  *
  * Flujo: el operador busca la carta en Scryfall (`/admin/scryfall/search`),
  * toma su scryfall_id y publica un single (`POST /admin/inventory`). Al publicar
@@ -10,12 +15,13 @@
  * (centavos MXN). Sin pagos ni reservas aquí.
  */
 
-import { inventory, sellers, users } from '@thepubmarket/db'
+import { inventory, sellerInvitations, sellers, users } from '@thepubmarket/db'
 import { ANCHOR_SELLER_ID, CONDITIONS, FINISHES } from '@thepubmarket/shared'
-import { eq, sql } from 'drizzle-orm'
+import { desc, eq, sql } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { z } from 'zod'
 import { createListing, type ListingInput, rowToInventoryItem } from '../lib/inventory'
+import { clientIp } from '../lib/rate-limit'
 import { ScryfallError, searchCards } from '../lib/scryfall'
 import type { AppEnv } from '../types'
 
@@ -80,14 +86,32 @@ admin.post('/inventory', async (c) => {
 
 /**
  * POST /admin/sellers/:id/link — vincula (invita) un seller con el usuario
- * dueño de un email. Crea el usuario si no existe (el magic link lo encontrará
- * por email al iniciar sesión). Modelo vetted: la invitación es manual, no hay
- * auto-registro de sellers.
+ * dueño de un email. Crea el usuario si no existe (al registrarse con ese mismo
+ * email reclama la cuenta y entra al panel). Modelo vetted: la invitación es
+ * manual, no hay auto-registro de sellers.
+ *
+ * Auditoría (TASK-010): cada invocación escribe una fila en `seller_invitations`
+ * — quién invitó (`x-admin-actor`), a qué email, a qué seller y cuándo. La
+ * bitácora es append-only: re-vincular agrega otra fila, no pisa la anterior.
+ * El header `x-admin-actor` es OBLIGATORIO; sin él no hay a quién atribuir la
+ * acción y la petición se rechaza con 400. Ver docs/ingenieria/invitacion-sellers.md.
  */
-const linkSchema = z.object({ email: z.string().email() })
+const linkSchema = z.object({
+  email: z.string().email(),
+  // Contexto libre para la bitácora ("acordado con X en la tienda el 24/07").
+  note: z.string().trim().max(500).optional(),
+})
+const actorSchema = z.string().email().max(254)
 
 admin.post('/sellers/:id/link', async (c) => {
   const sellerId = c.req.param('id')
+
+  const actorParsed = actorSchema.safeParse(c.req.header('x-admin-actor')?.trim().toLowerCase())
+  if (!actorParsed.success) {
+    return c.json({ error: 'missing_admin_actor' }, 400)
+  }
+  const invitedBy = actorParsed.data
+
   const parsed = linkSchema.safeParse(await c.req.json().catch(() => null))
   if (!parsed.success) {
     return c.json({ error: 'invalid_body', issues: parsed.error.issues }, 400)
@@ -111,7 +135,45 @@ admin.post('/sellers/:id/link', async (c) => {
     .set({ userId: user.id, updatedAt: sql`(unixepoch())` })
     .where(eq(sellers.id, sellerId))
 
-  return c.json({ ok: true, sellerId, userId: user.id, email })
+  // La bitácora se escribe DESPUÉS del vínculo: si el update falla, no queda
+  // registrada una invitación que en realidad nunca ocurrió.
+  const invitationId = crypto.randomUUID()
+  await db.insert(sellerInvitations).values({
+    id: invitationId,
+    sellerId,
+    email,
+    userId: user.id,
+    invitedBy,
+    ip: clientIp(c.req.header('cf-connecting-ip')),
+    note: parsed.data.note,
+  })
+
+  return c.json({ ok: true, sellerId, userId: user.id, email, invitationId, invitedBy })
+})
+
+/**
+ * GET /admin/sellers/:id/invitations — bitácora de invitaciones del seller, de
+ * la más reciente a la más antigua. Una bitácora que no se puede leer no es
+ * auditoría: este endpoint es la mitad de lectura de `POST .../link`.
+ */
+admin.get('/sellers/:id/invitations', async (c) => {
+  const sellerId = c.req.param('id')
+  const db = c.get('db')
+
+  const seller = await db.select().from(sellers).where(eq(sellers.id, sellerId)).get()
+  if (!seller) return c.json({ error: 'not_found' }, 404)
+
+  const items = await db
+    .select()
+    .from(sellerInvitations)
+    .where(eq(sellerInvitations.sellerId, sellerId))
+    .orderBy(desc(sellerInvitations.createdAt))
+    .all()
+
+  return c.json({
+    seller: { id: seller.id, name: seller.name, status: seller.status, userId: seller.userId },
+    items,
+  })
 })
 
 /** PATCH /admin/inventory/:id — edita precio, cantidad, condición o estado. */

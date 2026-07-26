@@ -43,6 +43,13 @@
       "when": 1784866758830,
       "tag": "0005_nice_sleeper",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1785035604009,
+      "tag": "0006_perpetual_the_liberteens",
+      "breakpoints": true
     }
   ]
 }
