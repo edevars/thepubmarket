@@ -50,6 +50,12 @@ export const users = sqliteTable(
 // =====================================================================
 // sellers — vendedores vetted (por invitación). The Pub Game Store es el ancla.
 // Cada seller es una Stripe Connect account propia.
+//
+// INVARIANTE (modelo vetted, CLAUDE.md): las filas de esta tabla SOLO se crean
+// por vía administrativa (seed o admin con `x-admin-key`). NINGUNA ruta pública
+// inserta aquí, y `user_id` —lo que convierte a un usuario en vendedor— solo lo
+// escribe `POST /admin/sellers/:id/link`. No hay auto-registro de sellers.
+// Ver docs/ingenieria/invitacion-sellers.md.
 // =====================================================================
 export const sellers = sqliteTable(
   'sellers',
@@ -86,6 +92,39 @@ export const sellers = sqliteTable(
     // Resolución sesión→seller del panel (sellerAuth busca por user_id).
     index('idx_sellers_user_id').on(t.userId),
     check('sellers_status_check', sql`${t.status} IN ('invited', 'active', 'suspended')`),
+  ],
+)
+
+// =====================================================================
+// seller_invitations — bitácora APPEND-ONLY de invitaciones de vendedores.
+// Cada `POST /admin/sellers/:id/link` escribe una fila: quién invitó, a qué
+// email, a qué seller y cuándo. Nunca se actualiza ni se borra; re-vincular un
+// seller a otro email agrega una fila más, así el historial queda íntegro.
+//
+// `invited_by` es la identidad declarada por el operador en `x-admin-actor`.
+// Con clave compartida la atribución es POR CONVENCIÓN, no criptográfica: la
+// clave no identifica a la persona. Ver docs/ingenieria/invitacion-sellers.md.
+// =====================================================================
+export const sellerInvitations = sqliteTable(
+  'seller_invitations',
+  {
+    id: text('id').primaryKey(),
+    sellerId: text('seller_id')
+      .notNull()
+      .references(() => sellers.id, { onDelete: 'cascade' }),
+    // Email invitado, normalizado a minúsculas (igual que en `users.email`).
+    email: text('email').notNull(),
+    // Usuario resuelto o creado al vincular. `set null` para no perder la fila
+    // de bitácora si el usuario se borra.
+    userId: text('user_id').references(() => users.id, { onDelete: 'set null' }),
+    invitedBy: text('invited_by').notNull(),
+    ip: text('ip'),
+    note: text('note'),
+    createdAt: integer('created_at').notNull().default(sql`(unixepoch())`),
+  },
+  (t) => [
+    index('idx_seller_invitations_seller_id').on(t.sellerId),
+    index('idx_seller_invitations_email').on(t.email),
   ],
 )
 
@@ -225,4 +264,12 @@ export const webhookEvents = sqliteTable('webhook_events', {
 })
 
 /** Todas las tablas, para pasarle el schema al cliente Drizzle. */
-export const schema = { users, sellers, inventory, orders, orderItems, webhookEvents }
+export const schema = {
+  users,
+  sellers,
+  sellerInvitations,
+  inventory,
+  orders,
+  orderItems,
+  webhookEvents,
+}

@@ -3,9 +3,34 @@
 > Snapshot técnico del proyecto. Actualízalo al cerrar cada bloque de trabajo.
 > Léelo junto con `ROADMAP.md` (fases) y `CLAUDE.md` (reglas de decisión).
 
-**Fecha:** 2026-07-24
+**Fecha:** 2026-07-25
 **Rama activa:** `main`
 **Fase del roadmap:** Fase 2 → Fase 3 — Núcleo transaccional completo; identidad de usuario migrando a email+password
+
+---
+
+## 🎟️ Invitación de vendedores: flujo formal y auditable (2026-07-25)
+
+TASK-010. La invitación sigue siendo el mismo endpoint
+(`POST /admin/sellers/:id/link`), pero ahora deja rastro y exige responsable.
+
+- **Bitácora append-only:** tabla `seller_invitations` (migración `0006`) —
+  seller, email, usuario, `invited_by`, IP, nota y fecha. Se lee con
+  `GET /admin/sellers/:id/invitations`.
+- **`x-admin-actor` obligatorio** (formato email) en el link: sin responsable
+  no hay invitación (`400 missing_admin_actor`).
+- **`adminAuth` endurecido:** comparación en tiempo constante sobre SHA-256 y
+  rate limit de intentos fallidos por IP en KV (10 / 15 min). Sigue siendo
+  clave compartida — el cierre real son service tokens de Access.
+- **Salvaguardas anti auto-registro verificadas** con sondeos curl (registro no
+  puede inyectar `role` ni crear tienda; `/seller/*` responde `403`).
+- Proceso completo, bitácora y veredicto de la revisión de `x-admin-key` en
+  [`invitacion-sellers.md`](./invitacion-sellers.md).
+
+⚠️ **Pendiente antes de desplegar el API:** correr
+`pnpm -F @thepubmarket/api db:migrate:remote` (migración `0006`). Si el Worker
+sale a producción sin la tabla, `POST /admin/sellers/:id/link` falla al
+insertar en la bitácora. Local ya está migrada.
 
 ---
 

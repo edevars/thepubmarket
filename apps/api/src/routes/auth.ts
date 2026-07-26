@@ -55,7 +55,15 @@ function toSessionUser(row: {
 
 export const auth = new Hono<AppEnv>()
 
-/** POST /auth/register — creates an account (or claims a legacy passwordless one). */
+/**
+ * POST /auth/register — creates an account (or claims a legacy passwordless one).
+ *
+ * Buyers only, always: `role` is hardcoded to 'buyer' and `registerSchema`
+ * strips unknown keys, so a caller can't smuggle in `role` or a seller link.
+ * Becoming a seller requires an admin to create the `sellers` row and run
+ * `POST /admin/sellers/:id/link` — there is no self-registration path
+ * (see docs/ingenieria/invitacion-sellers.md).
+ */
 auth.post('/register', async (c) => {
   const parsed = registerSchema.safeParse(await c.req.json().catch(() => null))
   if (!parsed.success) return c.json({ error: 'invalid_request' }, 400)

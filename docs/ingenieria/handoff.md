@@ -42,9 +42,11 @@ apps/web/src/
 packages/shared/src/index.ts   # contrato (InventoryItem, Seller, SellerOrder, CheckoutRequest…)
 ```
 
-Panel del Vendedor (`/panel`): acceso = magic link con un email vinculado en
-`sellers.user_id` (seed vincula al dueño con el ancla; invitar otros:
-`POST /admin/sellers/:id/link {email}` con `x-admin-key`). El chrome del
+Panel del Vendedor (`/panel`): acceso = sesión email+password con un email
+vinculado en `sellers.user_id` (seed vincula al dueño con el ancla; invitar
+otros: `POST /admin/sellers/:id/link {email}` con `x-admin-key` **y**
+`x-admin-actor`, que queda registrado en `seller_invitations` — proceso completo
+en [`invitacion-sellers.md`](./invitacion-sellers.md)). El chrome del
 marketplace se oculta en `/panel/*` vía `MarketplaceChrome` (layout del locale).
 
 ## 3. Próximo objetivo: cerrar Fase 2 (Stripe vivo)

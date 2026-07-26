@@ -87,12 +87,16 @@ que falta para cruzar esa línea.
       `apps/web/wrangler.jsonc`. Ver
       [`cloudflare-access-panel.md`](./cloudflare-access-panel.md) para el
       paso a paso y el detalle de por qué NO cubre `apps/api`.
-- [ ] **Cloudflare Access / Zero Trust para `/admin`** (carga de inventario) —
-      hoy sigue protegido solo por `ADMIN_API_KEY` de texto plano (TODO en
-      `apps/api/src/middleware/admin-auth.ts` y `apps/api/wrangler.jsonc`).
-      Mismo patrón que `/panel`, pendiente como tarea futura — el helper
-      `verifyAccessJwt` de `apps/web/src/lib/cloudflare-access.ts` se puede
-      mover a `packages/shared` y reusar desde Hono.
+- [ ] **Cloudflare Access / Zero Trust para `/admin`** (carga de inventario e
+      invitación de vendedores) — hoy sigue protegido por `ADMIN_API_KEY`,
+      endurecido en TASK-010 (comparación en tiempo constante + rate limit de
+      intentos fallidos en KV), pero sigue siendo una clave compartida: acredita
+      posesión, no identidad. Falta ponerlo detrás de Access con **service
+      tokens** (`CF-Access-Client-Id`/`CF-Access-Client-Secret`, los que sí
+      funcionan para llamadas no interactivas). El helper `verifyAccessJwt` de
+      `apps/web/src/lib/cloudflare-access.ts` se puede mover a
+      `packages/shared` y reusar desde Hono. Ver
+      [`invitacion-sellers.md`](./invitacion-sellers.md) §4.
 - [ ] **Turnstile** activo en registro/checkout (mencionado en `CLAUDE.md` como
       parte del stack; confirmar que está realmente wireado, no solo planeado).
 - [ ] **WAF + rate limiting** confirmados activos en el dashboard de Cloudflare
