@@ -1,10 +1,11 @@
 ---
 id: TASK-011
 title: Harden buyer/seller authentication and KV session handling
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - claude
 created_date: '2026-07-22 22:32'
-updated_date: '2026-07-24 04:18'
+updated_date: '2026-07-28 17:46'
 labels:
   - 'epic:identity'
   - chore
