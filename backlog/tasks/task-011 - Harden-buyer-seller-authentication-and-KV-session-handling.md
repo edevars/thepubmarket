@@ -1,7 +1,7 @@
 ---
 id: TASK-011
 title: Harden buyer/seller authentication and KV session handling
-status: In Progress
+status: Done
 assignee:
   - claude
 created_date: '2026-07-22 22:32'
