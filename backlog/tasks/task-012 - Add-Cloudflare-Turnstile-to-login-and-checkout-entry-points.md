@@ -5,7 +5,7 @@ status: In Progress
 assignee:
   - '@claude'
 created_date: '2026-07-22 22:32'
-updated_date: '2026-07-29 01:09'
+updated_date: '2026-07-29 01:22'
 labels:
   - 'epic:anti-bot'
   - feature
@@ -28,6 +28,8 @@ CLAUDE.md specifies Turnstile as the anti-bot layer for registration and checkou
 - [ ] #3 Server-side siteverify check enforced in the Worker before accepting login/register/checkout requests
 - [ ] #4 Turnstile site/secret keys managed via Cloudflare secrets, not hardcoded
 - [ ] #5 Graceful failure UX in place (Spanish copy) if Turnstile verification fails
+- [ ] #6 Turnstile widget added to the /auth/forgot-password and /auth/reset-password forms
+- [ ] #7 Server-side siteverify enforced on /auth/password/forgot and /auth/password/reset
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -64,6 +66,18 @@ None — Turnstile does not touch the fund flow. Non-custodial invariant unaffec
 - Whether to also gate `/auth/password/forgot` and `/auth/password/reset` (not in the current AC).
 - Whether real Turnstile keys exist yet or the widget creation stays a manual dashboard step on the go-live checklist.
 <!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+2026-07-28 — Scope decision (user): extend the gate to `/auth/password/forgot` and `/auth/password/reset` on top of login/register/checkout. forgot-password triggers an outbound email, which is the cheapest abuse surface of the set. Two acceptance criteria added (#6, #7).
+
+2026-07-28 — Code complete on both sides. API: `lib/turnstile.ts` + `middleware/turnstile.ts`, mounted before the expensive work on the 5 endpoints. Web: `lib/turnstile.ts` + `components/security/useTurnstile.ts` (explicit render, execution:'execute', appearance:'interaction-only', fresh token per submit), wired into /login, /register, /auth/forgot-password, /auth/reset-password and /cart. Token travels in the `cf-turnstile-response` header, so no `@thepubmarket/shared` request type changed.
+
+2026-07-28 — Verified against local `wrangler dev` with Cloudflare's dummy always-pass secret (so siteverify is really called, not bypassed): all 5 endpoints return 403 `turnstile_failed` without the header and fall through to their normal 401/400 with it; `/health` and `/auth/me` unaffected. Also green: `pnpm typecheck`, `pnpm lint`, 42 API tests (8 new in `lib/turnstile.test.ts`), 23 web tests, `apps/web` production build.
+
+2026-07-28 — BLOCKED on prod keys: creating the widget via the Cloudflare API needs a token with `Account.Turnstile:Edit`; the `wrangler login` OAuth token does not carry that scope (confirmed via the turnstile-spin skill's auth probe). User chose to hand over an API token via `~/.cf-turnstile-token`. Everything else is done and works with the dummy test keys.
+<!-- SECTION:NOTES:END -->
 
 ## Comments
 
