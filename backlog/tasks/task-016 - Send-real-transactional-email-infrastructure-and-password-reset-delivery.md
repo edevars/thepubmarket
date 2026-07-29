@@ -5,7 +5,7 @@ status: In Progress
 assignee:
   - '@claude'
 created_date: '2026-07-29 01:59'
-updated_date: '2026-07-29 02:00'
+updated_date: '2026-07-29 02:02'
 labels:
   - 'epic:transactional-email'
   - api
@@ -55,3 +55,32 @@ Constraints:
 - [ ] #8 Delivery verified against the deployed API, not only locally, and the verification is recorded in the task notes
 - [ ] #9 docs/ingenieria/estado-actual.md no longer lists 'sin envío real de correo' as an open gap, and a dedicated doc covers the email setup, sender identity, and known limits
 <!-- AC:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+## Research findings (2026-07-29)
+
+- `apps/api/src/lib/email.ts` already exists as a stub: `sendPasswordResetEmail()` just `console.log`s the link. Called from `POST /auth/password/forgot` (`apps/api/src/routes/auth.ts:194`), inside the `if (existing)` branch, so the neutral-response property (AC #4) is already correct and must be preserved.
+- No `send_email` binding in `apps/api/wrangler.jsonc`. Wrangler 4.105.0 supports `wrangler email sending` (open beta).
+- **DNS state of `thepubmarket.com`** (checked via dig): nameservers are Cloudflare, but inbound mail is Namecheap forwarding — `MX 10 eforward1..5.registrar-servers.com` and a single SPF TXT `v=spf1 include:spf.efwd.registrar-servers.com ~all`. No `_dmarc` record.
+  - Email Sending does not need MX, so the existing forwarding stays untouched.
+  - It does need SPF. A second SPF TXT record on the apex is an RFC violation and would break the existing one, so the Cloudflare include must be **merged into the existing record**, not added alongside it.
+- **Access blocker:** the wrangler OAuth token returns `2036 Unauthorized` on `/accounts/*/email/sending/zones`, and the existing scoped token in `~/.cf-turnstile-token` is Turnstile-only (`10000 Authentication error` on the same endpoint). Domain onboarding needs either the Dashboard or a new scoped API token. Same shape of problem as TASK-012.
+
+## Approach
+
+1. **Onboard the sender domain** — apex `thepubmarket.com`, so the From address is DMARC-aligned with the site. Read the required records with `wrangler email sending dns get`, hand-merge the Cloudflare include into the existing SPF TXT, add the DKIM records, and add a `_dmarc` TXT at `p=none` to start. Verify with dig before claiming it works.
+2. **Binding** — `send_email` named `EMAIL` in `wrangler.jsonc`, restricted via `allowed_sender_addresses` to the single no-reply sender so a future bug cannot send as an arbitrary address. Regenerate `worker-configuration.d.ts` with `wrangler types`.
+3. **Shared helper** — rewrite `apps/api/src/lib/email.ts` around one `sendEmail(env, message)` that is the only caller of the binding. It never throws: on failure it logs recipient, subject and provider error code, and returns a result the caller ignores. Templates live beside it as pure functions returning `{subject, html, text}` (Spanish copy, both HTML and plain text).
+4. **Mode switch** — an `EMAIL_MODE` var. Anything other than `send` means log-only: the helper prints the full message body so the reset link stays usable in local dev with no credentials. Deployed config sets `send`; `.dev.vars.example` documents `log`.
+5. **Wire password reset** — `sendPasswordResetEmail` keeps its call site but takes the env and delegates to the helper. The send goes through `executionCtx.waitUntil` so the endpoint's neutral `{ok: true}` response is returned at the same latency whether or not delivery succeeds.
+6. **Verify** — locally: reset flow end to end in log mode, plus probes confirming Turnstile 403 and the KV rate limits still fire, and that an unregistered email sends nothing. Deployed: real reset email to a controlled inbox, follow the link, complete a reset.
+7. **Document** — new `docs/ingenieria/email.md` (English) covering domain onboarding, the DNS merge, sender identity, the mode switch, limits and diagnostics. Update `estado-actual.md` and `checklist-go-live-real.md` to drop "sin envío real de correo" as an open gap.
+
+## Risks
+
+- Merging SPF by hand on a zone that already forwards mail: a wrong edit silently breaks inbound forwarding auth. Capture the current record verbatim before editing.
+- Cloudflare Email Sending is open beta; limits and error codes may differ from the skill reference. Trust `wrangler email sending settings` / the live API over documentation.
+- Onboarding is blocked until a token with Email Sending permission exists or the user completes it in the Dashboard. Everything from step 2 onward can be built and locally verified without it.
+<!-- SECTION:PLAN:END -->
