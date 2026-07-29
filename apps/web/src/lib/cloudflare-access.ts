@@ -27,9 +27,16 @@ function getJwks(teamDomain: string) {
   return jwks
 }
 
+/**
+ * `aud` acepta varias audiencias porque `/panel` está cubierto por DOS Access
+ * Applications: Access solo admite un wildcard entre cada par de diagonales,
+ * así que ningún patrón único cubre `/panel*` y `/en/panel*` a la vez, y cada
+ * aplicación trae su propio AUD tag. `jose` da por válido el token si su claim
+ * `aud` coincide con CUALQUIERA de las audiencias esperadas.
+ */
 export async function verifyAccessJwt(
   token: string,
-  opts: { teamDomain: string; aud: string },
+  opts: { teamDomain: string; aud: string | string[] },
 ): Promise<VerifyResult> {
   try {
     const jwks = getJwks(opts.teamDomain)

@@ -32,9 +32,15 @@
   // aplica al Worker real (`pnpm preview` / prod); en `next dev` (sin
   // Worker) estas vars se leen del `.env` local vía el loader nativo de
   // Next.js. Ver runbook para el detalle completo.
+  // CF_ACCESS_AUD lleva DOS audiencias separadas por coma, una por Access
+  // Application: Access solo admite un wildcard entre cada par de diagonales,
+  // así que `/panel*` (locale default, sin prefijo) y `/en/panel*` no caben en
+  // una sola aplicación. Ambas comparten la policy "Sellers vetted".
+  //   1º = "Panel del Vendedor (es)" → thepubmarket.com/panel*
+  //   2º = "Panel del Vendedor (en)" → thepubmarket.com/en/panel*
   "vars": {
-    "CF_ACCESS_TEAM_DOMAIN": "",
-    "CF_ACCESS_AUD": ""
+    "CF_ACCESS_TEAM_DOMAIN": "thepubmarket.cloudflareaccess.com",
+    "CF_ACCESS_AUD": "03db41a9a38e359e66203f604a23e5f036c62a09056f3eb98d02efcbad8d39d7,33e4f7b6d529ce6653917ef81db79f3a94499cacea3c7f1ca64d7e6897256d71"
   }
 
   // NOTA: NEXT_PUBLIC_API_URL NO va aquí. Las variables NEXT_PUBLIC_* se inlinan
