@@ -5,7 +5,7 @@ status: In Progress
 assignee:
   - '@claude'
 created_date: '2026-07-29 01:59'
-updated_date: '2026-07-29 04:35'
+updated_date: '2026-07-29 16:09'
 labels:
   - 'epic:transactional-email'
   - api
@@ -109,4 +109,35 @@ Also flipped `.dev.vars` to `EMAIL_MODE=send` to exercise the real binding: Mini
 ## Blocked on access
 
 Step 1 (domain onboarding) is waiting on a Cloudflare API token with **Account → Email Sending: Edit** and **Zone → DNS: Edit** on `thepubmarket.com`, to be placed at `~/.cf-email-token`. Decisions confirmed with the user: sender is the apex `no-reply@thepubmarket.com` (DMARC-aligned with the site), and the existing Namecheap SPF include gets merged rather than replaced.
+
+## Sender domain verified (2026-07-29)
+
+Token at `~/.cf-email-token` works for Email Sending (`/email/sending/limits` returns quota 1000/day, 0 sent) and for Zone DNS. Note the account-scoped `/email/sending/zones` subresource still 401s with this token — the working path is **zone-scoped**: `/zones/{zone_id}/email/sending/subdomains`. `wrangler email sending list` is therefore unusable here; query the zone endpoint directly.
+
+**The domain was already onboarded** (created `2026-07-29T04:43:28Z`), so `wrangler email sending enable` returned `2040 Subdomain already exists`. State on zone `a4e0652bc69bc8dee2f521add23cb27b`:
+
+```
+name: thepubmarket.com   enabled: true
+return_path_domain: cf-bounce.thepubmarket.com
+dkim_selector: cf-bounce
+```
+
+**Correction to the plan: no SPF merge was needed, and none was done.** Cloudflare puts its records on the `cf-bounce` subdomain, not the apex. Verified by dig:
+
+| Record | Host | Value |
+|---|---|---|
+| MX ×3 | `cf-bounce.thepubmarket.com` | `route1/2/3.mx.cloudflare.net` |
+| TXT SPF | `cf-bounce.thepubmarket.com` | `v=spf1 include:_spf.mx.cloudflare.net ~all` |
+| TXT DKIM | `cf-bounce._domainkey.thepubmarket.com` | `v=DKIM1; h=sha256; k=rsa; p=MIIBIj…` |
+| TXT DMARC | `_dmarc.thepubmarket.com` | `v=DMARC1; p=none;` |
+
+The apex is untouched: MX still the five `eforward*.registrar-servers.com` and SPF still `v=spf1 include:spf.efwd.registrar-servers.com ~all`, so the existing Namecheap forwarding keeps working.
+
+**DMARC lowered from the `p=reject` default to `p=none`** (record `1a7ecb34bcfd61c976f9b07aabfd0aca`, comment left on it). `p=reject` on the apex applies to every sender claiming `@thepubmarket.com`, not just this Worker — any other outbound path (Gmail "send as", webmail) would have started getting hard-rejected silently. Our own mail is aligned either way via the cf-bounce DKIM/SPF, so nothing is lost by starting at `none`. Propagation took ~4 minutes; confirmed `p=none` at the authoritative NS and at 1.1.1.1. **Raising this to quarantine/reject belongs on the go-live checklist.**
+
+Also checked while here: `seller_invitations` **already exists in remote D1**, so migration 0006 is applied and the warning about it in estado-actual.md is stale — fix that when updating the docs.
+
+## Blocked: deploy
+
+`wrangler deploy` was denied by the permission classifier. The deployed verification (AC #3, #5, #8) needs the user to run the deploy.
 <!-- SECTION:NOTES:END -->
