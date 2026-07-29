@@ -21,11 +21,12 @@ import {
   consumeResetToken,
   createResetToken,
   createSession,
+  deleteAllUserSessions,
   deleteSession,
 } from '../lib/auth'
 import { sendPasswordResetEmail } from '../lib/email'
-import { hashPassword, verifyPassword } from '../lib/password'
-import { checkRateLimit, clientIp } from '../lib/rate-limit'
+import { dummyVerify, hashPassword, needsRehash, verifyPassword } from '../lib/password'
+import { checkRateLimit, clientIp, isRateLimited, recordAttempt } from '../lib/rate-limit'
 import { buyerAuth } from '../middleware/buyer-auth'
 import type { AppEnv, SessionUser } from '../types'
 
@@ -110,27 +111,63 @@ auth.post('/register', async (c) => {
   return c.json({ sessionToken, user }, 201)
 })
 
-/** POST /auth/login — verifies email+password, returns a session. */
+const LOGIN_WINDOW_SECONDS = 10 * 60
+const LOGIN_EMAIL_LIMIT = 8
+
+/**
+ * POST /auth/login — verifies email+password, returns a session.
+ *
+ * Two deliberate properties on the failure paths:
+ *
+ * - **No account-existence oracle.** An unknown email, an account with no
+ *   password set, and a wrong password all return the same `401
+ *   invalid_credentials`. The first two also burn an equivalent KDF derivation
+ *   (`dummyVerify`) so response *timing* doesn't leak the difference either.
+ * - **Failures, not attempts, fill the per-email bucket.** A buyer signing in
+ *   correctly all day never approaches the limit; a guessing run hits it in 8.
+ *   The per-IP bucket still counts every attempt (cheap blanket cap).
+ */
 auth.post('/login', async (c) => {
   const parsed = loginSchema.safeParse(await c.req.json().catch(() => null))
   if (!parsed.success) return c.json({ error: 'invalid_request' }, 400)
 
   const ip = clientIp(c.req.header('cf-connecting-ip'))
   const email = parsed.data.email.trim().toLowerCase()
-  const ipOk = await checkRateLimit(c.env.SESSIONS, 'login:ip', ip, 20, 10 * 60)
-  const emailOk = await checkRateLimit(c.env.SESSIONS, 'login:email', email, 8, 10 * 60)
+  const kv = c.env.SESSIONS
+  const ipOk = await checkRateLimit(kv, 'login:ip', ip, 20, LOGIN_WINDOW_SECONDS)
+  const emailOk = !(await isRateLimited(
+    kv,
+    'login:email',
+    email,
+    LOGIN_EMAIL_LIMIT,
+    LOGIN_WINDOW_SECONDS,
+  ))
   if (!ipOk || !emailOk) return c.json({ error: 'rate_limited' }, 429)
+
+  const failed = async () => {
+    await recordAttempt(kv, 'login:email', email, LOGIN_WINDOW_SECONDS)
+    return c.json({ error: 'invalid_credentials' }, 401)
+  }
 
   const db = c.get('db')
   const row = await db.select().from(users).where(eq(users.email, email)).get()
-  if (!row) return c.json({ error: 'invalid_credentials' }, 401)
-  if (!row.passwordHash) return c.json({ error: 'password_not_set' }, 403)
+  if (!row?.passwordHash) {
+    await dummyVerify(parsed.data.password)
+    return failed()
+  }
 
-  const valid = await verifyPassword(parsed.data.password, row.passwordHash)
-  if (!valid) return c.json({ error: 'invalid_credentials' }, 401)
+  if (!(await verifyPassword(parsed.data.password, row.passwordHash))) return failed()
+
+  // Upgrade hashes written under weaker KDF params. One-time cost per user,
+  // and the stored format carries its own params so the old hash stays valid
+  // until this succeeds.
+  if (needsRehash(row.passwordHash)) {
+    const passwordHash = await hashPassword(parsed.data.password)
+    await db.update(users).set({ passwordHash }).where(eq(users.id, row.id))
+  }
 
   const user = toSessionUser(row)
-  const sessionToken = await createSession(c.env.SESSIONS, user)
+  const sessionToken = await createSession(kv, user)
   return c.json({ sessionToken, user })
 })
 
@@ -177,9 +214,12 @@ auth.post('/password/reset', async (c) => {
   )[0]
   if (!row) return c.json({ error: 'user_not_found' }, 404)
 
-  // Known limitation: this doesn't invalidate the user's other existing
-  // sessions (no user→sessions reverse index in KV today). Acceptable at
-  // current volume; revisit if this becomes a live threat.
+  // A password change revokes every session issued under the old one — the
+  // point of resetting after a compromise is that the attacker loses access,
+  // which doesn't happen if their 7-day session survives. Revoke first, then
+  // mint the new session so the caller stays signed in on this device only.
+  await deleteAllUserSessions(c.env.SESSIONS, row.id)
+
   const user = toSessionUser(row)
   const sessionToken = await createSession(c.env.SESSIONS, user)
   return c.json({ sessionToken, user })

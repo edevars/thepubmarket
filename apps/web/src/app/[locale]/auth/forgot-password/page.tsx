@@ -19,7 +19,6 @@ export default function ForgotPasswordPage() {
 function ForgotPasswordInner() {
   const t = useTranslations('auth')
   const params = useSearchParams()
-  const legacy = params.get('reason') === 'legacy'
   const [email, setEmail] = useState(params.get('email') ?? '')
   const [emailTouched, setEmailTouched] = useState(false)
   const [sent, setSent] = useState(false)
@@ -31,9 +30,7 @@ function ForgotPasswordInner() {
       <h1 className="mb-2 font-display text-3xl font-bold tracking-[0.02em] text-white">
         {t('forgotPasswordTitle')}
       </h1>
-      <p className="mb-6 text-sm text-muted">
-        {legacy ? t('forgotPasswordLegacyHint') : t('forgotPasswordSubtitle')}
-      </p>
+      <p className="mb-6 text-sm text-muted">{t('forgotPasswordSubtitle')}</p>
 
       {sent ? (
         <div className="border border-line bg-panel-2 px-5 py-6">

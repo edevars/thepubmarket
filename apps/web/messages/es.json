@@ -66,7 +66,6 @@
     "registerCta": "Crear cuenta",
     "forgotPasswordTitle": "Recupera tu contraseña",
     "forgotPasswordSubtitle": "Te enviamos un enlace para elegir una nueva contraseña.",
-    "forgotPasswordLegacyHint": "Actualizamos el acceso para usar contraseña. Elige una para continuar.",
     "resetLinkSent": "Si {email} tiene cuenta, te enviamos un enlace para restablecer tu contraseña.",
     "sendResetLink": "Enviar enlace",
     "backToSignIn": "Volver a iniciar sesión",

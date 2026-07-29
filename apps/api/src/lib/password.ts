@@ -1,13 +1,25 @@
 /**
  * Password hashing via the Workers-native SubtleCrypto API (no dependency,
- * no nodejs_compat needed). PBKDF2-HMAC-SHA256 at OWASP's 2023 minimum
- * iteration count.
+ * no nodejs_compat needed). PBKDF2-HMAC-SHA512 at OWASP's recommended
+ * iteration count for SHA-512 (210,000 — see the Password Storage Cheat
+ * Sheet). SHA-512 over SHA-256 because it hits OWASP parity at ~48 ms of
+ * Worker CPU instead of the ~71 ms that PBKDF2-HMAC-SHA256 needs at its own
+ * 600,000-iteration figure.
  *
  * Stored format is self-describing so params can change later without a
- * schema migration: `pbkdf2-sha256$<iterations>$<salt b64>$<hash b64>`.
+ * schema migration: `pbkdf2-<hash>$<iterations>$<salt b64>$<hash b64>`.
+ * Hashes written by older parameter sets still verify; `needsRehash()` flags
+ * them so callers can upgrade them on the next successful login.
  */
 
-const ALGO_TAG = 'pbkdf2-sha256'
+const HASHES = {
+  'pbkdf2-sha256': 'SHA-256',
+  'pbkdf2-sha512': 'SHA-512',
+} as const
+
+type AlgoTag = keyof typeof HASHES
+
+const ALGO_TAG: AlgoTag = 'pbkdf2-sha512'
 const PBKDF2_ITERATIONS = 210_000
 const SALT_BYTES = 16
 const KEY_BYTES = 32
@@ -29,6 +41,7 @@ async function deriveKey(
   password: string,
   salt: Uint8Array,
   iterations: number,
+  hash: string,
 ): Promise<Uint8Array> {
   const keyMaterial = await crypto.subtle.importKey(
     'raw',
@@ -38,7 +51,7 @@ async function deriveKey(
     ['deriveBits'],
   )
   const bits = await crypto.subtle.deriveBits(
-    { name: 'PBKDF2', salt: salt as BufferSource, iterations, hash: 'SHA-256' },
+    { name: 'PBKDF2', salt: salt as BufferSource, iterations, hash },
     keyMaterial,
     KEY_BYTES * 8,
   )
@@ -52,21 +65,63 @@ function constantTimeEqual(a: Uint8Array, b: Uint8Array): boolean {
   return diff === 0
 }
 
-/** Hashes a plaintext password into the storable `pbkdf2-sha256$...` format. */
+interface ParsedHash {
+  algo: AlgoTag
+  iterations: number
+  salt: Uint8Array
+  hash: Uint8Array
+}
+
+function parseStored(stored: string): ParsedHash | null {
+  const parts = stored.split('$')
+  if (parts.length !== 4) return null
+  const [algo, iterStr, saltB64, hashB64] = parts as [string, string, string, string]
+  if (!(algo in HASHES)) return null
+  const iterations = Number(iterStr)
+  if (!Number.isInteger(iterations) || iterations <= 0) return null
+  try {
+    return {
+      algo: algo as AlgoTag,
+      iterations,
+      salt: fromBase64(saltB64),
+      hash: fromBase64(hashB64),
+    }
+  } catch {
+    return null
+  }
+}
+
+/** Hashes a plaintext password into the storable `pbkdf2-sha512$...` format. */
 export async function hashPassword(password: string): Promise<string> {
   const salt = crypto.getRandomValues(new Uint8Array(SALT_BYTES))
-  const hash = await deriveKey(password, salt, PBKDF2_ITERATIONS)
+  const hash = await deriveKey(password, salt, PBKDF2_ITERATIONS, HASHES[ALGO_TAG])
   return `${ALGO_TAG}$${PBKDF2_ITERATIONS}$${toBase64(salt)}$${toBase64(hash)}`
 }
 
 /** Verifies a plaintext password against a stored hash (constant-time compare). */
 export async function verifyPassword(password: string, stored: string): Promise<boolean> {
-  const parts = stored.split('$')
-  if (parts.length !== 4) return false
-  const [algo, iterStr, saltB64, hashB64] = parts as [string, string, string, string]
-  if (algo !== ALGO_TAG) return false
-  const iterations = Number(iterStr)
-  if (!Number.isInteger(iterations) || iterations <= 0) return false
-  const actual = await deriveKey(password, fromBase64(saltB64), iterations)
-  return constantTimeEqual(actual, fromBase64(hashB64))
+  const parsed = parseStored(stored)
+  if (!parsed) return false
+  const actual = await deriveKey(password, parsed.salt, parsed.iterations, HASHES[parsed.algo])
+  return constantTimeEqual(actual, parsed.hash)
+}
+
+/**
+ * True when `stored` was produced by weaker parameters than the current ones,
+ * so the caller should re-hash the password on the next successful login.
+ * Unparseable input also returns true — rewriting it is the safe move.
+ */
+export function needsRehash(stored: string): boolean {
+  const parsed = parseStored(stored)
+  if (!parsed) return true
+  return parsed.algo !== ALGO_TAG || parsed.iterations < PBKDF2_ITERATIONS
+}
+
+/**
+ * Burns the same KDF work a real verification would, then discards it. Used on
+ * the unknown-account login path so response timing doesn't reveal whether an
+ * email is registered. The salt is fixed and never stored.
+ */
+export async function dummyVerify(password: string): Promise<void> {
+  await deriveKey(password, new Uint8Array(SALT_BYTES), PBKDF2_ITERATIONS, HASHES[ALGO_TAG])
 }
