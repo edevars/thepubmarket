@@ -69,24 +69,36 @@ que falta para cruzar esa línea.
 
 ## 2. Infraestructura / dominio
 
-- [ ] **Dominio propio** para `apps/web` y `apps/api` (hoy son subdominios
-      `*.workers.dev`). Actualizar `WEB_BASE_URL` en `apps/api/wrangler.jsonc` y
-      `NEXT_PUBLIC_API_URL` en `apps/web/.env`/config de Pages.
+- [x] **Dominio propio** (2026-07-28): `thepubmarket.com` como zona en
+      Cloudflare, con Custom Domains al Worker web (apex) y al de API
+      (`api.thepubmarket.com`). `WEB_BASE_URL` ya actualizado en
+      `apps/api/wrangler.jsonc`. **Falta**, y es manual en el dashboard:
+      (a) `NEXT_PUBLIC_API_URL=https://api.thepubmarket.com` como variable del
+      paso de build en Workers Builds — se inlina en build time, no se lee de
+      `wrangler.jsonc`; (b) mover el webhook de Stripe a
+      `https://api.thepubmarket.com/webhooks/stripe`; (c) deshabilitar los
+      subdominios `*.workers.dev` **después** de (b), o los pagos dejan de
+      confirmarse.
+- [ ] **Cerrar CORS a una allowlist de orígenes.** Hoy `apps/api/src/index.ts`
+      usa `cors()` sin configuración, abierto a cualquier origen. Es aceptable
+      solo mientras no exista ni un usuario real (ver `estado-actual.md`); con
+      tokens Bearer en `localStorage`, deja de serlo con el primer comprador.
+      El origen ya es fijo: `cors({ origin: c.env.WEB_BASE_URL })`.
 - [ ] **Envío real de magic links.** Hoy `apps/api/src/lib/email.ts` solo hace
       `console.log` del link (ver comentario en el archivo). Antes de live hay
       que integrar Cloudflare Email Service (o proveedor) con dominio + SPF/DKIM.
-- [x] **Cloudflare Access / Zero Trust para `/panel`** (TASK-009, 2026-07-24).
-      El código está listo y probado: `apps/web/src/middleware.ts` +
+- [x] **Cloudflare Access / Zero Trust para `/panel`** (TASK-009, cerrada
+      2026-07-28). `apps/web/src/middleware.ts` +
       `apps/web/src/lib/{cloudflare-access,panel-access-guard}.ts` validan el
       JWT de Access (`Cf-Access-Jwt-Assertion`) en toda petición a `/panel`,
-      fail-closed si falta config en producción. **Falta el paso manual en el
-      dashboard de Zero Trust** — no se puede hacer desde este repo/agente
-      (no hay credenciales de cuenta de Cloudflare): crear la Access
-      Application + Policy (Allow por lista explícita de emails de sellers
-      vetted) y cargar `CF_ACCESS_TEAM_DOMAIN`/`CF_ACCESS_AUD` reales en
-      `apps/web/wrangler.jsonc`. Ver
+      fail-closed si falta config en producción. Dos Access Applications
+      (`/panel*` y `/en/panel*`) creadas sobre `thepubmarket.com`, con la
+      policy `Sellers vetted`; `CF_ACCESS_TEAM_DOMAIN`/`CF_ACCESS_AUD` reales
+      en `apps/web/wrangler.jsonc`. Verificado: `/panel` redirige al login de
+      Access y la tienda pública no. **Al invitar a un seller nuevo hay que
+      agregar su correo a la policy**, además del alta en `sellers`. Ver
       [`cloudflare-access-panel.md`](./cloudflare-access-panel.md) para el
-      paso a paso y el detalle de por qué NO cubre `apps/api`.
+      detalle y por qué NO cubre `apps/api`.
 - [ ] **Cloudflare Access / Zero Trust para `/admin`** (carga de inventario e
       invitación de vendedores) — hoy sigue protegido por `ADMIN_API_KEY`,
       endurecido en TASK-010 (comparación en tiempo constante + rate limit de

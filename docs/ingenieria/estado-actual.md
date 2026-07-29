@@ -3,7 +3,7 @@
 > Snapshot técnico del proyecto. Actualízalo al cerrar cada bloque de trabajo.
 > Léelo junto con `ROADMAP.md` (fases) y `CLAUDE.md` (reglas de decisión).
 
-**Fecha:** 2026-07-25
+**Fecha:** 2026-07-28
 **Rama activa:** `main`
 **Fase del roadmap:** Fase 2 → Fase 3 — Núcleo transaccional completo; identidad de usuario migrando a email+password
 
@@ -40,16 +40,23 @@ El login pasó de passwordless (magic link) a **email + contraseña**, para
 compradores y vendedores por igual (comparten `users`). Reemplazo completo,
 no aditivo — `/auth/magic-link` y `/auth/verify` ya no existen.
 
-- **Hashing:** PBKDF2-HMAC-SHA256 vía `crypto.subtle` nativo de Workers (sin
-  dependencia nueva), 210k iteraciones. `apps/api/src/lib/password.ts`.
+- **Hashing:** PBKDF2 vía `crypto.subtle` nativo de Workers (sin dependencia
+  nueva). Endurecido en TASK-011 a **HMAC-SHA512 @ 210k**, la cifra de OWASP
+  para SHA-512; el formato almacenado lleva sus propios parámetros y se
+  re-hashea en el siguiente login exitoso. `apps/api/src/lib/password.ts`.
 - **Endpoints nuevos:** `POST /auth/register`, `POST /auth/login`,
   `POST /auth/password/forgot`, `POST /auth/password/reset` en
   `apps/api/src/routes/auth.ts`. `/auth/logout` y `GET /auth/me` intactos.
 - **Rate limiting interino (KV):** `apps/api/src/lib/rate-limit.ts`, mientras
-  no llegue Turnstile (TASK-012).
-- **Usuarios legacy** (creados vía magic link, `password_hash IS NULL`)
-  reciben `password_not_set` al hacer login y se les redirige a
-  restablecer contraseña — sin migración masiva ni batch job.
+  no llegue Turnstile (TASK-012). El bucket por email del login cuenta
+  **fallos**, no intentos (TASK-011).
+- **Usuarios legacy** (creados vía magic link, `password_hash IS NULL`): desde
+  TASK-011 el login les responde `invalid_credentials` como a cualquier otro
+  fallo — el antiguo `password_not_set` era un oráculo de existencia de cuenta.
+  Se recuperan por "olvidé mi contraseña".
+- **Sesiones:** expiración absoluta de 7 días, sin renovación deslizante. Un
+  cambio de contraseña revoca todas las sesiones previas. Detalle completo en
+  [`auth-hardening.md`](./auth-hardening.md).
 - **Frontend:** `login/`, `register/`, `auth/forgot-password/`,
   `auth/reset-password/` (reemplaza `auth/verify/`) en `apps/web/src/app/[locale]/`.
 - Verificado E2E en local: registro, login, `/auth/me`, rate limit,
@@ -57,6 +64,31 @@ no aditivo — `/auth/magic-link` y `/auth/verify` ya no existen.
 - Ver TASK-015 (implementación) y TASK-011/TASK-012 (scope actualizado).
 
 ---
+
+## 🚧 Todo está en modo desarrollo: sin tráfico y sin clientes
+
+**No hay usuarios reales, ni compradores ni vendedores, en ningún ambiente.**
+Ni en local, ni en los Workers desplegados. Lo que está en `thepubmarket.com`
+y `api.thepubmarket.com` es un entorno de desarrollo con dominio propio, no un
+negocio operando. El único seller en D1 es The Pub Game Store, sembrado, y el
+único usuario ligado a él es el del fundador.
+
+Esto cambia el cálculo de riesgo de varias decisiones que quedaron abiertas a
+propósito, y por eso conviene tenerlo escrito en vez de deducirlo:
+
+- **CORS abierto a cualquier origen** (`apps/api/src/index.ts`, `cors()` sin
+  configuración). Con tokens Bearer en `localStorage`, un CORS abierto sería
+  exposición real **si hubiera sesiones de usuarios reales que robar**. Hoy no
+  las hay. Se deja abierto deliberadamente mientras eso siga siendo cierto.
+- **Registro que reclama cuentas sin contraseña** (`POST /auth/register` sobre
+  una fila con `password_hash IS NULL`) — ver §6 de
+  [`auth-hardening.md`](./auth-hardening.md).
+- **Sin envío real de correo:** los enlaces de reset se imprimen en el log.
+
+⚠️ **Todo lo anterior deja de ser aceptable en el momento en que exista el
+primer comprador real.** Cerrar el CORS a una allowlist de orígenes es el
+primer punto de esa lista, y es trabajo de minutos: el origen ya es fijo
+(`https://thepubmarket.com`). No dejarlo para después del lanzamiento.
 
 ## ⚠️ "Producción" hoy = Stripe en modo TEST
 
@@ -91,7 +123,7 @@ murió). Link "Mis compras" en el header con sesión. `GET /orders/:id`
 Nuevo desde el 2026-07-04: **Panel del Vendedor** (`/panel`) end-to-end —
 autoservicio de inventario (alta vía Scryfall, precio/cantidad inline, pausa) y
 órdenes con envío (Pagada → Enviada con guía → Entregada). API `/seller/*` con
-`sellerAuth` (sesión magic-link + `sellers.user_id`, por fin en uso). Migración
+`sellerAuth` (sesión email+contraseña + `sellers.user_id`). Migración
 0005-ready: 0004 añadió `tracking_number/shipped_at/delivered_at` a `orders`
 (el enum de status NO se tocó; enviado/entregado se derivan, entregada fija
 `fulfilled`). Vinculación de sellers: seed (dueño→ancla) +
