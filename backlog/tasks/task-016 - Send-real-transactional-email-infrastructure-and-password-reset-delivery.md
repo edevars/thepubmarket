@@ -5,7 +5,7 @@ status: In Progress
 assignee:
   - '@claude'
 created_date: '2026-07-29 01:59'
-updated_date: '2026-07-29 02:02'
+updated_date: '2026-07-29 04:35'
 labels:
   - 'epic:transactional-email'
   - api
@@ -84,3 +84,29 @@ Constraints:
 - Cloudflare Email Sending is open beta; limits and error codes may differ from the skill reference. Trust `wrangler email sending settings` / the live API over documentation.
 - Onboarding is blocked until a token with Email Sending permission exists or the user completes it in the Dashboard. Everything from step 2 onward can be built and locally verified without it.
 <!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+## Code landed + local verification (2026-07-29)
+
+Implemented steps 2–5 of the plan. Local behavior verified with curl against `wrangler dev` (no browser, per project convention):
+
+| Probe | Result |
+|---|---|
+| `POST /auth/password/forgot`, registered email, `EMAIL_MODE=log` | `{ok:true}`; full message (subject + plain-text body + reset link) printed to the Worker log |
+| Same, unregistered email | `{ok:true}`, byte-identical; **zero** `[email]` lines emitted — confirmed by counting log blocks (3 sends across 5 requests, matching the 3/hour bucket) |
+| Reset link from the log → `POST /auth/password/reset` | 200, new session issued |
+| Login with new password / old password | 200 / 401 |
+| Reusing the consumed token | `invalid_or_expired` — still single-use |
+| `forgot` with no `cf-turnstile-response` header | 403 `turnstile_failed`, logged as `turnstile: rejected POST /auth/password/forgot (missing-input-response)` |
+| `forgot` ×5 on one email | 3× `{ok:true}`, then `rate_limited`; no email sent on the 429s |
+
+Also flipped `.dev.vars` to `EMAIL_MODE=send` to exercise the real binding: Miniflare **simulates** the send rather than calling the provider — it logs `send_email binding called with MessageBuilder` and writes the rendered text/HTML to temp files. Useful (it confirms the builder payload: `From: "The Pub Market" <no-reply@thepubmarket.com>`, both bodies present, HTML well-formed) but it means the **provider failure path cannot be exercised locally**. AC #5 has to be confirmed against the deployed Worker. `.dev.vars` reverted to `log`.
+
+`pnpm typecheck` and `pnpm lint` clean.
+
+## Blocked on access
+
+Step 1 (domain onboarding) is waiting on a Cloudflare API token with **Account → Email Sending: Edit** and **Zone → DNS: Edit** on `thepubmarket.com`, to be placed at `~/.cf-email-token`. Decisions confirmed with the user: sender is the apex `no-reply@thepubmarket.com` (DMARC-aligned with the site), and the existing Namecheap SPF include gets merged rather than replaced.
+<!-- SECTION:NOTES:END -->
