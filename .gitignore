@@ -19,6 +19,10 @@ wrangler.local.jsonc
 .env
 .env.*
 !.env.example
+# Excepción: config de BUILD para producción, sin secretos (solo la URL pública
+# de la API). Se commitea a propósito para que un build local y uno de CI
+# produzcan el mismo bundle — ver apps/web/.env.production.
+!.env.production
 
 # Logs
 *.log
