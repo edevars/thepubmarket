@@ -40,51 +40,70 @@ Esta capa es **adicional**, no un reemplazo:
    por sí mismo (todo pasa por `sellerAuth` del lado servidor); es solo
    experiencia. No se tocó en esta tarea.
 
-## 2. Configuración manual en el dashboard de Zero Trust
+## 2. Configuración en el dashboard de Zero Trust (hecha)
 
-**No se hizo desde este repo** — no hay credenciales de cuenta de Cloudflare
-disponibles para el agente. Esto lo tiene que hacer el operador (dueño de la
-cuenta) directamente en el dashboard. Pasos, con la salvedad de que el flujo
-de clicks exacto del dashboard de Zero Trust puede haber cambiado desde que
-se escribió esto — si algo no coincide, es más confiable la documentación
-oficial de Cloudflare del momento que esta lista.
+Configurada por el operador el 2026-07-28 sobre el dominio `thepubmarket.com`.
+Los pasos de dashboard no son automatizables desde este repo (no hay
+credenciales de cuenta disponibles para el agente); esto documenta lo que
+quedó, para poder reproducirlo o agregar sellers.
 
-1. **Zero Trust → Access → Applications → Add an application → Self-hosted.**
-2. **Hostname + path.** El dominio de `apps/web` en producción, con path
-   `/panel*`. **Ojo con el prefijo de locale**: las rutas reales son
-   `/en/panel*` y `/es/panel*` (más `/panel*` sin prefijo, si `as-needed`
-   deja pasar el default sin prefijo — confirmar contra
-   `apps/web/src/i18n/routing.ts`, hoy `es` es el default sin prefijo).
-   No tengo certeza de que el dashboard actual soporte un solo path con
-   wildcard que cubra ambos prefijos de locale en una sola Application. Si
-   no lo soporta: **crear dos Access Applications, una por locale
-   (`/panel*` y `/en/panel*`), compartiendo la misma Policy** — es el
-   fallback confiable y explícito si un solo wildcard no alcanza.
-3. **Policy: Allow, por lista explícita de emails.** No usar "cualquiera con
-   este dominio de correo" — el modelo de negocio es *store-first, sellers
-   por invitación* (ver `CLAUDE.md`), así que la política debe reflejar
-   exactamente eso: una lista de emails de vendedores vetted, no una regla
-   abierta.
-4. **Obtener `CF_ACCESS_TEAM_DOMAIN` y `CF_ACCESS_AUD`:**
-   - Team domain: Zero Trust → Settings → Custom Pages (o la URL general del
-     equipo), forma `<team-name>.cloudflareaccess.com`.
-   - AUD tag: dentro de la Access Application recién creada, en su página de
-     overview — "Application Audience (AUD) Tag".
-5. **Cargar los valores** en `apps/web/wrangler.jsonc` (bloque `"vars"`) y
-   redeploy, o vía `wrangler deploy --var CF_ACCESS_TEAM_DOMAIN:... --var
-   CF_ACCESS_AUD:...` si se prefiere no commitear los valores reales (no son
-   secretos, pero tampoco hace daño mantenerlos fuera del repo si se
-   prefiere ese approach — decisión del operador).
+**Son dos Access Applications, no una.** Access admite **un solo wildcard
+entre cada par de diagonales**, así que ningún patrón único cubre `/panel*` y
+`/en/panel*` a la vez (`es` es el locale default y no lleva prefijo, ver
+`apps/web/src/i18n/routing.ts`). Ambas comparten la misma policy:
+
+| Application | Destination | Policy |
+|---|---|---|
+| `Panel del Vendedor (es)` | `thepubmarket.com/panel*` | `Sellers vetted` |
+| `Panel del Vendedor (en)` | `thepubmarket.com/en/panel*` | `Sellers vetted` |
+
+Para reproducirlo o agregar otra: **Zero Trust → Access controls →
+Applications → Create new application → Self-hosted and private → Add public
+hostname** (el flujo cambió: ya no es `Access → Applications`). Campos:
+dominio del dropdown, path sin diagonal inicial (`panel*`), Session Duration
+24 h, identity provider de Cloudflare (el default de las organizaciones
+nuevas; el One-time PIN ya no se agrega solo). En la segunda aplicación se
+agrega la policy **existente** en vez de crear otra.
+
+**Policy `Sellers vetted`:** action **Allow**, rule type **Include**, selector
+**Emails**, con la lista explícita de correos. No usar "Emails ending in" ni
+nada por dominio — el modelo es *store-first, sellers por invitación* (ver
+`CLAUDE.md`). Tampoco usar la acción **Bypass**: desactiva Access por completo
+y ni siquiera registra los accesos. **Agregar un seller nuevo = agregar su
+correo a esta policy**, además del alta en `sellers` (ver
+[`invitacion-sellers.md`](./invitacion-sellers.md)).
+
+**Los valores en `apps/web/wrangler.jsonc`** (bloque `"vars"`):
+
+- `CF_ACCESS_TEAM_DOMAIN` = `thepubmarket.cloudflareaccess.com`
+- `CF_ACCESS_AUD` = los **dos** AUD tags separados por coma, primero el de es
+  y luego el de en. `guardPanelAccess` parte la lista y `verifyAccessJwt` da
+  por válido el token si su claim `aud` coincide con cualquiera de los dos.
+
+Dónde salen los AUD: **Applications → clic en el nombre de la aplicación →
+Additional settings → Application Audience (AUD) Tag**. (La lista de
+Applications no tiene botón "Configure"; se entra por el nombre o por el menú
+`...` de la fila.) Atajo sin dashboard: son públicos y vienen dentro del JWT
+de meta del redirect a Access —
+`curl -s -o /dev/null -w '%{redirect_url}' https://thepubmarket.com/panel`,
+decodificar el parámetro `meta` y leer su claim `aud`.
 
 ## 3. El gap de `*.workers.dev` (por qué el chequeo en código importa)
 
-Cloudflare Access se ata a un **hostname específico** (el dominio custom que
-se configuró en el paso 2). **Nunca se ata al subdominio `*.workers.dev`**
-que Wrangler asigna por default a cada Worker. Mientras ese subdominio siga
-habilitado (no está deshabilitado explícitamente en el dashboard del
-Worker), la URL `https://thepubmarket-web.<cuenta>.workers.dev/panel` queda
-alcanzable **sin pasar por Access en absoluto** — sin importar cuán bien
-configurada esté la Access Application del dominio custom.
+Una Access Application self-hosted se ata a un **hostname de una zona activa
+de tu cuenta** (aquí `thepubmarket.com`). El subdominio `*.workers.dev` que
+Wrangler asigna por default a cada Worker **no es una zona tuya**, así que no
+puede recibir una Access Application. Mientras ese subdominio siga habilitado
+(no está deshabilitado explícitamente en el dashboard del Worker), la URL
+`https://thepubmarket-web.<cuenta>.workers.dev/panel` queda alcanzable **sin
+pasar por Access en absoluto** — sin importar cuán bien configurada esté la
+Access Application del dominio custom.
+
+Matiz: el Worker sí tiene un toggle **Settings → Domains & Routes → Enable
+Cloudflare Access** para su subdominio workers.dev. No sirve aquí porque
+protege **el host completo**, y eso pondría la tienda pública entera detrás
+del login de Access. La salida correcta es deshabilitar el subdominio
+workers.dev una vez que el dominio custom funciona.
 
 Esta es exactamente la razón de que `guardPanelAccess`
 (`apps/web/src/lib/panel-access-guard.ts`, compuesto en

@@ -188,6 +188,55 @@ describe('verifyAccessJwt', () => {
     expect(result.valid).toBe(false)
   })
 
+  // /panel está cubierto por dos Access Applications (una por prefijo de
+  // locale), cada una con su propio AUD tag, así que el guard pasa una lista.
+  describe('con varias audiencias esperadas', () => {
+    const AUD_ES = 'aud-panel-es'
+    const AUD_EN = 'aud-panel-en'
+
+    async function verifyWithAudList(name: string, tokenAud: string) {
+      const teamDomain = `${name}.cloudflareaccess.com`
+      const { publicKey, privateKey } = await generateKeyPair('RS256')
+      const kid = `kid-${name}`
+      const jwk = await exportJWK(publicKey)
+
+      global.fetch = vi.fn(async () => {
+        return new Response(JSON.stringify({ keys: [{ ...jwk, kid, alg: 'RS256', use: 'sig' }] }), {
+          status: 200,
+        })
+      }) as typeof fetch
+
+      const token = await makeSignedToken({
+        privateKey,
+        kid,
+        iss: `https://${teamDomain}`,
+        aud: tokenAud,
+      })
+
+      return verifyAccessJwt(token, { teamDomain, aud: [AUD_ES, AUD_EN] })
+    }
+
+    it('acepta un token emitido por la primera aplicación', async () => {
+      await expect(verifyWithAudList('multi-first', AUD_ES)).resolves.toEqual({
+        valid: true,
+        email: 'seller@thepubmarket.mx',
+      })
+    })
+
+    it('acepta un token emitido por la segunda aplicación', async () => {
+      await expect(verifyWithAudList('multi-second', AUD_EN)).resolves.toEqual({
+        valid: true,
+        email: 'seller@thepubmarket.mx',
+      })
+    })
+
+    it('rechaza un token de una aplicación que no está en la lista', async () => {
+      const result = await verifyWithAudList('multi-none', 'aud-de-otra-app')
+
+      expect(result.valid).toBe(false)
+    })
+  })
+
   it('devuelve inválido (sin lanzar) si falla la red al pedir el JWKS', async () => {
     const teamDomain = 'network-fail.cloudflareaccess.com'
     const { privateKey } = await generateKeyPair('RS256')

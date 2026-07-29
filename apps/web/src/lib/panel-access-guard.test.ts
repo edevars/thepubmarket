@@ -135,8 +135,39 @@ describe('guardPanelAccess', () => {
       expect(result).toBeNull()
       expect(verifyAccessJwtMock).toHaveBeenCalledWith('un-token-valido', {
         teamDomain: 'thepubmarket.cloudflareaccess.com',
-        aud: 'aud-tag',
+        aud: ['aud-tag'],
       })
+    })
+  })
+
+  // Hay una Access Application por prefijo de locale (`/panel*` y
+  // `/en/panel*`), cada una con su propio AUD tag, así que la var lleva una
+  // lista separada por comas.
+  describe('con varias audiencias en CF_ACCESS_AUD', () => {
+    beforeEach(() => {
+      vi.stubEnv('NODE_ENV', 'production')
+      vi.stubEnv('CF_ACCESS_TEAM_DOMAIN', 'thepubmarket.cloudflareaccess.com')
+    })
+
+    it('parte la lista por comas y limpia espacios', async () => {
+      vi.stubEnv('CF_ACCESS_AUD', 'aud-es , aud-en')
+      verifyAccessJwtMock.mockResolvedValue({ valid: true, email: 'seller@thepubmarket.mx' })
+
+      await guardPanelAccess(req('/en/panel', { 'Cf-Access-Jwt-Assertion': 'token' }))
+
+      expect(verifyAccessJwtMock).toHaveBeenCalledWith('token', {
+        teamDomain: 'thepubmarket.cloudflareaccess.com',
+        aud: ['aud-es', 'aud-en'],
+      })
+    })
+
+    it('trata una lista vacía como sin configurar: 503 en producción', async () => {
+      vi.stubEnv('CF_ACCESS_AUD', ' , ,')
+
+      const result = await guardPanelAccess(req('/panel', { 'Cf-Access-Jwt-Assertion': 'token' }))
+
+      expect(result?.status).toBe(503)
+      expect(verifyAccessJwtMock).not.toHaveBeenCalled()
     })
   })
 })

@@ -50,9 +50,14 @@ export async function guardPanelAccess(request: NextRequest): Promise<NextRespon
   }
 
   const teamDomain = process.env.CF_ACCESS_TEAM_DOMAIN
-  const aud = process.env.CF_ACCESS_AUD
+  // Lista separada por comas: hay una Access Application por prefijo de locale
+  // (`/panel*` y `/en/panel*`), y cada una trae su propio AUD tag.
+  const aud = (process.env.CF_ACCESS_AUD ?? '')
+    .split(',')
+    .map((value) => value.trim())
+    .filter(Boolean)
 
-  if (!teamDomain || !aud) {
+  if (!teamDomain || aud.length === 0) {
     if (isProd) {
       // Fail-closed: sin config no entra nadie (mismo espíritu que
       // apps/api/src/middleware/admin-auth.ts).
