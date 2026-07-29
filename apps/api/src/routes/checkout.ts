@@ -17,6 +17,7 @@ import { z } from 'zod'
 import { computePlatformFeeCents } from '../lib/orders'
 import { createCheckoutSession, createStripe } from '../lib/stripe'
 import { buyerAuth } from '../middleware/buyer-auth'
+import { turnstileGuard } from '../middleware/turnstile'
 import type { AppEnv } from '../types'
 
 const checkoutSchema = z.object({
@@ -33,7 +34,9 @@ const checkoutSchema = z.object({
 
 export const checkout = new Hono<AppEnv>()
 
-checkout.post('/', buyerAuth, async (c) => {
+// `turnstileGuard` va ANTES de buyerAuth: un bot con token de sesión robado se
+// frena antes de tocar KV, los Durable Objects de reserva y la API de Stripe.
+checkout.post('/', turnstileGuard, buyerAuth, async (c) => {
   const user = c.get('user')
   if (!user) return c.json({ error: 'unauthorized' }, 401)
 

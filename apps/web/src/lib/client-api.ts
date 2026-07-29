@@ -21,6 +21,7 @@ import type {
   SellerPanelMe,
   UpdateListingRequest,
 } from '@thepubmarket/shared'
+import { withTurnstileHeader } from './turnstile'
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8787'
 
@@ -34,14 +35,24 @@ export interface CheckoutError {
   reason?: string
 }
 
-/** Crea el checkout y devuelve la URL de Stripe, o un error tipado. */
+/**
+ * Crea el checkout y devuelve la URL de Stripe, o un error tipado.
+ *
+ * `turnstileToken` viaja en el header `cf-turnstile-response`: la API lo
+ * verifica contra siteverify antes de reservar inventario o hablar con Stripe.
+ * `null` = sin widget configurado (el header se omite).
+ */
 export async function createCheckout(
   token: string,
   body: CheckoutRequest,
+  turnstileToken: string | null,
 ): Promise<{ ok: true; data: CheckoutResponse } | { ok: false; error: CheckoutError }> {
   const res = await fetch(`${API}/checkout`, {
     method: 'POST',
-    headers: { 'content-type': 'application/json', Authorization: `Bearer ${token}` },
+    headers: withTurnstileHeader(
+      { 'content-type': 'application/json', Authorization: `Bearer ${token}` },
+      turnstileToken,
+    ),
     body: JSON.stringify(body),
   })
   if (res.ok) return { ok: true, data: (await res.json()) as CheckoutResponse }

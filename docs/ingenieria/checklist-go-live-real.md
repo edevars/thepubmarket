@@ -109,8 +109,18 @@ que falta para cruzar esa línea.
       `apps/web/src/lib/cloudflare-access.ts` se puede mover a
       `packages/shared` y reusar desde Hono. Ver
       [`invitacion-sellers.md`](./invitacion-sellers.md) §4.
-- [ ] **Turnstile** activo en registro/checkout (mencionado en `CLAUDE.md` como
-      parte del stack; confirmar que está realmente wireado, no solo planeado).
+- [x] **Turnstile con llaves reales** (TASK-012, cerrada 2026-07-28).
+      `turnstileGuard` protege `/auth/register`, `/auth/login`,
+      `/auth/password/{forgot,reset}` y `/checkout`; el widget corre en las
+      páginas correspondientes de `apps/web`. Widget `thepubmarket` (managed)
+      creado para `thepubmarket.com`, `www.thepubmarket.com`, `localhost` y
+      `127.0.0.1`; site key `0x4AAAAAAEAZkoBZ4yQKkn4x` en
+      `apps/web/.env.production`, secret cargado con `wrangler secret put
+      TURNSTILE_SECRET_KEY` en `thepubmarket-api`. Ambos Workers desplegados y
+      verificados en vivo (sin token → 403; token inválido → 403). **Al
+      redesplegar, las dos llaves se mueven juntas**: site key sin secret = cero
+      protección; secret sin site key = 403 en todo. Ver
+      [`turnstile.md`](./turnstile.md).
 - [ ] **WAF + rate limiting** confirmados activos en el dashboard de Cloudflare
       para los Workers de prod (no solo "disponibles por default").
 - [ ] **Monitoreo/alertas:** algo que avise si un webhook falla, si

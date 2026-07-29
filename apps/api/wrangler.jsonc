@@ -19,6 +19,13 @@
   // Secretos de Stripe (NO van aquí, son secrets):
   //   - Local: apps/api/.dev.vars (STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET)
   //   - Prod:  wrangler secret put STRIPE_SECRET_KEY / STRIPE_WEBHOOK_SECRET
+  //
+  // TURNSTILE_SECRET_KEY (anti-bot en auth y checkout) — mismo mecanismo:
+  //   - Local: apps/api/.dev.vars (llave de prueba de Cloudflare)
+  //   - Prod:  wrangler secret put TURNSTILE_SECRET_KEY
+  // Si falta, la API deja pasar todo y lo advierte en el log en cada request.
+  // Va en pareja con NEXT_PUBLIC_TURNSTILE_SITE_KEY del build de apps/web.
+  // Ver docs/ingenieria/turnstile.md.
 
   // === Config no-secreta ===
   // PLATFORM_FEE_BPS: comisión de la plataforma en puntos básicos (1000 = 10%).

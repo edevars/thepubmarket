@@ -9,6 +9,29 @@
 
 ---
 
+## 🛡️ Turnstile activo en producción (2026-07-28)
+
+TASK-012. Anti-bot real, con llaves reales, desplegado — no solo wireado.
+
+- **Gate en 5 endpoints:** `POST /auth/{register,login,password/forgot,password/reset}`
+  y `POST /checkout`. `turnstileGuard` corre **antes** del trabajo caro (KDF,
+  KV, Durable Objects de reserva, Stripe). Rechazo = `403 turnstile_failed`,
+  distinto del `429 rate_limited` de los contadores en KV, que siguen vivos.
+- **Widget** `thepubmarket` (managed): `thepubmarket.com`,
+  `www.thepubmarket.com`, `localhost`, `127.0.0.1`. Site key
+  `0x4AAAAAAEAZkoBZ4yQKkn4x` en `apps/web/.env.production` (público, se inlina
+  en build time); secret en `wrangler secret put TURNSTILE_SECRET_KEY` sobre
+  `thepubmarket-api`.
+- **Verificado en prod** (2026-07-28): sin token → 403; token inválido → 403
+  (`invalid-input-response` en el log); `/health`, `/catalog` y `/sellers`
+  intactos.
+- **Ojo con el orden al redesplegar:** site key sin secret = cero protección
+  (la API lo advierte en el log); secret sin site key = 403 en todo. Se mueven
+  juntos. Un host no registrado (`*.workers.dev`) falla la verificación.
+- Detalle y diagnóstico: [`turnstile.md`](./turnstile.md).
+
+---
+
 ## 🎟️ Invitación de vendedores: flujo formal y auditable (2026-07-25)
 
 TASK-010. La invitación sigue siendo el mismo endpoint

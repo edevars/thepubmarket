@@ -6,6 +6,7 @@ import { Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import { useAuth } from '@/components/auth/AuthProvider'
 import { CartLine } from '@/components/cart/CartLine'
 import { OrderSummary } from '@/components/cart/OrderSummary'
+import { TURNSTILE_SLOT_CLASS, useTurnstile } from '@/components/security/useTurnstile'
 import { Link, useRouter } from '@/i18n/navigation'
 import { useCart } from '@/lib/cart'
 import { formatMoneyCents } from '@/lib/catalog/display'
@@ -27,24 +28,34 @@ function CartPageInner() {
   const { user, loading } = useAuth()
   const { items, count, subtotalCents } = useCart()
   const [phase, setPhase] = useState<'browse' | 'redirecting'>('browse')
-  const [checkoutError, setCheckoutError] = useState(false)
+  const [checkoutError, setCheckoutError] = useState<'generic' | 'verification' | null>(null)
   const autoPayDone = useRef(false)
+  const turnstile = useTurnstile('checkout')
 
   const startCheckout = useCallback(async () => {
     const token = getToken()
     if (!token) return
-    setCheckoutError(false)
+    setCheckoutError(null)
+    // El token de Turnstile se pide ANTES de cambiar de fase: si Cloudflare
+    // decide mostrar un reto, el widget sigue montado en esta vista.
+    const turnstileToken = await turnstile.getToken()
+    if (turnstile.enabled && !turnstileToken) {
+      setCheckoutError('verification')
+      return
+    }
     setPhase('redirecting')
-    const res = await createCheckout(token, {
-      items: items.map((i) => ({ inventoryId: i.inventoryId, quantity: i.quantity })),
-    })
+    const res = await createCheckout(
+      token,
+      { items: items.map((i) => ({ inventoryId: i.inventoryId, quantity: i.quantity })) },
+      turnstileToken,
+    )
     if (res.ok) {
       window.location.href = res.data.url
       return
     }
-    setCheckoutError(true)
+    setCheckoutError(res.error.error === 'turnstile_failed' ? 'verification' : 'generic')
     setPhase('browse')
-  }, [items])
+  }, [items, turnstile])
 
   // Entrada desde el drawer (`/cart?pay=1`): arranca el checkout si hay sesión.
   useEffect(() => {
@@ -82,7 +93,7 @@ function CartPageInner() {
 
       {checkoutError && (
         <p className="mb-[18px] border border-red-500/40 bg-red-500/10 px-4 py-2.5 text-sm text-red-400">
-          {t('checkoutError')}
+          {checkoutError === 'verification' ? t('checkoutErrorVerification') : t('checkoutError')}
         </p>
       )}
 
@@ -92,7 +103,10 @@ function CartPageInner() {
             <CartLine key={item.inventoryId} item={item} variant="page" />
           ))}
         </div>
-        <OrderSummary subtotalCents={subtotalCents} count={count} onCheckout={startCheckout} />
+        <div className="flex flex-col gap-3">
+          <OrderSummary subtotalCents={subtotalCents} count={count} onCheckout={startCheckout} />
+          <div ref={turnstile.containerRef} className={TURNSTILE_SLOT_CLASS} />
+        </div>
       </div>
     </main>
   )

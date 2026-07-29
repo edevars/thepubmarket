@@ -4,6 +4,7 @@ import { useSearchParams } from 'next/navigation'
 import { useTranslations } from 'next-intl'
 import { Suspense, useState } from 'react'
 import { useAuth } from '@/components/auth/AuthProvider'
+import { TURNSTILE_SLOT_CLASS, useTurnstile } from '@/components/security/useTurnstile'
 import { AngularButton } from '@/components/ui/AngularButton'
 import { Link, useRouter } from '@/i18n/navigation'
 import { isPasswordLongEnough } from '@/lib/auth-validation'
@@ -26,6 +27,7 @@ function ResetPasswordInner() {
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const turnstile = useTurnstile('password-reset')
   const passwordOk = isPasswordLongEnough(password)
 
   if (!token) {
@@ -56,7 +58,13 @@ function ResetPasswordInner() {
           }
           setBusy(true)
           setError(null)
-          const result = await resetPassword(token, password)
+          const turnstileToken = await turnstile.getToken()
+          if (turnstile.enabled && !turnstileToken) {
+            setBusy(false)
+            setError(t('errorVerification'))
+            return
+          }
+          const result = await resetPassword(token, password, turnstileToken)
           setBusy(false)
           if ('error' in result) {
             setError(
@@ -64,7 +72,9 @@ function ResetPasswordInner() {
                 ? t('resetInvalidOrExpired')
                 : result.error === 'rate_limited'
                   ? t('errorRateLimited')
-                  : t('errorPasswordTooShort'),
+                  : result.error === 'turnstile_failed'
+                    ? t('errorVerification')
+                    : t('errorPasswordTooShort'),
             )
             return
           }
@@ -99,6 +109,7 @@ function ResetPasswordInner() {
             )}
           </p>
         )}
+        <div ref={turnstile.containerRef} className={TURNSTILE_SLOT_CLASS} />
         <AngularButton type="submit" disabled={busy}>
           {busy ? t('signingIn') : t('resetPasswordCta')}
         </AngularButton>

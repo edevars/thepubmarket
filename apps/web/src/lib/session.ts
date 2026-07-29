@@ -2,8 +2,14 @@
  * Client-side (browser) session handling. The session token is stored in
  * localStorage and sent as `Authorization: Bearer` (the web app and the API
  * are on different origins; third-party cookies get blocked by Safari).
+ *
+ * Every unauthenticated endpoint also carries a Turnstile token in
+ * `cf-turnstile-response` — see components/security/useTurnstile.ts for where
+ * the callers mint it. A `null` token means "no widget configured" and the
+ * header is simply omitted.
  */
 import type { AuthUser } from '@thepubmarket/shared'
+import { withTurnstileHeader } from './turnstile'
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8787'
 const TOKEN_KEY = 'tpm_session'
@@ -25,10 +31,14 @@ export function clearToken(): void {
 
 type AuthResult = { sessionToken: string; user: AuthUser } | { error: string }
 
-async function postAuth(path: string, body: unknown): Promise<AuthResult> {
+async function postAuth(
+  path: string,
+  body: unknown,
+  turnstileToken: string | null,
+): Promise<AuthResult> {
   const res = await fetch(`${API}${path}`, {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
+    headers: withTurnstileHeader({ 'content-type': 'application/json' }, turnstileToken),
     body: JSON.stringify(body),
   })
   const data = (await res.json().catch(() => ({}))) as { error?: string } & Partial<AuthResult>
@@ -40,29 +50,45 @@ async function postAuth(path: string, body: unknown): Promise<AuthResult> {
 export async function registerUser(
   email: string,
   password: string,
+  turnstileToken: string | null,
   displayName?: string,
 ): Promise<AuthResult> {
-  return postAuth('/auth/register', { email, password, displayName })
+  return postAuth('/auth/register', { email, password, displayName }, turnstileToken)
 }
 
 /** Signs in with email+password. */
-export async function loginUser(email: string, password: string): Promise<AuthResult> {
-  return postAuth('/auth/login', { email, password })
+export async function loginUser(
+  email: string,
+  password: string,
+  turnstileToken: string | null,
+): Promise<AuthResult> {
+  return postAuth('/auth/login', { email, password }, turnstileToken)
 }
 
-/** Requests a password-reset email. Always resolves true (neutral response). */
-export async function requestPasswordReset(email: string): Promise<boolean> {
+/**
+ * Requests a password-reset email. Resolves false on a rejected Turnstile so the
+ * caller can say so; the success path stays neutral about whether the account
+ * exists (the API answers `{ ok: true }` either way).
+ */
+export async function requestPasswordReset(
+  email: string,
+  turnstileToken: string | null,
+): Promise<boolean> {
   const res = await fetch(`${API}/auth/password/forgot`, {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
+    headers: withTurnstileHeader({ 'content-type': 'application/json' }, turnstileToken),
     body: JSON.stringify({ email }),
   })
   return res.ok
 }
 
 /** Consumes a password-reset token and sets a new password. */
-export async function resetPassword(token: string, password: string): Promise<AuthResult> {
-  return postAuth('/auth/password/reset', { token, password })
+export async function resetPassword(
+  token: string,
+  password: string,
+  turnstileToken: string | null,
+): Promise<AuthResult> {
+  return postAuth('/auth/password/reset', { token, password }, turnstileToken)
 }
 
 /** Returns the current session's user, or null if the token is invalid. */

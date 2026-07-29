@@ -11,6 +11,9 @@
  *   4. POST /auth/password/reset {token, password}  → consumes the token,
  *      sets the new password, returns { sessionToken, user }.
  *   5. The frontend stores sessionToken and sends it as `Authorization: Bearer`.
+ *
+ * Every unauthenticated endpoint here is behind `turnstileGuard` (anti-bot,
+ * `cf-turnstile-response` header) on top of the KV rate limiting.
  */
 import { users } from '@thepubmarket/db'
 import { eq } from 'drizzle-orm'
@@ -28,6 +31,7 @@ import { sendPasswordResetEmail } from '../lib/email'
 import { dummyVerify, hashPassword, needsRehash, verifyPassword } from '../lib/password'
 import { checkRateLimit, clientIp, isRateLimited, recordAttempt } from '../lib/rate-limit'
 import { buyerAuth } from '../middleware/buyer-auth'
+import { turnstileGuard } from '../middleware/turnstile'
 import type { AppEnv, SessionUser } from '../types'
 
 const registerSchema = z.object({
@@ -65,7 +69,7 @@ export const auth = new Hono<AppEnv>()
  * `POST /admin/sellers/:id/link` — there is no self-registration path
  * (see docs/ingenieria/invitacion-sellers.md).
  */
-auth.post('/register', async (c) => {
+auth.post('/register', turnstileGuard, async (c) => {
   const parsed = registerSchema.safeParse(await c.req.json().catch(() => null))
   if (!parsed.success) return c.json({ error: 'invalid_request' }, 400)
 
@@ -127,7 +131,7 @@ const LOGIN_EMAIL_LIMIT = 8
  *   correctly all day never approaches the limit; a guessing run hits it in 8.
  *   The per-IP bucket still counts every attempt (cheap blanket cap).
  */
-auth.post('/login', async (c) => {
+auth.post('/login', turnstileGuard, async (c) => {
   const parsed = loginSchema.safeParse(await c.req.json().catch(() => null))
   if (!parsed.success) return c.json({ error: 'invalid_request' }, 400)
 
@@ -172,7 +176,7 @@ auth.post('/login', async (c) => {
 })
 
 /** POST /auth/password/forgot — emails a reset link if the account exists. */
-auth.post('/password/forgot', async (c) => {
+auth.post('/password/forgot', turnstileGuard, async (c) => {
   const parsed = forgotSchema.safeParse(await c.req.json().catch(() => null))
   if (!parsed.success) return c.json({ error: 'invalid_email' }, 400)
 
@@ -195,7 +199,7 @@ auth.post('/password/forgot', async (c) => {
 })
 
 /** POST /auth/password/reset — consumes the token, sets a new password, signs in. */
-auth.post('/password/reset', async (c) => {
+auth.post('/password/reset', turnstileGuard, async (c) => {
   const parsed = resetSchema.safeParse(await c.req.json().catch(() => null))
   if (!parsed.success) return c.json({ error: 'invalid_request' }, 400)
 

@@ -3,6 +3,7 @@
 import { useSearchParams } from 'next/navigation'
 import { useTranslations } from 'next-intl'
 import { Suspense, useState } from 'react'
+import { TURNSTILE_SLOT_CLASS, useTurnstile } from '@/components/security/useTurnstile'
 import { AngularButton } from '@/components/ui/AngularButton'
 import { Link } from '@/i18n/navigation'
 import { isValidEmail } from '@/lib/auth-validation'
@@ -23,6 +24,8 @@ function ForgotPasswordInner() {
   const [emailTouched, setEmailTouched] = useState(false)
   const [sent, setSent] = useState(false)
   const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const turnstile = useTurnstile('password-forgot')
   const emailInvalid = emailTouched && email.trim().length > 0 && !isValidEmail(email)
 
   return (
@@ -45,8 +48,21 @@ function ForgotPasswordInner() {
             if (!email.trim()) return
             if (!isValidEmail(email)) return
             setBusy(true)
-            await requestPasswordReset(email.trim().toLowerCase())
+            setError(null)
+            const turnstileToken = await turnstile.getToken()
+            if (turnstile.enabled && !turnstileToken) {
+              setBusy(false)
+              setError(t('errorVerification'))
+              return
+            }
+            // La respuesta de la API es neutral (no dice si el correo existe);
+            // un `false` aquí es un rechazo real: Turnstile o rate limit.
+            const ok = await requestPasswordReset(email.trim().toLowerCase(), turnstileToken)
             setBusy(false)
+            if (!ok) {
+              setError(t('errorVerification'))
+              return
+            }
             setSent(true)
           }}
           className="flex flex-col gap-3"
@@ -65,6 +81,8 @@ function ForgotPasswordInner() {
             }`}
           />
           {emailInvalid && <p className="text-[12.5px] text-[#d6584f]">{t('errorInvalidEmail')}</p>}
+          {error && <p className="text-sm text-[#d6584f]">{error}</p>}
+          <div ref={turnstile.containerRef} className={TURNSTILE_SLOT_CLASS} />
           <AngularButton type="submit" disabled={busy}>
             {busy ? t('sending') : t('sendResetLink')}
           </AngularButton>

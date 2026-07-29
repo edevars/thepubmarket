@@ -3,6 +3,7 @@
 import { useTranslations } from 'next-intl'
 import { useState } from 'react'
 import { useAuth } from '@/components/auth/AuthProvider'
+import { TURNSTILE_SLOT_CLASS, useTurnstile } from '@/components/security/useTurnstile'
 import { AngularButton } from '@/components/ui/AngularButton'
 import { Link, useRouter } from '@/i18n/navigation'
 import { isPasswordLongEnough, isValidEmail } from '@/lib/auth-validation'
@@ -12,6 +13,7 @@ export default function RegisterPage() {
   const t = useTranslations('auth')
   const { user, signIn } = useAuth()
   const router = useRouter()
+  const turnstile = useTurnstile('register')
   const [email, setEmail] = useState('')
   const [emailTouched, setEmailTouched] = useState(false)
   const [password, setPassword] = useState('')
@@ -58,7 +60,13 @@ export default function RegisterPage() {
           }
           setBusy(true)
           setError(null)
-          const result = await registerUser(email.trim().toLowerCase(), password)
+          const turnstileToken = await turnstile.getToken()
+          if (turnstile.enabled && !turnstileToken) {
+            setBusy(false)
+            setError(t('errorVerification'))
+            return
+          }
+          const result = await registerUser(email.trim().toLowerCase(), password, turnstileToken)
           setBusy(false)
           if ('error' in result) {
             setError(
@@ -66,7 +74,9 @@ export default function RegisterPage() {
                 ? t('errorEmailTaken')
                 : result.error === 'rate_limited'
                   ? t('errorRateLimited')
-                  : t('errorPasswordTooShort'),
+                  : result.error === 'turnstile_failed'
+                    ? t('errorVerification')
+                    : t('errorPasswordTooShort'),
             )
             return
           }
@@ -120,6 +130,7 @@ export default function RegisterPage() {
         )}
         {passwordsMatch && <p className="text-[12.5px] text-cond-nm">{t('passwordsMatch')}</p>}
         {error && <p className="text-sm text-[#d6584f]">{error}</p>}
+        <div ref={turnstile.containerRef} className={TURNSTILE_SLOT_CLASS} />
         <AngularButton type="submit" disabled={busy}>
           {busy ? t('signingIn') : t('registerCta')}
         </AngularButton>

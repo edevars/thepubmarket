@@ -3,6 +3,7 @@
 import { useTranslations } from 'next-intl'
 import { useState } from 'react'
 import { useAuth } from '@/components/auth/AuthProvider'
+import { TURNSTILE_SLOT_CLASS, useTurnstile } from '@/components/security/useTurnstile'
 import { AngularButton } from '@/components/ui/AngularButton'
 import { Link, useRouter } from '@/i18n/navigation'
 import { isValidEmail } from '@/lib/auth-validation'
@@ -12,6 +13,7 @@ export default function LoginPage() {
   const t = useTranslations('auth')
   const { user, signIn } = useAuth()
   const router = useRouter()
+  const turnstile = useTurnstile('login')
   const [email, setEmail] = useState('')
   const [emailTouched, setEmailTouched] = useState(false)
   const [password, setPassword] = useState('')
@@ -45,7 +47,13 @@ export default function LoginPage() {
           if (!isValidEmail(email)) return
           setBusy(true)
           setError(null)
-          const result = await loginUser(email.trim().toLowerCase(), password)
+          const turnstileToken = await turnstile.getToken()
+          if (turnstile.enabled && !turnstileToken) {
+            setBusy(false)
+            setError(t('errorVerification'))
+            return
+          }
+          const result = await loginUser(email.trim().toLowerCase(), password, turnstileToken)
           setBusy(false)
           if ('error' in result) {
             // No hay rama para "cuenta sin contraseña": la API responde
@@ -55,7 +63,9 @@ export default function LoginPage() {
             setError(
               result.error === 'rate_limited'
                 ? t('errorRateLimited')
-                : t('errorInvalidCredentials'),
+                : result.error === 'turnstile_failed'
+                  ? t('errorVerification')
+                  : t('errorInvalidCredentials'),
             )
             return
           }
@@ -88,6 +98,7 @@ export default function LoginPage() {
           className="border border-line bg-input px-4 py-3 text-sm text-ink outline-none focus:border-primary"
         />
         {error && <p className="text-sm text-[#d6584f]">{error}</p>}
+        <div ref={turnstile.containerRef} className={TURNSTILE_SLOT_CLASS} />
         <AngularButton type="submit" disabled={busy}>
           {busy ? t('signingIn') : t('signIn')}
         </AngularButton>
