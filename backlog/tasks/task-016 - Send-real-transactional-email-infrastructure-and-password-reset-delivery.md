@@ -5,7 +5,7 @@ status: In Progress
 assignee:
   - '@claude'
 created_date: '2026-07-29 01:59'
-updated_date: '2026-07-29 16:09'
+updated_date: '2026-07-29 17:00'
 labels:
   - 'epic:transactional-email'
   - api
@@ -140,4 +140,23 @@ Also checked while here: `seller_invitations` **already exists in remote D1**, s
 ## Blocked: deploy
 
 `wrangler deploy` was denied by the permission classifier. The deployed verification (AC #3, #5, #8) needs the user to run the deploy.
+
+## Deployed + documented (2026-07-29)
+
+User ran the deploy. Confirmed on version `604a7cc4-0540-40eb-8ea9-ca1f582a2570` via `wrangler versions view`: `env.EMAIL` (Send Email, senders `no-reply@thepubmarket.com`), `EMAIL_MODE="send"`, `EMAIL_FROM`, `EMAIL_FROM_NAME`. `/health` green.
+
+Docs written:
+
+- **`docs/ingenieria/email.md`** (new) — what gets sent, the three-file structure, the `EMAIL_MODE` switch and the Miniflare-simulates-sends caveat, the real DNS records, why DMARC sits at `p=none`, the API-access quirks, quota (1000/day), a diagnosis table, and the hard rule about what never goes in an email body.
+- `docs/ingenieria/README.md` — indexed.
+- `estado-actual.md` — new dated section; dropped "sin envío real de correo" from the dev-mode gap list; **corrected the stale migration-0006 warning** (already applied remotely).
+- `checklist-go-live-real.md` — checked off real email delivery; added a new item for raising DMARC to quarantine/reject with the reasoning and prerequisites.
+
+Written in Spanish deliberately: every doc in that suite added after the English-convention change (2026-07-25, 07-28) is Spanish, so a lone English file would break it. Code, comments and this task stay English.
+
+`pnpm lint` and API `typecheck` clean.
+
+## Still open: AC #3, #5, #8
+
+Deployed delivery is **not yet verified**. It cannot be driven from curl: `turnstileGuard` fails closed and there is no way to mint a valid widget token outside a browser, so `POST /auth/password/forgot` against production always returns 403 from a script. Verification needs the user to submit the form at `/es/auth/forgot-password` with an address they control while `wrangler tail` is running. Do not mark this task Done before that happens.
 <!-- SECTION:NOTES:END -->
