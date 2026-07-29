@@ -23,7 +23,16 @@ import type { AppEnv } from './types'
 const app = new Hono<AppEnv>()
 
 // CORS: el frontend (apps/web) corre en otro origen y consume la API.
-// En Fase 1 abrimos el origen; en fases con auth se restringe por allowlist.
+//
+// ABIERTO A PROPÓSITO, y es deuda con fecha de caducidad. Con tokens Bearer en
+// localStorage (ver apps/web/src/lib/session.ts), un CORS sin allowlist sería
+// exposición real EN CUANTO haya sesiones de usuarios reales que robar. Hoy no
+// las hay: no existe ni un comprador ni un vendedor real en ningún ambiente
+// (ver docs/ingenieria/estado-actual.md, "Todo está en modo desarrollo").
+//
+// CERRAR ANTES DEL PRIMER COMPRADOR REAL. El origen ya es fijo, así que es
+// cambiar esta línea por `cors({ origin: c.env.WEB_BASE_URL })` — no hay
+// trabajo de diseño pendiente, solo la decisión de que ya toca.
 app.use('*', cors())
 
 // Cliente Drizzle por request, disponible en los handlers como `c.get('db')`.
@@ -69,7 +78,7 @@ app.route('/sellers', sellersRoutes)
 app.use('/seller/connect/*', sellerConnectAuth)
 app.route('/seller/connect', sellerConnect)
 
-// Panel del Vendedor (autoservicio; sesión magic-link + fila activa en sellers).
+// Panel del Vendedor (autoservicio; sesión email+contraseña + fila activa en sellers).
 app.use('/seller/*', sellerAuth)
 app.route('/seller', sellerPanel)
 

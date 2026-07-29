@@ -26,7 +26,7 @@
   // magic link). En local se sobreescribe vía .dev.vars.
   "vars": {
     "PLATFORM_FEE_BPS": "1000",
-    "WEB_BASE_URL": "https://thepubmarket-web.enrique-devars-cee.workers.dev"
+    "WEB_BASE_URL": "https://thepubmarket.com"
   },
 
   // === Bindings ===
