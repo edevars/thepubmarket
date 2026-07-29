@@ -41,9 +41,9 @@ compradores y vendedores por igual (comparten `users`). Reemplazo completo,
 no aditivo — `/auth/magic-link` y `/auth/verify` ya no existen.
 
 - **Hashing:** PBKDF2 vía `crypto.subtle` nativo de Workers (sin dependencia
-  nueva). Endurecido en TASK-011 a **HMAC-SHA512 @ 210k**, la cifra de OWASP
-  para SHA-512; el formato almacenado lleva sus propios parámetros y se
-  re-hashea en el siguiente login exitoso. `apps/api/src/lib/password.ts`.
+  nueva). Endurecido en TASK-011 a **HMAC-SHA512 encadenado, 3 × 70k = 210k**
+  de trabajo efectivo (Workers topa PBKDF2 en 100k por llamada, ver doc); el
+  formato lleva sus parámetros y se re-hashea en el siguiente login exitoso.
 - **Endpoints nuevos:** `POST /auth/register`, `POST /auth/login`,
   `POST /auth/password/forgot`, `POST /auth/password/reset` en
   `apps/api/src/routes/auth.ts`. `/auth/logout` y `GET /auth/me` intactos.
