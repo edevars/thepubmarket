@@ -1,9 +1,11 @@
 ---
 id: TASK-016
 title: 'Send real transactional email: infrastructure and password reset delivery'
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - '@claude'
 created_date: '2026-07-29 01:59'
+updated_date: '2026-07-29 02:00'
 labels:
   - 'epic:transactional-email'
   - api
