@@ -13,7 +13,8 @@
     "db:migrate:local": "wrangler d1 migrations apply thepubmarket-db --local",
     "db:migrate:remote": "wrangler d1 migrations apply thepubmarket-db --remote",
     "db:seed:local": "wrangler d1 execute thepubmarket-db --local --file=seed.sql",
-    "db:seed:remote": "wrangler d1 execute thepubmarket-db --remote --file=seed.sql"
+    "db:seed:remote": "wrangler d1 execute thepubmarket-db --remote --file=seed.sql",
+    "test": "vitest run"
   },
   "dependencies": {
     "@thepubmarket/db": "workspace:*",
@@ -27,6 +28,7 @@
     "@types/node": "^22.10.0",
     "drizzle-kit": "^0.31.0",
     "typescript": "^5.7.3",
-    "wrangler": "^4.83.0"
+    "wrangler": "^4.83.0",
+    "vitest": "^4.1.10"
   }
 }

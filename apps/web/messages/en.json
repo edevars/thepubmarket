@@ -66,7 +66,6 @@
     "registerCta": "Create account",
     "forgotPasswordTitle": "Reset your password",
     "forgotPasswordSubtitle": "We'll email you a link to choose a new password.",
-    "forgotPasswordLegacyHint": "We upgraded sign-in to use a password. Choose one to continue.",
     "resetLinkSent": "If {email} has an account, we sent you a password reset link.",
     "sendResetLink": "Send link",
     "backToSignIn": "Back to sign in",

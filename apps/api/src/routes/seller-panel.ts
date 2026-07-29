@@ -3,7 +3,7 @@
  * inventario propio (alta, precio, cantidad, pausa), órdenes con envío
  * (marcar enviada con guía / entregada) y búsqueda en Scryfall para el alta.
  *
- * TODO el router va detrás de `sellerAuth`: sesión magic-link + fila activa en
+ * TODO el router va detrás de `sellerAuth`: sesión email+contraseña + fila activa en
  * `sellers` (c.get('seller')). Cada query filtra por el seller de la sesión —
  * nunca se acepta un sellerId del cliente.
  *

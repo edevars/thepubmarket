@@ -13,7 +13,7 @@ import {
 interface AuthContextValue {
   user: AuthUser | null
   loading: boolean
-  /** Registra la sesión recién creada (tras verificar el magic link). */
+  /** Registra la sesión recién creada (login, registro o reset de contraseña). */
   signIn: (sessionToken: string, user: AuthUser) => void
   signOut: () => Promise<void>
 }

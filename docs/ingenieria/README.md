@@ -34,6 +34,7 @@ ponerse al día sin recargar todo el contexto.
 | ¿Qué falta para cobrar dinero real (no test)? | [`checklist-go-live-real.md`](./checklist-go-live-real.md) |
 | ¿Qué se validó del flujo E2E (pago fallido, idempotencia, TTL)? | [`validacion-e2e-task-005.md`](./validacion-e2e-task-005.md) |
 | ¿Cómo queda protegido `/panel` con Cloudflare Access? | [`cloudflare-access-panel.md`](./cloudflare-access-panel.md) |
+| ¿Cómo funcionan sesiones, hashing, reset y rate limiting de auth? | [`auth-hardening.md`](./auth-hardening.md) |
 | ¿Cómo doy de alta un vendedor vetted nuevo? | [`invitacion-sellers.md`](./invitacion-sellers.md) |
 
 ---

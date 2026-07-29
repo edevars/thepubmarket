@@ -48,12 +48,10 @@ export default function LoginPage() {
           const result = await loginUser(email.trim().toLowerCase(), password)
           setBusy(false)
           if ('error' in result) {
-            if (result.error === 'password_not_set') {
-              router.push(
-                `/auth/forgot-password?email=${encodeURIComponent(email.trim().toLowerCase())}&reason=legacy`,
-              )
-              return
-            }
+            // No hay rama para "cuenta sin contraseña": la API responde
+            // invalid_credentials en ese caso a propósito, para no confirmar
+            // qué correos están registrados. Esas cuentas se recuperan por
+            // "olvidé mi contraseña" (enlace debajo del formulario).
             setError(
               result.error === 'rate_limited'
                 ? t('errorRateLimited')
