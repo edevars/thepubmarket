@@ -5,7 +5,7 @@ status: Done
 assignee:
   - claude
 created_date: '2026-07-22 22:32'
-updated_date: '2026-07-28 18:02'
+updated_date: '2026-07-29 00:58'
 labels:
   - 'epic:identity'
   - chore
@@ -129,6 +129,18 @@ Decisiones tomadas con el usuario antes de implementar: (a) plan Workers Paid, K
 El test de paginación del índice inverso encontró un bug real en la primera versión de `deleteAllUserSessions`: borraba mientras paginaba, lo que muta el propio listado y salta entradas (5 sesiones → 3 revocadas). Corregido recolectando todas las páginas antes de borrar. El fake de KV también se ajustó para modelar el cursor del KV real (basado en la última clave, no en offset).
 
 Verificación funcional contra `wrangler dev` local (no solo unit tests): register/login/me/logout, reset que revoca sesiones hermanas, token de reset de un solo uso, re-hash de sha256→sha512 en el login (confirmado en D1), login de cuenta legacy sin contraseña devolviendo invalid_credentials, y los tres buckets de rate limit (15 logins correctos sin consumir presupuesto → 8 fallos cortan en el 9no; 20 intentos por IP cortan en el 21). /seller/* y /orders siguen respondiendo 200 con sesión y 401 tras logout.
+
+2026-07-28, tras el deploy a producción — CORRECCIÓN DE PARÁMETROS. El KDF que quedó en esta tarea (PBKDF2-HMAC-SHA512 @ 210,000 en una sola pasada) NO corre en Workers: el runtime de Cloudflare rechaza PBKDF2 por encima de 100,000 iteraciones (`NotSupportedError: Pbkdf2 failed: iteration counts above 100000 are not supported`). `/auth/login` devolvió 500 en el primer deploy.
+
+El tope NO se aplica en `wrangler dev` local — verificado: el mismo código responde 401 correctamente en local y 500 en producción. Por eso toda la verificación funcional de esta tarea (que sí se hizo contra el Worker local, no solo unit tests) pasó sin detectarlo. Lección para el harness: un cambio de parámetros de KDF no se puede dar por bueno sin probarlo contra el Worker desplegado.
+
+No fue regresión de esta tarea: el deploy anterior del API era del 2026-07-23, anterior a que shipeara email+contraseña (2026-07-24), así que los 210k SHA-256 originales de TASK-015 chocaban con el mismo tope. El deploy de hoy fue el primero en llevar PBKDF2 a producción y lo destapó.
+
+Resuelto encadenando: 3 rondas × 70,000 sobre el mismo salt, cada una alimentando a la siguiente como material de entrada — 210,000 iteraciones de trabajo efectivo (la cifra OWASP para SHA-512), mismo ~48 ms de CPU, solo crypto nativo. Decisión tomada con el usuario entre esto y aceptar 100k documentando la desviación. Formato: `pbkdf2-sha512x3$70000$<salt>$<hash>`; `needsRehash` compara trabajo total (rondas × iteraciones). Commit `63dcd5a`.
+
+`verifyPassword` ahora falla cerrado en vez de lanzar cuando el hash almacenado trae parámetros que el runtime rechaza — así un hash fuera de tope no vuelve a tumbar el login con un 500. Test nuevo que fija el invariante de ≤100k por ronda para que no se cuele otra vez en un deploy. 34 tests en apps/api.
+
+Verificado contra PRODUCCIÓN (api.thepubmarket.com), no local: register 201, /auth/me 200, login correcto 200, login incorrecto 401, forgot neutral 200, logout → 401, /orders sin sesión 401.
 <!-- SECTION:NOTES:END -->
 
 ## Comments
