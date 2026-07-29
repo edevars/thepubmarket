@@ -4,12 +4,24 @@ title: Put seller portal /panel behind Cloudflare Access / Zero Trust
 status: In Progress
 assignee: []
 created_date: '2026-07-22 22:32'
-updated_date: '2026-07-25 01:55'
+updated_date: '2026-07-29 00:20'
 labels:
   - 'epic:seller-portal'
   - feature
 milestone: m-1
 dependencies: []
+modified_files:
+  - apps/web/src/lib/cloudflare-access.ts
+  - apps/web/src/lib/panel-access-guard.ts
+  - apps/web/src/lib/cloudflare-access.test.ts
+  - apps/web/src/lib/panel-access-guard.test.ts
+  - apps/web/src/middleware.ts
+  - apps/web/wrangler.jsonc
+  - apps/web/.env.example
+  - apps/api/wrangler.jsonc
+  - apps/api/src/middleware/seller-auth.ts
+  - docs/ingenieria/cloudflare-access-panel.md
+  - docs/ingenieria/checklist-go-live-real.md
 priority: high
 ordinal: 9000
 ---
@@ -22,8 +34,8 @@ The seller portal /panel already has application-level auth (sellerAuth middlewa
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 /panel/* routes gated by Cloudflare Access in addition to existing sellerAuth magic-link check
-- [ ] #2 Access policies defined for which identities (invited/vetted sellers) may reach the portal
+- [x] #1 /panel/* routes gated by Cloudflare Access in addition to existing sellerAuth magic-link check
+- [x] #2 Access policies defined for which identities (invited/vetted sellers) may reach the portal
 - [x] #3 Local dev workflow for testing /panel without fighting Access documented (e.g. bypass or local Access emulation)
 - [x] #4 No regression to existing PanelShell guard / magic-link session behavior
 <!-- AC:END -->
@@ -45,4 +57,20 @@ REMAINING — cannot be done without Cloudflare account access:
 - AC #2: policy identities (which vetted sellers) must be entered by hand in the dashboard per the runbook.
 
 ⚠️ DEPLOY-ORDER RISK: apps/web/wrangler.jsonc currently ships CF_ACCESS_TEAM_DOMAIN/CF_ACCESS_AUD as empty strings. Per the fail-closed design (intentional, mirrors admin-auth.ts), if this reaches production via Workers Builds auto-deploy on push to main BEFORE the dashboard Access Application is created and real values are filled in, ALL /panel requests will return 503 — including for The Pub Game Store, the current real seller. Do not merge/push to main until the dashboard step is done and wrangler.jsonc has real values, or deploy web separately after that step.
+
+2026-07-28 — DESBLOQUEADO. El operador registró el dominio `thepubmarket.com` en Cloudflare y apuntó Custom Domains: apex → Worker `thepubmarket-web`, `api.thepubmarket.com` → Worker `thepubmarket-api`. Eso era el bloqueo real de AC#1/#2: una Access Application self-hosted exige una zona activa en la cuenta, y hasta hoy todo corría en `*.workers.dev`, que no es zona propia. (El toggle de Access para workers.dev existe pero protege el host completo — habría puesto la tienda pública entera detrás del login.)
+
+AC#1/#2 cerrados. Dos Access Applications creadas por el operador sobre `thepubmarket.com`: `Panel del Vendedor (es)` → `/panel*` y `Panel del Vendedor (en)` → `/en/panel*`, ambas con la policy `Sellers vetted` (Allow / Include / Emails, lista explícita). Son dos y no una porque Access solo admite un wildcard entre cada par de diagonales.
+
+Cambio de código requerido por las dos aplicaciones: cada una trae su propio AUD tag y `verifyAccessJwt` validaba contra un solo string. Ahora `aud` acepta `string | string[]` (jose da por válido si el claim coincide con cualquiera) y `guardPanelAccess` parte `CF_ACCESS_AUD` por comas, descartando vacíos — una lista que queda vacía se trata como sin configurar y mantiene el fail-closed. +5 tests (23 en apps/web).
+
+Los AUD no se sacaron del dashboard: vienen dentro del JWT de `meta` del redirect a Access, que es público. Documentado en el runbook como atajo.
+
+Verificación en producción (Access ya interceptando, antes de desplegar el código): `/panel`, `/en/panel` y `/panel/inventario` → 302 al login de `thepubmarket.cloudflareaccess.com`; `/`, `/login` y `/compras` → 200. La tienda pública no quedó tocada.
+
+Verificación del guard contra el Worker real (`opennextjs-cloudflare build` + `wrangler dev`, no solo unit tests): `/panel`, `/en/panel` y `/panel/connect/return` sin header → 401; `/panel/inventario` con token basura → 403; `/`, `/login`, `/compras`, `/catalog` → 200. Importante: `ACCESS_LOCAL_BYPASS=true` estaba presente en el entorno y fue no-op, lo que confirma en vivo la protección de que el bypass de desarrollo no aplica en un build de producción.
+
+Runbook actualizado a la realidad: el flujo de dashboard cambió (`Access controls → Applications → Create new application → Self-hosted and private`), la sección §2 documenta las dos aplicaciones y la policy, y se corrigió §3 — decía que Access 'nunca se ata a workers.dev', cuando lo correcto es que workers.dev no es zona propia y por eso no admite una Access Application self-hosted (el toggle host-wide sí existe, pero no sirve para este caso).
+
+PENDIENTE del operador, fuera de esta tarea: (a) `NEXT_PUBLIC_API_URL=https://api.thepubmarket.com` como variable del paso de build en Workers Builds — se inlina en build time, no se lee de wrangler.jsonc; (b) mover el webhook de Stripe a `https://api.thepubmarket.com/webhooks/stripe`, hoy apunta a workers.dev; (c) deshabilitar los subdominios workers.dev DESPUÉS de (b), o los pagos dejan de confirmarse.
 <!-- SECTION:NOTES:END -->
