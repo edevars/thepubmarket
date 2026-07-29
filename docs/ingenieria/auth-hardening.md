@@ -12,27 +12,54 @@ Tests: `apps/api/src/lib/*.test.ts` (`pnpm --filter @thepubmarket/api test`).
 
 ## 1. Hashing de contraseñas
 
-**PBKDF2-HMAC-SHA512, 210,000 iteraciones, salt de 16 bytes, clave de 32 bytes**
-(`lib/password.ts`), vía SubtleCrypto nativo de Workers — sin dependencias.
+**PBKDF2-HMAC-SHA512 encadenado: 3 rondas × 70,000 iteraciones = 210,000 de
+trabajo efectivo**, salt de 16 bytes, clave de 32 bytes (`lib/password.ts`),
+vía SubtleCrypto nativo de Workers — sin dependencias.
 
-Es la cifra que OWASP recomienda para SHA-512 en el *Password Storage Cheat
-Sheet*. Se eligió SHA-512 sobre SHA-256 porque llega a paridad con OWASP
-costando ~48 ms de CPU del Worker en vez de los ~71 ms que necesitaría
-PBKDF2-HMAC-SHA256 con su propia cifra de 600,000 (medido con WebCrypto nativo;
-en workerd será algo mayor). Sigue holgado dentro del límite de CPU del plan
-Paid de Workers.
+### ⚠️ El tope de 100k de Workers
 
-El formato almacenado es autodescriptivo:
+El runtime de Cloudflare **rechaza PBKDF2 con más de 100,000 iteraciones**:
 
 ```
-pbkdf2-<hash>$<iteraciones>$<salt b64>$<hash b64>
+NotSupportedError: Pbkdf2 failed: iteration counts above 100000
+are not supported (requested 210000).
 ```
 
-Eso permite subir los parámetros **sin migración de esquema**: los hashes viejos
-se siguen verificando con los parámetros con los que se escribieron, y
-`needsRehash()` los marca para que `POST /auth/login` los reescriba con los
-parámetros actuales en el siguiente login exitoso. Así migró el parque de
-hashes `pbkdf2-sha256$210000$…` que existía antes de esta tarea.
+Ninguna cifra de OWASP cabe ahí — el *Password Storage Cheat Sheet* pide
+600,000 para HMAC-SHA256 o 210,000 para HMAC-SHA512. Una sola pasada dentro del
+tope queda a menos de la mitad del factor de trabajo recomendado.
+
+La salida es **encadenar**: N pasadas con el mismo salt, cada una usando la
+salida de la anterior como material de entrada. El atacante tiene que computar
+las N en secuencia —cada una depende de la previa, no hay atajo— así que el
+trabajo efectivo es la suma. Con 3 × 70,000 se llega a los 210,000 de OWASP
+para SHA-512, costando ~48 ms de CPU del Worker.
+
+**El tope NO se aplica en `wrangler dev` local, solo en producción.** Un cambio
+de parámetros del KDF no se puede dar por bueno con pruebas locales: hay que
+verificarlo contra el Worker desplegado. Así se descubrió esto — el primer
+deploy de auth por contraseña devolvió `500` en `/auth/login` mientras el mismo
+código respondía correctamente en local. Hay un test que fija el invariante
+(`password.test.ts`, "dentro del tope de 100k de Workers").
+
+### Formato almacenado
+
+Autodescriptivo:
+
+```
+pbkdf2-<hash>x<rondas>$<iteraciones por ronda>$<salt b64>$<hash b64>
+```
+
+Eso permite cambiar parámetros **sin migración de esquema**: los hashes viejos
+se siguen verificando con los suyos, y `needsRehash()` los marca para que
+`POST /auth/login` los reescriba en el siguiente login exitoso. Los de una sola
+ronda llevan el tag sin `x<n>`. `needsRehash` compara **trabajo total**
+(`rondas × iteraciones`), no la forma en que está repartido.
+
+Un hash con iteraciones por encima del tope no se puede recomputar en este
+runtime, así que `verifyPassword` devuelve `false` en vez de lanzar —falla
+cerrado, sin tumbar el login con un 500— y `needsRehash` lo marca. Esas cuentas
+entran por "olvidé mi contraseña".
 
 ## 2. Ciclo de vida de la sesión
 
