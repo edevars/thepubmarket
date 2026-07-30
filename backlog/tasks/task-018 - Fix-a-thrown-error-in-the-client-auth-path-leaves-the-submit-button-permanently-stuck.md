@@ -7,7 +7,7 @@ status: In Progress
 assignee:
   - '@claude'
 created_date: '2026-07-30 03:08'
-updated_date: '2026-07-30 04:02'
+updated_date: '2026-07-30 04:13'
 labels:
   - web
   - auth
@@ -172,4 +172,37 @@ Replaced the `busy` boolean with a named `AuthPhase` across all four auth screen
 - All four screens served locally return 200 with the correct idle copy (`Entrar`, `Enviar enlace`, `Guardar contraseña`, `Crear cuenta`).
 
 **Not yet verified (AC #2, #7):** the phase transitions and the animations only exist at runtime after a submit. That needs a browser; curl cannot get past Turnstile. Dev environment left running on localhost:3000.
+
+## Perceived login latency (2026-07-29)
+
+User reported login still feels slow after the phase work. Measured before changing anything:
+
+| What | Time |
+|---|---|
+| Local `POST /auth/login` (includes a real siteverify round trip and the 210k-iteration KDF) | **72 ms** |
+| Local `/health` baseline | 2 ms |
+| Production `/health` (RTT floor) | ~210 ms |
+| Production `GET /catalog?limit=200` (11.6 KB) | ~280 ms |
+
+**The backend is not the problem.** That leaves two client-side costs, both of which sat on the critical path:
+
+1. `turnstile.execute()` — a round trip to Cloudflare that only *started* when the user clicked submit.
+2. `router.push('/')` — a client navigation to a page that then fetches the catalog, only starting after credentials came back.
+
+### Changes
+
+- **`useTurnstile.prewarm()`** (new). Splits the old `getToken` into `mint()` + a `prewarm()` that starts minting immediately, and a `getToken()` that consumes the in-flight/ready token if there is one. Wired to `onFocus` on the first input of all four auth forms, so the Turnstile round trip overlaps with typing instead of with the spinner. Still exactly one single-use token per submit: `warmRef` is cleared before being awaited, so a retry after a wrong password cannot resend a token the server already burned. If the pre-warm resolves null (blocked widget, timeout) `getToken()` falls through and mints once more, so a transient failure does not cost the user their submit.
+- **`router.prefetch('/')`** on login, register and reset-password — warms the destination while the user types.
+
+### Honest limits of this measurement
+
+The two server numbers are measured. The claim that `execute()` dominated is **inferred** from what is left after subtracting them; it was not timed in a browser, because Turnstile cannot be driven from curl. If login still feels slow after this, the next step is a real browser timing of the widget, not more guessing.
+
+One intentional behavioural change: with the widget in `interaction-only` mode, a visitor who *is* challenged may now see the challenge appear while typing rather than after clicking. That is better — the puzzle stops being the thing standing between the click and the result.
+
+### Note for whoever runs the dev server
+
+Running `next build` while `next dev` is live corrupts the shared `.next` directory and every route starts 500ing with `Could not find the module … in the React Client Manifest`. It is not a code fault. `rm -rf apps/web/.next` and restart. Hit this during verification and it cost a confusing few minutes.
+
+Re-verified after a clean restart: all four screens 200, no bundler errors, `lint` / `typecheck` / `next build` clean.
 <!-- SECTION:NOTES:END -->
