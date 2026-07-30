@@ -84,9 +84,16 @@ que falta para cruzar esa línea.
       solo mientras no exista ni un usuario real (ver `estado-actual.md`); con
       tokens Bearer en `localStorage`, deja de serlo con el primer comprador.
       El origen ya es fijo: `cors({ origin: c.env.WEB_BASE_URL })`.
-- [ ] **Envío real de magic links.** Hoy `apps/api/src/lib/email.ts` solo hace
-      `console.log` del link (ver comentario en el archivo). Antes de live hay
-      que integrar Cloudflare Email Service (o proveedor) con dominio + SPF/DKIM.
+- [x] **Envío real de correo** (TASK-016, cerrada 2026-07-29). Cloudflare Email
+      Sending con `thepubmarket.com` dado de alta (SPF/DKIM/DMARC bajo
+      `cf-bounce`); `apps/api/src/lib/email.ts` es el transporte único y el
+      reset de contraseña se entrega de verdad. Ver [`email.md`](./email.md).
+- [ ] **Subir el DMARC de `p=none` a `quarantine` y luego `reject`.** Cloudflare
+      lo crea en `reject`; se bajó a propósito porque el `_dmarc` del ápice
+      aplica a **todo** remitente de `@thepubmarket.com`, no solo al Worker.
+      Antes de subirlo: inventariar qué más manda correo con el dominio y
+      agregar `rua=mailto:…` a una bandeja que sí se lea, para ver los reportes
+      agregados primero.
 - [x] **Cloudflare Access / Zero Trust para `/panel`** (TASK-009, cerrada
       2026-07-28). `apps/web/src/middleware.ts` +
       `apps/web/src/lib/{cloudflare-access,panel-access-guard}.ts` validan el

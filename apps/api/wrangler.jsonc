@@ -29,11 +29,20 @@
 
   // === Config no-secreta ===
   // PLATFORM_FEE_BPS: comisión de la plataforma en puntos básicos (1000 = 10%).
-  // WEB_BASE_URL: origen del frontend (success/cancel de Checkout, redirect de
-  // magic link). En local se sobreescribe vía .dev.vars.
+  // WEB_BASE_URL: origen del frontend (success/cancel de Checkout, links de los
+  // correos transaccionales). En local se sobreescribe vía .dev.vars.
+  //
+  // EMAIL_MODE: "send" entrega de verdad por Cloudflare Email Sending;
+  // cualquier otro valor imprime el correo completo en el log y no envía nada.
+  // En local se pone `EMAIL_MODE=log` en .dev.vars — ver docs/ingenieria/email.md.
+  // EMAIL_FROM va en pareja con `allowed_sender_addresses` del binding EMAIL:
+  // si cambia uno sin el otro, el envío falla con E_VALIDATION_ERROR.
   "vars": {
     "PLATFORM_FEE_BPS": "1000",
-    "WEB_BASE_URL": "https://thepubmarket.com"
+    "WEB_BASE_URL": "https://thepubmarket.com",
+    "EMAIL_MODE": "send",
+    "EMAIL_FROM": "no-reply@thepubmarket.com",
+    "EMAIL_FROM_NAME": "The Pub Market"
   },
 
   // === Bindings ===
@@ -80,6 +89,19 @@
     {
       "tag": "v1",
       "new_sqlite_classes": ["InventoryReservation"]
+    }
+  ],
+
+  // Email Sending — correo transaccional (hoy: reset de contraseña).
+  // El binding está restringido a un único remitente: un bug no puede enviar
+  // como cualquier dirección del dominio. Debe coincidir con el var EMAIL_FROM.
+  // El dominio se da de alta una vez con `wrangler email sending enable`
+  // (ver docs/ingenieria/email.md). Sin alta, el envío falla con
+  // E_SENDER_NOT_VERIFIED.
+  "send_email": [
+    {
+      "name": "EMAIL",
+      "allowed_sender_addresses": ["no-reply@thepubmarket.com"]
     }
   ],
 

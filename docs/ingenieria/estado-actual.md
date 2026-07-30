@@ -3,9 +3,32 @@
 > Snapshot técnico del proyecto. Actualízalo al cerrar cada bloque de trabajo.
 > Léelo junto con `ROADMAP.md` (fases) y `CLAUDE.md` (reglas de decisión).
 
-**Fecha:** 2026-07-28
+**Fecha:** 2026-07-29
 **Rama activa:** `main`
-**Fase del roadmap:** Fase 2 → Fase 3 — Núcleo transaccional completo; identidad de usuario migrando a email+password
+**Fase del roadmap:** Fase 3 cerrada → Fase 4 (Operación y confianza) — arrancó con correo transaccional
+
+---
+
+## 📧 Correo transaccional real (2026-07-29)
+
+TASK-016. La plataforma ya envía correo de verdad, no lo imprime en el log.
+
+- **Dominio dado de alta** en Cloudflare Email Sending: `thepubmarket.com`,
+  return-path `cf-bounce.thepubmarket.com`, selector DKIM `cf-bounce`. Los
+  registros de Cloudflare cuelgan de `cf-bounce`, así que **el MX y el SPF del
+  ápice (reenvío de Namecheap) quedaron intactos**.
+- **Transporte único:** `apps/api/src/lib/email.ts` es el único que toca el
+  binding `EMAIL`. Nunca lanza; un fallo del proveedor no cambia la respuesta
+  HTTP ni filtra su error. Plantillas puras en `email-templates.ts` (copy en
+  español, HTML **y** texto plano).
+- **`EMAIL_MODE`:** `send` en el Worker desplegado; `log` en `.dev.vars` imprime
+  el correo completo y no envía nada — desarrollo local sin credenciales.
+- **DMARC bajado a `p=none`** (Cloudflare lo crea en `p=reject`). El `_dmarc`
+  del ápice aplica a todo remitente del dominio, no solo a este Worker; subirlo
+  a `quarantine`/`reject` es trabajo de la checklist de go-live.
+- Hoy solo se envía el **reset de contraseña**. Los correos de orden son
+  TASK-017 y reusan este mismo transporte.
+- Detalle, registros DNS y diagnóstico: [`email.md`](./email.md).
 
 ---
 
@@ -50,10 +73,9 @@ TASK-010. La invitación sigue siendo el mismo endpoint
 - Proceso completo, bitácora y veredicto de la revisión de `x-admin-key` en
   [`invitacion-sellers.md`](./invitacion-sellers.md).
 
-⚠️ **Pendiente antes de desplegar el API:** correr
-`pnpm -F @thepubmarket/api db:migrate:remote` (migración `0006`). Si el Worker
-sale a producción sin la tabla, `POST /admin/sellers/:id/link` falla al
-insertar en la bitácora. Local ya está migrada.
+✅ **Migración `0006` ya aplicada en D1 remota** (verificado 2026-07-29:
+`seller_invitations` existe en la base de producción). La advertencia previa
+sobre correrla antes de desplegar el API ya no aplica.
 
 ---
 
@@ -106,7 +128,6 @@ propósito, y por eso conviene tenerlo escrito en vez de deducirlo:
 - **Registro que reclama cuentas sin contraseña** (`POST /auth/register` sobre
   una fila con `password_hash IS NULL`) — ver §6 de
   [`auth-hardening.md`](./auth-hardening.md).
-- **Sin envío real de correo:** los enlaces de reset se imprimen en el log.
 
 ⚠️ **Todo lo anterior deja de ser aceptable en el momento en que exista el
 primer comprador real.** Cerrar el CORS a una allowlist de orígenes es el

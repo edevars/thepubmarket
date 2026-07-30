@@ -160,6 +160,8 @@ Workers Builds despliega **producción** al hacer push a `main` y genera **URLs 
 | `NEXT_PUBLIC_API_URL` | **Build time**: `apps/web/.env` (local) · env var del build en Workers Builds/CI | URL del Worker de API que consume el cliente. Se inlina en el bundle al build; **no** es un `var` de runtime. |
 | `NEXT_PUBLIC_TURNSTILE_SITE_KEY` | **Build time**: `apps/web/.env` (local) · `apps/web/.env.production` (prod) | Site key **público** del widget de Turnstile. Se inlina al build. Va siempre en pareja con `TURNSTILE_SECRET_KEY`. |
 | `TURNSTILE_SECRET_KEY` | `apps/api/.dev.vars` (local) · `wrangler secret put` (prod) | Secret de Turnstile para `siteverify` en el Worker. Sin él la API deja pasar todo y lo advierte en el log. Ver [`docs/ingenieria/turnstile.md`](docs/ingenieria/turnstile.md). |
+| `EMAIL_MODE` | `apps/api/.dev.vars` (local, `log`) · `vars` de `wrangler.jsonc` (prod, `send`) | Con `send` entrega por Cloudflare Email Sending; con cualquier otro valor imprime el correo en el log y no envía. Así el desarrollo local no necesita dominio verificado ni credenciales. Ver [`docs/ingenieria/email.md`](docs/ingenieria/email.md). |
+| `EMAIL_FROM` / `EMAIL_FROM_NAME` | `vars` de `apps/api/wrangler.jsonc` | Remitente de todo el correo transaccional. `EMAIL_FROM` debe coincidir con `allowed_sender_addresses` del binding `EMAIL`; si se mueve uno sin el otro, el envío falla. |
 | `CLOUDFLARE_API_TOKEN` | GitHub → Settings → Secrets and variables → Actions | Deploy vía GitHub Actions (`deploy.yml`). No hace falta con Workers Builds. |
 | `CLOUDFLARE_ACCOUNT_ID` | GitHub → Secrets (Actions) | Idem. |
 

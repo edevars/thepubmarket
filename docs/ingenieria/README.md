@@ -36,6 +36,7 @@ ponerse al día sin recargar todo el contexto.
 | ¿Cómo queda protegido `/panel` con Cloudflare Access? | [`cloudflare-access-panel.md`](./cloudflare-access-panel.md) |
 | ¿Cómo funcionan sesiones, hashing, reset y rate limiting de auth? | [`auth-hardening.md`](./auth-hardening.md) |
 | ¿Cómo está wireado Turnstile y qué llaves lleva cada ambiente? | [`turnstile.md`](./turnstile.md) |
+| ¿Cómo sale el correo y por qué no llegó uno? | [`email.md`](./email.md) |
 | ¿Cómo doy de alta un vendedor vetted nuevo? | [`invitacion-sellers.md`](./invitacion-sellers.md) |
 
 ---

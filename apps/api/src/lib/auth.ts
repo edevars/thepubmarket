@@ -9,7 +9,8 @@
  */
 import type { SessionUser } from '../types'
 
-const RESET_TTL_SECONDS = 60 * 15 // 15 min
+/** Exported so the reset email states the same lifetime the token actually has. */
+export const RESET_TTL_SECONDS = 60 * 15 // 15 min
 const SESSION_TTL_SECONDS = 60 * 60 * 24 * 7 // 7 days
 
 const resetKey = (token: string) => `pwr:${token}`
