@@ -7,7 +7,7 @@ status: In Progress
 assignee:
   - '@claude'
 created_date: '2026-07-30 03:08'
-updated_date: '2026-07-30 03:54'
+updated_date: '2026-07-30 03:55'
 labels:
   - web
   - auth
@@ -56,6 +56,43 @@ Constraints:
 - [ ] #6 A double submit cannot fire a second request against an already-consumed reset token
 - [ ] #7 Reproduced and verified in the browser against the deployed site, with the before/after behavior recorded in the task notes
 <!-- AC:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+## Approach — UX-first, per the user's direction (2026-07-29)
+
+The user asked to solve this at the UX level: better copy and animation that distinguish "submitting" from "redirecting / signing you back in". Doing that properly means replacing the single `busy` boolean, which is what makes every wait look identical, with a named phase.
+
+### Shared pieces (new)
+
+- `components/ui/Spinner.tsx` — small inline spinner reusing the existing `tpmSpin` keyframe, for inside the submit button.
+- `components/auth/AuthRedirecting.tsx` — full-panel success view with the larger spinner idiom already used by the cart's `RedirectingView` (`tpmSpin` + `tpmPulse`), taking a title and body. Shown after a successful login / register / reset while `router.push` runs, so the navigation gap stops looking like nothing happened.
+- `lib/auth-phase.ts` — `type AuthPhase = 'idle' | 'verifying' | 'submitting' | 'done'`.
+
+### Per screen
+
+Replace `busy: boolean` with `phase: AuthPhase`, derive `busy = phase !== 'idle'`, and give each phase its own label:
+
+| Screen | verifying | submitting | done |
+|---|---|---|---|
+| login | Verificando… | Entrando… | panel: sesión iniciada, redirigiendo |
+| register | Verificando… | Creando cuenta… | panel: cuenta creada, redirigiendo |
+| forgot-password | Verificando… | Enviando enlace… | existing "revisa tu correo" panel |
+| reset-password | Verificando… | Guardando… | panel: contraseña actualizada, entrando |
+
+The `done` phase is never cleared — the page is navigating away — which also closes AC #6: the button cannot be clicked a second time against a consumed reset token.
+
+### Robustness (still required — copy alone does not fix a 60s wait)
+
+- Wrap each handler body in `try/catch`, reset the phase in `finally` for every path except `done`. A throw now surfaces a real message instead of a silent freeze. Covers AC #2, #3.
+- `lib/session.ts`: `postAuth` and `requestPasswordReset` catch transport failures and return a distinguishable `network_error` rather than letting the rejection escape. Recognized API codes keep their existing specific messages (AC #4).
+- `useTurnstile`: cut `TOKEN_TIMEOUT_MS` from 60s to something that reads as a failure, and drop the widget id when the container is detached so a stale id cannot silently swallow `execute()`.
+
+### Out of scope, flagged separately
+
+Whether `turnstileGuard` should keep failing closed when a blocker kills the widget. That is a product/security decision, not UX polish, and it is what actually determines whether an ad-blocker user can buy at all.
+<!-- SECTION:PLAN:END -->
 
 ## Implementation Notes
 
