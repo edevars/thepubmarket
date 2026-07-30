@@ -7,7 +7,7 @@ status: In Progress
 assignee:
   - '@claude'
 created_date: '2026-07-30 03:08'
-updated_date: '2026-07-30 03:55'
+updated_date: '2026-07-30 04:02'
 labels:
   - web
   - auth
@@ -145,4 +145,31 @@ So the bug to fix is resilience, not a crash:
 4. `useTurnstile` should not keep a widget id bound to a detached container.
 
 Still unresolved and **larger than this task**: with `turnstileGuard` failing closed server-side, a visitor whose blocker kills Turnstile gets `403` on login, register, password reset **and checkout**. They cannot buy, and it looks like an ordinary 403 in the logs. Needs a product decision on posture before launch.
+
+## UX implementation landed (2026-07-29)
+
+Replaced the `busy` boolean with a named `AuthPhase` across all four auth screens, per the user's direction to solve this at the UX level.
+
+**New**
+
+- `lib/auth-phase.ts` — `AuthPhase = 'idle' | 'verifying' | 'submitting' | 'done'` + `isBusy()`.
+- `components/ui/Spinner.tsx` — inline button spinner, reuses the existing `tpmSpin` keyframe so there is one spin animation in the product rather than two that nearly match.
+- `components/auth/AuthRedirecting.tsx` — full-panel success screen (`tpmSpin` + `tpmPulse`, the cart's redirect idiom), `role="status"` / `aria-live="polite"`.
+
+**Copy** — 12 keys added to both `es.json` and `en.json`, purely additive. Distinct labels per phase instead of one generic one: `Verificando…` → `Entrando…` / `Creando cuenta…` / `Enviando enlace…` / `Guardando…`, plus three redirect panels and two new error messages (`errorNetwork`, `errorUnexpected`). Removed the now-orphaned `sending` key.
+
+**Robustness**
+
+- `lib/session.ts`: `postAuth` and `requestPasswordReset` catch transport failures and return an exported `NETWORK_ERROR` code, distinguishable from any API error. `requestPasswordReset` changed from `Promise<boolean>` to a tagged result so the caller can tell a rate limit from a dead network — previously both surfaced as the Turnstile message. Its neutrality is unchanged and now documented: success returns the same shape whether or not the account exists.
+- All four handlers wrapped in `try/catch`; every failure path returns to `idle` with a message.
+- `useTurnstile`: `TOKEN_TIMEOUT_MS` 60s → 12s; bail immediately when `containerRef.current?.isConnected` is false (the detached-widget case that logs `Cannot find Widget` and then never calls back); `reset()`/`execute()` wrapped so a throw settles the promise instead of escaping into the caller.
+- `done` is terminal on all three redirecting screens — the form is replaced, not re-enabled, which is what closes the double-submit-against-a-consumed-token path.
+
+**Verified so far**
+
+- `pnpm lint` clean, web `typecheck` clean, `next build` succeeds.
+- Scripted check that all 51 `t()` keys used across the four pages resolve in **both** locales — a missing next-intl key throws at render, and the new panels are only reachable at runtime, so this could not be left to a build.
+- All four screens served locally return 200 with the correct idle copy (`Entrar`, `Enviar enlace`, `Guardar contraseña`, `Crear cuenta`).
+
+**Not yet verified (AC #2, #7):** the phase transitions and the animations only exist at runtime after a submit. That needs a browser; curl cannot get past Turnstile. Dev environment left running on localhost:3000.
 <!-- SECTION:NOTES:END -->
