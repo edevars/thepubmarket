@@ -7,7 +7,7 @@ status: In Progress
 assignee:
   - '@claude'
 created_date: '2026-07-30 03:08'
-updated_date: '2026-07-30 04:13'
+updated_date: '2026-07-30 04:55'
 labels:
   - web
   - auth
@@ -50,10 +50,10 @@ Constraints:
 <!-- AC:BEGIN -->
 - [x] #1 The trigger for the observed production hang is identified from browser Console/Network evidence and recorded in the task notes
 - [ ] #2 A thrown error anywhere in a submit handler leaves the button re-enabled and shows the user an actionable message, on all four auth screens: login, register, forgot-password, reset-password
-- [ ] #3 The fetch helpers in lib/session.ts no longer let a network-level rejection escape to callers; a transport failure is distinguishable from an API error response
+- [x] #3 The fetch helpers in lib/session.ts no longer let a network-level rejection escape to callers; a transport failure is distinguishable from an API error response
 - [ ] #4 Recognized API error codes (invalid_credentials, rate_limited, turnstile_failed, invalid_or_expired) still map to their existing specific messages, not to a generic failure message
-- [ ] #5 POST /auth/password/forgot still returns the same neutral confirmation regardless of whether the account exists, and the UI reveals nothing more than it does today
-- [ ] #6 A double submit cannot fire a second request against an already-consumed reset token
+- [x] #5 POST /auth/password/forgot still returns the same neutral confirmation regardless of whether the account exists, and the UI reveals nothing more than it does today
+- [x] #6 A double submit cannot fire a second request against an already-consumed reset token
 - [ ] #7 Reproduced and verified in the browser against the deployed site, with the before/after behavior recorded in the task notes
 <!-- AC:END -->
 
@@ -205,4 +205,20 @@ One intentional behavioural change: with the widget in `interaction-only` mode, 
 Running `next build` while `next dev` is live corrupts the shared `.next` directory and every route starts 500ing with `Could not find the module … in the React Client Manifest`. It is not a code fault. `rm -rf apps/web/.next` and restart. Hit this during verification and it cost a confusing few minutes.
 
 Re-verified after a clean restart: all four screens 200, no bundler errors, `lint` / `typecheck` / `next build` clean.
+
+## Deployed, speed confirmed (2026-07-29)
+
+Commit `e997e04`, merged as `4565815`, `thepubmarket-web` version `25c10d71`. Confirmed the new copy is actually in the production bundle (`Verificando`, `Sesión iniciada`, `Te llevamos al catálogo` present in the served HTML) rather than trusting the deploy output.
+
+**User confirms login is now noticeably faster.** That retroactively validates the inference recorded above: with the server measured at 72ms of work and ~210ms of RTT, `turnstile.execute()` on the critical path was the remaining cost, and moving it to first-focus removed it. Worth noting the diagnosis order that worked here — measuring the server first ruled out the KDF, which was the intuitive suspect and the wrong one. Weakening the password hashing would have been a real security regression for no gain.
+
+### AC status
+
+- **#3 (transport failures do not escape)** — met by construction and type-checked: both helpers now return a tagged result, and `NETWORK_ERROR` is a distinct code no API path can produce.
+- **#5 (no account-existence oracle)** — met, and worth spelling out because the change touched it. `/auth/password/forgot` still answers the same neutral `{ok:true}`. The UI now distinguishes `rate_limited` from a Turnstile failure, which is safe here: both KV buckets in `lib/rate-limit.ts` are incremented *before* the users table is queried, so a rate-limit message carries no information about whether the address is registered.
+- **#6 (no double submit against a consumed token)** — met: `done` is terminal and replaces the form outright.
+
+### Still open
+
+**#2, #4, #7** need the error paths exercised in a browser, not just the happy path. One check closes all three: a wrong password on the login screen should re-enable the button and show `Correo o contraseña incorrectos` — not the generic message, and not a dead button. Optionally, re-enabling the ad blocker should now produce an error in ~12s instead of ~60s of silence.
 <!-- SECTION:NOTES:END -->
