@@ -52,7 +52,7 @@ Constraints:
 - [ ] #5 A send failure does not change the HTTP response of the auth endpoint and does not leak provider errors to the caller; the failure is logged with enough detail to diagnose
 - [x] #6 Local development does not require live email credentials: with no credentials configured the helper falls back to logging the message and this fallback is obvious in the log
 - [x] #7 Turnstile verification and KV rate limiting still gate the auth endpoints unchanged, verified by probing the endpoints
-- [ ] #8 Delivery verified against the deployed API, not only locally, and the verification is recorded in the task notes
+- [x] #8 Delivery verified against the deployed API, not only locally, and the verification is recorded in the task notes
 - [x] #9 docs/ingenieria/estado-actual.md no longer lists 'sin envío real de correo' as an open gap, and a dedicated doc covers the email setup, sender identity, and known limits
 <!-- AC:END -->
 
