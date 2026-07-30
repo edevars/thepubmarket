@@ -5,7 +5,7 @@ status: In Progress
 assignee:
   - '@claude'
 created_date: '2026-07-29 01:59'
-updated_date: '2026-07-29 17:00'
+updated_date: '2026-07-30 03:06'
 labels:
   - 'epic:transactional-email'
   - api
@@ -45,15 +45,15 @@ Constraints:
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Sender domain is authenticated for the project domain (SPF, DKIM, DMARC records in place) and the setup steps are written down in docs/ingenieria/ so they can be repeated or audited
-- [ ] #2 A single shared sending helper exists in the API and is the only place that talks to the email provider; all future emails go through it
-- [ ] #3 Password reset email is actually delivered to the user's inbox when POST /auth/password/forgot is called with a registered email, and the link in it completes a reset successfully
-- [ ] #4 POST /auth/password/forgot keeps its existing behavior for unregistered emails: same response, no account-existence oracle, and no email sent
+- [x] #1 Sender domain is authenticated for the project domain (SPF, DKIM, DMARC records in place) and the setup steps are written down in docs/ingenieria/ so they can be repeated or audited
+- [x] #2 A single shared sending helper exists in the API and is the only place that talks to the email provider; all future emails go through it
+- [x] #3 Password reset email is actually delivered to the user's inbox when POST /auth/password/forgot is called with a registered email, and the link in it completes a reset successfully
+- [x] #4 POST /auth/password/forgot keeps its existing behavior for unregistered emails: same response, no account-existence oracle, and no email sent
 - [ ] #5 A send failure does not change the HTTP response of the auth endpoint and does not leak provider errors to the caller; the failure is logged with enough detail to diagnose
-- [ ] #6 Local development does not require live email credentials: with no credentials configured the helper falls back to logging the message and this fallback is obvious in the log
-- [ ] #7 Turnstile verification and KV rate limiting still gate the auth endpoints unchanged, verified by probing the endpoints
+- [x] #6 Local development does not require live email credentials: with no credentials configured the helper falls back to logging the message and this fallback is obvious in the log
+- [x] #7 Turnstile verification and KV rate limiting still gate the auth endpoints unchanged, verified by probing the endpoints
 - [ ] #8 Delivery verified against the deployed API, not only locally, and the verification is recorded in the task notes
-- [ ] #9 docs/ingenieria/estado-actual.md no longer lists 'sin envío real de correo' as an open gap, and a dedicated doc covers the email setup, sender identity, and known limits
+- [x] #9 docs/ingenieria/estado-actual.md no longer lists 'sin envío real de correo' as an open gap, and a dedicated doc covers the email setup, sender identity, and known limits
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -159,4 +159,32 @@ Written in Spanish deliberately: every doc in that suite added after the English
 ## Still open: AC #3, #5, #8
 
 Deployed delivery is **not yet verified**. It cannot be driven from curl: `turnstileGuard` fails closed and there is no way to mint a valid widget token outside a browser, so `POST /auth/password/forgot` against production always returns 403 from a script. Verification needs the user to submit the form at `/es/auth/forgot-password` with an address they control while `wrangler tail` is running. Do not mark this task Done before that happens.
+
+## Deployed delivery VERIFIED (2026-07-29)
+
+User submitted the form at `/es/auth/forgot-password` for a real account. `wrangler tail` on `thepubmarket-api`:
+
+```
+POST /auth/password/forgot - Ok @ 8:58:59 PM
+POST /auth/password/reset  - Ok @ 9:00:08 PM
+POST /auth/password/reset  - Ok @ 9:00:40 PM   ← second click, token already consumed
+POST /auth/login           - Ok @ 9:02:42 PM
+```
+
+The email was delivered, the link in it opened the reset page, the reset completed, and the account then signed in with the new password. **No `[email] send failed` line** — the provider accepted the send. AC #3 and #8 met.
+
+AC #5 is **partially** verified, and the notes should say so plainly: no provider failure actually occurred remotely, so the failure path was not observed end to end. What is established is structural — the send runs inside `executionCtx.waitUntil`, so the `{ok:true}` response is already emitted before the provider is called, and `sendEmail` catches everything and returns rather than throwing. Verified locally that the caller ignores the outcome. Forcing a real remote failure would mean deploying a deliberately-broken sender config; judged not worth it.
+
+## Found during verification: stuck submit button (frontend)
+
+The forgot-password form hung on `Enviando…` even though the request succeeded — which is why there are two `/auth/password/reset` calls (user re-clicked).
+
+Root defect is in the client auth path and predates this task (TASK-012/TASK-015):
+
+- `apps/web/src/lib/session.ts` — neither `postAuth` nor `requestPasswordReset` wraps `fetch`. A rejected fetch propagates to the caller.
+- `apps/web/src/app/[locale]/auth/forgot-password/page.tsx` and `…/reset-password/page.tsx` — both `onSubmit` handlers `setBusy(true)` and clear it only on the happy path and on known API errors. There is no `try/catch` and no `finally`.
+
+So **any** throw between those two points leaves the button permanently disabled, showing `Enviando…` (or `Entrando…` on the reset page), with no message to the user and no way to retry without a reload. `login` and `register` share the same shape via `postAuth`.
+
+What actually threw in this instance is not yet known — the request reached the Worker and returned Ok, so it happened after the fetch was issued. Needs the browser console/network entry to pin down. Scope decision pending with the user.
 <!-- SECTION:NOTES:END -->
