@@ -191,7 +191,10 @@ auth.post('/password/forgot', turnstileGuard, async (c) => {
   if (existing) {
     const token = await createResetToken(c.env.SESSIONS, email)
     const link = `${c.env.WEB_BASE_URL}/auth/reset-password?token=${token}`
-    await sendPasswordResetEmail(email, link)
+    // Off the response path: the answer below is the same whether delivery
+    // succeeds, fails or is skipped, so waiting on the provider would only add
+    // latency — and latency that correlates with "this email has an account".
+    c.executionCtx.waitUntil(sendPasswordResetEmail(c.env, email, link))
   }
 
   // Neutral response: doesn't reveal whether the email has an account.
