@@ -42,7 +42,6 @@
     "newPasswordPlaceholder": "New password",
     "signIn": "Sign in",
     "signingIn": "Signing in…",
-    "sending": "Sending…",
     "linkSentHint": "Check your inbox and open the link to continue.",
     "alreadySignedIn": "You're already signed in as {email}.",
     "backHome": "Back to home",
@@ -73,7 +72,19 @@
     "resetPasswordTitle": "Choose a new password",
     "resetPasswordSubtitle": "Enter your new password to continue.",
     "resetPasswordCta": "Save password",
-    "resetInvalidOrExpired": "The link is invalid or expired."
+    "resetInvalidOrExpired": "The link is invalid or expired.",
+    "verifying": "Verifying…",
+    "sendingLink": "Sending link…",
+    "creatingAccount": "Creating account…",
+    "savingPassword": "Saving…",
+    "redirSignedInTitle": "Signed in",
+    "redirSignedInBody": "All set. Taking you to the catalog…",
+    "redirAccountCreatedTitle": "Account created",
+    "redirAccountCreatedBody": "You're signed in. Taking you to the catalog…",
+    "redirPasswordSavedTitle": "Password updated",
+    "redirPasswordSavedBody": "We signed out your other sessions and kept you in. Taking you to the catalog…",
+    "errorNetwork": "We couldn't reach the server. Check your connection and try again.",
+    "errorUnexpected": "Something went wrong. Try again."
   },
   "cart": {
     "title": "Your cart",
