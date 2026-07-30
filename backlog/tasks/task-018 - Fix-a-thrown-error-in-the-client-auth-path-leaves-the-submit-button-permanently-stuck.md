@@ -6,6 +6,7 @@ title: >-
 status: To Do
 assignee: []
 created_date: '2026-07-30 03:08'
+updated_date: '2026-07-30 03:44'
 labels:
   - web
   - auth
@@ -54,3 +55,39 @@ Constraints:
 - [ ] #6 A double submit cannot fire a second request against an already-consumed reset token
 - [ ] #7 Reproduced and verified in the browser against the deployed site, with the before/after behavior recorded in the task notes
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+## Browser evidence, first pass (2026-07-29)
+
+User supplied two console lines:
+
+```
+Failed to load resource: net::ERR_BLOCKED_BY_CLIENT
+[Cloudflare Turnstile] Cannot find Widget cf-chl-widget-iuwx6,
+  consider using turnstile.remove() to clean up a widget.
+```
+
+### The hang is 60 seconds, not infinite
+
+`Cannot find Widget` means `turnstile.reset()`/`execute()` ran against a widget whose DOM node is gone. In that state Turnstile fires **none** of its callbacks — not `callback`, not `error-callback`, not `timeout-callback`. `useTurnstile.getToken()` only settles from those callbacks or from its own `setTimeout(…, TOKEN_TIMEOUT_MS)`, and that constant is **60_000**. So the button sits on `Enviando…` for a full minute with no feedback before finally resolving `null`.
+
+That revises the original diagnosis: the missing `try/catch`/`finally` is real and still worth fixing, but it is not what produced *this* symptom. The proximate cause is a Turnstile widget bound to a detached node plus a 60s backstop that is far too long to read as anything but a freeze.
+
+Two candidate mechanisms for the detached widget, not yet distinguished:
+
+1. **Extension blocked a Turnstile resource.** `ERR_BLOCKED_BY_CLIENT` is an extension (ad blocker) killing a request. If it hit `challenges.cloudflare.com`, the widget half-initializes and `execute()` becomes a no-op.
+2. **Container unmounted under the hook.** In `forgot-password/page.tsx` the widget container lives inside the `<form>`, which unmounts when `sent` becomes true. `useTurnstile`'s cleanup only runs on component unmount or when `[action, settle]` change — neither happens — so the hook keeps a widget id pointing at a node React already removed. This one is a latent defect regardless of whether it caused this instance.
+
+### Escalation: Turnstile + ad blockers may lock real buyers out entirely
+
+Bigger than the stuck button. `turnstileGuard` **fails closed** server-side: no token → `403`. If a common ad blocker blocks the Turnstile challenge, an affected visitor cannot sign in, register, reset a password, **or check out** — the gate covers `POST /checkout` too. That is a whole segment of buyers unable to transact, and it is invisible from server logs (it just looks like 403s).
+
+Needs a decision on posture before launch: keep failing closed, or degrade to the KV rate limits when the widget cannot load. Not in scope of this task; flag it to the user.
+
+### Missing to close AC #1
+
+- The **URL** of the request that returned `ERR_BLOCKED_BY_CLIENT` (Network tab). If it is `challenges.cloudflare.com`, mechanism 1 is confirmed.
+- Whether it reproduces in an incognito window with extensions disabled. Clean run there → extension is the trigger and our bug is the lack of resilience; still broken there → mechanism 2 or something else.
+<!-- SECTION:NOTES:END -->
