@@ -6,7 +6,7 @@ title: >-
 status: To Do
 assignee: []
 created_date: '2026-07-30 03:08'
-updated_date: '2026-07-30 03:44'
+updated_date: '2026-07-30 03:49'
 labels:
   - web
   - auth
@@ -47,7 +47,7 @@ Constraints:
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 The trigger for the observed production hang is identified from browser Console/Network evidence and recorded in the task notes
+- [x] #1 The trigger for the observed production hang is identified from browser Console/Network evidence and recorded in the task notes
 - [ ] #2 A thrown error anywhere in a submit handler leaves the button re-enabled and shows the user an actionable message, on all four auth screens: login, register, forgot-password, reset-password
 - [ ] #3 The fetch helpers in lib/session.ts no longer let a network-level rejection escape to callers; a transport failure is distinguishable from an API error response
 - [ ] #4 Recognized API error codes (invalid_credentials, rate_limited, turnstile_failed, invalid_or_expired) still map to their existing specific messages, not to a generic failure message
@@ -90,4 +90,21 @@ Needs a decision on posture before launch: keep failing closed, or degrade to th
 
 - The **URL** of the request that returned `ERR_BLOCKED_BY_CLIENT` (Network tab). If it is `challenges.cloudflare.com`, mechanism 1 is confirmed.
 - Whether it reproduces in an incognito window with extensions disabled. Clean run there → extension is the trigger and our bug is the lack of resilience; still broken there → mechanism 2 or something else.
+
+## Trigger identified (2026-07-29)
+
+Clean-ish Chrome run without the ad blocker: **the flow works**. No `Cannot find Widget`, no `ERR_BLOCKED_BY_CLIENT`, and the form completed normally.
+
+The only console output was Google Tag Assistant (`content_script_bin.js`, `tag_assistant_api_bin.js`) failing to inject into Turnstile's challenge iframe against its `trusted-types vOmE5 default` CSP. That is Cloudflare's CSP working as intended — unrelated noise, not a defect. Note Tag Assistant was still enabled, so this was not a fully extension-free run; it did not need to be, since the flow succeeded.
+
+**Conclusion: mechanism 1.** An ad blocker blocks a Turnstile resource → the widget half-initializes → `execute()` fires no callback → `getToken()` sits on its 60s `TOKEN_TIMEOUT_MS` → the button reads `Enviando…` for a minute with no feedback. Mechanism 2 (container unmounting under the hook when `sent` flips) is **not** what fired here, but it remains a latent defect worth fixing in the same pass.
+
+So the bug to fix is resilience, not a crash:
+
+1. `TOKEN_TIMEOUT_MS` of 60s is a freeze from the user's seat. Needs to be short enough to feel like a failure, with a message.
+2. A widget that cannot initialize should be detectable up front rather than only by timeout.
+3. The missing `try`/`catch`/`finally` in the four submit handlers still needs fixing — it is what would turn any *other* throw into the same silent hang.
+4. `useTurnstile` should not keep a widget id bound to a detached container.
+
+Still unresolved and **larger than this task**: with `turnstileGuard` failing closed server-side, a visitor whose blocker kills Turnstile gets `403` on login, register, password reset **and checkout**. They cannot buy, and it looks like an ordinary 403 in the logs. Needs a product decision on posture before launch.
 <!-- SECTION:NOTES:END -->
