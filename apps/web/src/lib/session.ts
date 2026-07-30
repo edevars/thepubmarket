@@ -31,16 +31,32 @@ export function clearToken(): void {
 
 type AuthResult = { sessionToken: string; user: AuthUser } | { error: string }
 
+/**
+ * Error code for "the request never completed" — DNS, offline, a blocked
+ * request, a CORS rejection. Deliberately distinct from any code the API can
+ * return, so the UI can say "check your connection" instead of blaming the
+ * user's credentials for a network problem.
+ */
+export const NETWORK_ERROR = 'network_error'
+
 async function postAuth(
   path: string,
   body: unknown,
   turnstileToken: string | null,
 ): Promise<AuthResult> {
-  const res = await fetch(`${API}${path}`, {
-    method: 'POST',
-    headers: withTurnstileHeader({ 'content-type': 'application/json' }, turnstileToken),
-    body: JSON.stringify(body),
-  })
+  let res: Response
+  try {
+    res = await fetch(`${API}${path}`, {
+      method: 'POST',
+      headers: withTurnstileHeader({ 'content-type': 'application/json' }, turnstileToken),
+      body: JSON.stringify(body),
+    })
+  } catch (err) {
+    // A rejected fetch used to propagate all the way out of the submit handler,
+    // which left the button disabled forever with nothing on screen.
+    console.error(`auth: request to ${path} failed`, err)
+    return { error: NETWORK_ERROR }
+  }
   const data = (await res.json().catch(() => ({}))) as { error?: string } & Partial<AuthResult>
   if (!res.ok) return { error: data.error ?? 'unknown_error' }
   return data as AuthResult
@@ -66,20 +82,31 @@ export async function loginUser(
 }
 
 /**
- * Requests a password-reset email. Resolves false on a rejected Turnstile so the
- * caller can say so; the success path stays neutral about whether the account
- * exists (the API answers `{ ok: true }` either way).
+ * Requests a password-reset email.
+ *
+ * The success path stays neutral about whether the account exists — the API
+ * answers `{ ok: true }` either way and this returns the same thing either way,
+ * so nothing here can be used to probe for registered addresses. A failure is
+ * always a real rejection: Turnstile, the rate limiter, or the network.
  */
 export async function requestPasswordReset(
   email: string,
   turnstileToken: string | null,
-): Promise<boolean> {
-  const res = await fetch(`${API}/auth/password/forgot`, {
-    method: 'POST',
-    headers: withTurnstileHeader({ 'content-type': 'application/json' }, turnstileToken),
-    body: JSON.stringify({ email }),
-  })
-  return res.ok
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  let res: Response
+  try {
+    res = await fetch(`${API}/auth/password/forgot`, {
+      method: 'POST',
+      headers: withTurnstileHeader({ 'content-type': 'application/json' }, turnstileToken),
+      body: JSON.stringify({ email }),
+    })
+  } catch (err) {
+    console.error('auth: password reset request failed', err)
+    return { ok: false, error: NETWORK_ERROR }
+  }
+  if (res.ok) return { ok: true }
+  const data = (await res.json().catch(() => ({}))) as { error?: string }
+  return { ok: false, error: data.error ?? 'unknown_error' }
 }
 
 /** Consumes a password-reset token and sets a new password. */

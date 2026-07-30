@@ -42,7 +42,6 @@
     "newPasswordPlaceholder": "Nueva contraseña",
     "signIn": "Entrar",
     "signingIn": "Entrando…",
-    "sending": "Enviando…",
     "linkSentHint": "Revisa tu correo y abre el enlace para continuar.",
     "alreadySignedIn": "Ya tienes sesión como {email}.",
     "backHome": "Volver al inicio",
@@ -73,7 +72,19 @@
     "resetPasswordTitle": "Elige una nueva contraseña",
     "resetPasswordSubtitle": "Escribe tu nueva contraseña para continuar.",
     "resetPasswordCta": "Guardar contraseña",
-    "resetInvalidOrExpired": "El enlace no es válido o expiró."
+    "resetInvalidOrExpired": "El enlace no es válido o expiró.",
+    "verifying": "Verificando…",
+    "sendingLink": "Enviando enlace…",
+    "creatingAccount": "Creando cuenta…",
+    "savingPassword": "Guardando…",
+    "redirSignedInTitle": "Sesión iniciada",
+    "redirSignedInBody": "Listo. Te llevamos al catálogo…",
+    "redirAccountCreatedTitle": "Cuenta creada",
+    "redirAccountCreatedBody": "Ya iniciamos tu sesión. Te llevamos al catálogo…",
+    "redirPasswordSavedTitle": "Contraseña actualizada",
+    "redirPasswordSavedBody": "Cerramos tus otras sesiones y te dejamos dentro. Te llevamos al catálogo…",
+    "errorNetwork": "No pudimos conectar con el servidor. Revisa tu conexión e intenta de nuevo.",
+    "errorUnexpected": "Algo salió mal. Intenta de nuevo."
   },
   "cart": {
     "title": "Tu carrito",

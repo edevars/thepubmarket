@@ -1,13 +1,16 @@
 'use client'
 
 import { useTranslations } from 'next-intl'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useAuth } from '@/components/auth/AuthProvider'
+import { AuthRedirecting } from '@/components/auth/AuthRedirecting'
 import { TURNSTILE_SLOT_CLASS, useTurnstile } from '@/components/security/useTurnstile'
 import { AngularButton } from '@/components/ui/AngularButton'
+import { Spinner } from '@/components/ui/Spinner'
 import { Link, useRouter } from '@/i18n/navigation'
+import { type AuthPhase, isBusy } from '@/lib/auth-phase'
 import { isValidEmail } from '@/lib/auth-validation'
-import { loginUser } from '@/lib/session'
+import { loginUser, NETWORK_ERROR } from '@/lib/session'
 
 export default function LoginPage() {
   const t = useTranslations('auth')
@@ -18,8 +21,21 @@ export default function LoginPage() {
   const [emailTouched, setEmailTouched] = useState(false)
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
-  const [busy, setBusy] = useState(false)
+  const [phase, setPhase] = useState<AuthPhase>('idle')
+  const busy = isBusy(phase)
   const emailInvalid = emailTouched && email.trim().length > 0 && !isValidEmail(email)
+
+  // Warm the destination while the user is still typing. Signing in ends in a
+  // client navigation to a page that fetches the catalog; without this, that
+  // load starts only after the credentials come back and shows up as "login is
+  // slow" even though the API answered in ~250ms.
+  useEffect(() => {
+    router.prefetch('/')
+  }, [router])
+
+  if (phase === 'done') {
+    return <AuthRedirecting title={t('redirSignedInTitle')} body={t('redirSignedInBody')} />
+  }
 
   if (user) {
     return (
@@ -45,32 +61,44 @@ export default function LoginPage() {
           setEmailTouched(true)
           if (!email.trim() || !password) return
           if (!isValidEmail(email)) return
-          setBusy(true)
           setError(null)
-          const turnstileToken = await turnstile.getToken()
-          if (turnstile.enabled && !turnstileToken) {
-            setBusy(false)
-            setError(t('errorVerification'))
-            return
+          try {
+            setPhase('verifying')
+            const turnstileToken = await turnstile.getToken()
+            if (turnstile.enabled && !turnstileToken) {
+              setPhase('idle')
+              setError(t('errorVerification'))
+              return
+            }
+            setPhase('submitting')
+            const result = await loginUser(email.trim().toLowerCase(), password, turnstileToken)
+            if ('error' in result) {
+              setPhase('idle')
+              // No hay rama para "cuenta sin contraseña": la API responde
+              // invalid_credentials en ese caso a propósito, para no confirmar
+              // qué correos están registrados. Esas cuentas se recuperan por
+              // "olvidé mi contraseña" (enlace debajo del formulario).
+              setError(
+                result.error === NETWORK_ERROR
+                  ? t('errorNetwork')
+                  : result.error === 'rate_limited'
+                    ? t('errorRateLimited')
+                    : result.error === 'turnstile_failed'
+                      ? t('errorVerification')
+                      : t('errorInvalidCredentials'),
+              )
+              return
+            }
+            // Stays in `done` on purpose: the page is navigating away, so the
+            // form must not come back to life under the redirect screen.
+            setPhase('done')
+            signIn(result.sessionToken, result.user)
+            router.push('/')
+          } catch (err) {
+            console.error('login: submit failed', err)
+            setPhase('idle')
+            setError(t('errorUnexpected'))
           }
-          const result = await loginUser(email.trim().toLowerCase(), password, turnstileToken)
-          setBusy(false)
-          if ('error' in result) {
-            // No hay rama para "cuenta sin contraseña": la API responde
-            // invalid_credentials en ese caso a propósito, para no confirmar
-            // qué correos están registrados. Esas cuentas se recuperan por
-            // "olvidé mi contraseña" (enlace debajo del formulario).
-            setError(
-              result.error === 'rate_limited'
-                ? t('errorRateLimited')
-                : result.error === 'turnstile_failed'
-                  ? t('errorVerification')
-                  : t('errorInvalidCredentials'),
-            )
-            return
-          }
-          signIn(result.sessionToken, result.user)
-          router.push('/')
         }}
         className="flex flex-col gap-3"
       >
@@ -79,6 +107,7 @@ export default function LoginPage() {
           required
           value={email}
           onChange={(e) => setEmail(e.target.value)}
+          onFocus={turnstile.prewarm}
           onBlur={() => setEmailTouched(true)}
           placeholder={t('emailPlaceholder')}
           aria-label={t('emailPlaceholder')}
@@ -93,14 +122,16 @@ export default function LoginPage() {
           required
           value={password}
           onChange={(e) => setPassword(e.target.value)}
+          onFocus={turnstile.prewarm}
           placeholder={t('passwordPlaceholder')}
           aria-label={t('passwordPlaceholder')}
           className="border border-line bg-input px-4 py-3 text-sm text-ink outline-none focus:border-primary"
         />
         {error && <p className="text-sm text-[#d6584f]">{error}</p>}
         <div ref={turnstile.containerRef} className={TURNSTILE_SLOT_CLASS} />
-        <AngularButton type="submit" disabled={busy}>
-          {busy ? t('signingIn') : t('signIn')}
+        <AngularButton type="submit" disabled={busy} className="gap-2">
+          {busy && <Spinner />}
+          {phase === 'verifying' ? t('verifying') : phase === 'idle' ? t('signIn') : t('signingIn')}
         </AngularButton>
       </form>
 
