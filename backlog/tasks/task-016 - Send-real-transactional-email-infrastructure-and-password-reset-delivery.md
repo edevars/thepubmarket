@@ -1,11 +1,11 @@
 ---
 id: TASK-016
 title: 'Send real transactional email: infrastructure and password reset delivery'
-status: In Progress
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-07-29 01:59'
-updated_date: '2026-07-30 03:06'
+updated_date: '2026-07-30 03:10'
 labels:
   - 'epic:transactional-email'
   - api
@@ -49,7 +49,7 @@ Constraints:
 - [x] #2 A single shared sending helper exists in the API and is the only place that talks to the email provider; all future emails go through it
 - [x] #3 Password reset email is actually delivered to the user's inbox when POST /auth/password/forgot is called with a registered email, and the link in it completes a reset successfully
 - [x] #4 POST /auth/password/forgot keeps its existing behavior for unregistered emails: same response, no account-existence oracle, and no email sent
-- [ ] #5 A send failure does not change the HTTP response of the auth endpoint and does not leak provider errors to the caller; the failure is logged with enough detail to diagnose
+- [x] #5 A send failure does not change the HTTP response of the auth endpoint and does not leak provider errors to the caller; the failure is logged with enough detail to diagnose
 - [x] #6 Local development does not require live email credentials: with no credentials configured the helper falls back to logging the message and this fallback is obvious in the log
 - [x] #7 Turnstile verification and KV rate limiting still gate the auth endpoints unchanged, verified by probing the endpoints
 - [x] #8 Delivery verified against the deployed API, not only locally, and the verification is recorded in the task notes
@@ -187,4 +187,59 @@ Root defect is in the client auth path and predates this task (TASK-012/TASK-015
 So **any** throw between those two points leaves the button permanently disabled, showing `Enviando…` (or `Entrando…` on the reset page), with no message to the user and no way to retry without a reload. `login` and `register` share the same shape via `postAuth`.
 
 What actually threw in this instance is not yet known — the request reached the Worker and returned Ok, so it happened after the fetch was issued. Needs the browser console/network entry to pin down. Scope decision pending with the user.
+
+## Failure path verified for real (2026-07-29)
+
+Earlier note said AC #5 could only be argued structurally. That was wrong — there is a way to force a genuine provider rejection locally without deploying anything broken: point `EMAIL_FROM` at an address the restricted binding does not allow.
+
+`.dev.vars` temporarily set to `EMAIL_MODE=send` + `EMAIL_FROM=intruso@otro-dominio.com`, then `POST /auth/password/forgot` on a registered account:
+
+- Response: `200 {"ok":true}` in 24ms — identical to the success path, nothing about the provider leaked.
+- Log: `[email] send failed → fail-path@example.com (Restablece tu contraseña — The Pub Market): email from intruso@otro-dominio.com not allowed` — recipient, subject and reason, and **no message body**.
+
+So AC #5 holds on evidence, not just on construction. Bonus: this also proves `allowed_sender_addresses` is actually enforced by the runtime rather than being decorative. `.dev.vars` restored to `EMAIL_MODE=log`; the observed error string replaced the guessed `E_VALIDATION_ERROR` row in the diagnosis table of `email.md`.
+
+Final checks: `pnpm lint` clean, API `typecheck` clean, `vitest run` 42/42 passing.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+## What changed
+
+The API can now send real transactional email through Cloudflare Email Sending. Before this, `POST /auth/password/forgot` printed the reset link to the Worker log, so nobody but the founder could recover an account — a hard blocker on letting any real buyer or seller use the site.
+
+**Sender domain.** `thepubmarket.com` is onboarded, `enabled: true`, return path `cf-bounce.thepubmarket.com`, DKIM selector `cf-bounce`. The plan assumed the apex SPF would need a hand-merge with the existing Namecheap forwarding include; that turned out to be wrong and no merge was made — Cloudflare places MX, SPF and DKIM under the `cf-bounce` subdomain, leaving the apex untouched. Verified by dig that the five `eforward*.registrar-servers.com` MX records and the Namecheap SPF are intact.
+
+**DMARC.** Cloudflare creates `_dmarc` at `p=reject`; lowered to `p=none`. That record governs every sender claiming `@thepubmarket.com`, not just this Worker, so `reject` would have started silently hard-rejecting any other legitimate outbound path (a Gmail "send as", the registrar's webmail). Our own mail is aligned either way. Raising it back is now an explicit item on the go-live checklist, with the prerequisites written down.
+
+**Code.**
+
+- `apps/api/src/lib/email.ts` — one `sendEmail(env, to, content)` that is the only caller of the `EMAIL` binding. It never throws; it returns an outcome the caller ignores. On failure it logs recipient, subject and provider reason, never the body.
+- `apps/api/src/lib/email-templates.ts` (new) — pure render functions, Spanish copy, always both HTML and plain text. The reset email's stated lifetime is derived from `RESET_TTL_SECONDS`, so copy cannot drift from the token's real TTL.
+- `apps/api/wrangler.jsonc` — `send_email` binding restricted to the single no-reply sender, plus `EMAIL_MODE` / `EMAIL_FROM` / `EMAIL_FROM_NAME`.
+- `apps/api/src/routes/auth.ts` — the send moved to `executionCtx.waitUntil`, so the neutral `{ok:true}` returns at the same latency whether delivery succeeds, fails or is skipped. Timing that correlates with "this address has an account" is exactly the oracle the neutral response exists to prevent.
+
+`EMAIL_MODE` is the local-development answer: anything but `send` prints the whole message, reset link included, and sends nothing. No credentials, no verified domain, no risk of mailing a real person from a test run.
+
+## Verification
+
+Local, curl against `wrangler dev`: full reset flow (request → link → new password → sign in), token single-use, old password rejected, unregistered address produces a byte-identical response and zero sends, missing Turnstile header still 403, the 3-per-hour KV bucket still cuts in and sends nothing on the 429s.
+
+Deployed, on version `604a7cc4`: the user submitted the real form, the email arrived, the link completed a reset and the account signed in — captured in `wrangler tail` as `forgot → reset → login`, all Ok, with no `[email] send failed` line.
+
+Failure path forced locally by pointing `EMAIL_FROM` at an address the restricted binding rejects: response stayed `200 {"ok":true}` at 24ms with nothing leaked, and the log carried recipient, subject and reason. This also confirms `allowed_sender_addresses` is enforced rather than decorative.
+
+`pnpm lint` clean, `typecheck` clean, `vitest run` 42/42.
+
+## Docs
+
+New `docs/ingenieria/email.md` (Spanish, matching its siblings) covering the setup, the real DNS records, the mode switch, the API-access quirks, the 1000/day quota and a diagnosis table. Indexed in the docs README. `estado-actual.md` gained a dated section and lost the "sin envío real de correo" gap; `checklist-go-live-real.md` checked off real delivery and gained the DMARC item.
+
+Two stale facts corrected along the way: migration `0006` is already applied in remote D1 (the warning said otherwise), and `wrangler email sending list` does not work with a scoped token — it hits an account-scoped endpoint that 401s, while `/zones/{id}/email/sending/subdomains` responds.
+
+## Follow-ups
+
+- **TASK-018** (filed): verifying this surfaced a real bug — a thrown error anywhere in the client auth submit path leaves the button permanently disabled with no message. All four auth screens share the shape. Not caused by this task, but found by it.
+- **TASK-017**: order lifecycle emails, which consume the helper this task established.
+<!-- SECTION:FINAL_SUMMARY:END -->
