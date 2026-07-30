@@ -3,10 +3,11 @@ id: TASK-018
 title: >-
   Fix: a thrown error in the client auth path leaves the submit button
   permanently stuck
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - '@claude'
 created_date: '2026-07-30 03:08'
-updated_date: '2026-07-30 03:49'
+updated_date: '2026-07-30 03:54'
 labels:
   - web
   - auth
