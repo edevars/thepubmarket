@@ -14,6 +14,13 @@ import type { CheckoutResponse } from '@thepubmarket/shared'
 import { eq, inArray } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { z } from 'zod'
+import {
+  addressColumns,
+  deliverySchema,
+  isEligiblePickupPoint,
+  shippingCentsFor,
+  toPickupPoint,
+} from '../lib/delivery'
 import { computePlatformFeeCents } from '../lib/orders'
 import { createCheckoutSession, createStripe } from '../lib/stripe'
 import { buyerAuth } from '../middleware/buyer-auth'
@@ -30,9 +37,47 @@ const checkoutSchema = z.object({
     )
     .min(1)
     .max(20),
+  // Obligatorio: una orden sin método de entrega es una orden que la tienda no
+  // puede cumplir. Nótese que el cliente elige el MÉTODO, nunca el monto.
+  delivery: deliverySchema,
 })
 
 export const checkout = new Hono<AppEnv>()
+
+/**
+ * GET /checkout/pickup-points?sellerId= — tiendas donde se puede recoger una
+ * orden de ese vendedor: la propia y cualquier otra ACTIVA de la misma ciudad.
+ *
+ * Público y de solo lectura, igual que `GET /sellers`: no revela nada que el
+ * escaparate no muestre ya. La regla de elegibilidad vive SOLO aquí; el cliente
+ * pinta lo que reciba y `POST /checkout` la vuelve a aplicar antes de cobrar,
+ * así que una lista manipulada en el navegador no compra nada.
+ *
+ * Devolver lista vacía es un resultado válido (vendedor sin ciudad registrada):
+ * el front debe ofrecer envío a domicilio, no romperse.
+ */
+checkout.get('/pickup-points', async (c) => {
+  const sellerId = c.req.query('sellerId')
+  if (!sellerId) return c.json({ error: 'missing_seller_id' }, 400)
+
+  const db = c.get('db')
+  const sellingStore = await db.select().from(sellers).where(eq(sellers.id, sellerId)).get()
+  if (!sellingStore) return c.json({ error: 'not_found' }, 404)
+
+  // Lista curada por invitación: son decenas de tiendas, no miles. Traerlas
+  // todas y filtrar en memoria evita replicar la normalización de ciudad en
+  // SQL, que es justo donde se desincronizaría de los tests.
+  const candidates = await db.select().from(sellers).all()
+  const items = candidates
+    .filter((row) => isEligiblePickupPoint(row, sellingStore))
+    .map((row) => toPickupPoint(row, sellingStore.id))
+    // La tienda vendedora primero: es la única sin espera de traslado.
+    .sort(
+      (a, b) => Number(b.isSellingStore) - Number(a.isSellingStore) || a.name.localeCompare(b.name),
+    )
+
+  return c.json({ items })
+})
 
 // `turnstileGuard` va ANTES de buyerAuth: un bot con token de sesión robado se
 // frena antes de tocar KV, los Durable Objects de reserva y la API de Stripe.
@@ -76,6 +121,22 @@ checkout.post('/', turnstileGuard, buyerAuth, async (c) => {
     return c.json({ error: 'seller_not_payable' }, 400)
   }
 
+  // Entrega: el cliente eligió MÉTODO; el monto se deriva aquí. Un pickup
+  // se valida contra la misma regla que alimenta la lista que vio el
+  // comprador — no basta con que mande un uuid de tienda cualquiera.
+  const delivery = parsed.data.delivery
+  if (delivery.method === 'pickup') {
+    const point = await db
+      .select()
+      .from(sellers)
+      .where(eq(sellers.id, delivery.pickupSellerId))
+      .get()
+    if (!point || !isEligiblePickupPoint(point, seller)) {
+      return c.json({ error: 'pickup_point_unavailable' }, 400)
+    }
+  }
+  const shippingCents = shippingCentsFor(delivery.method)
+
   const orderId = crypto.randomUUID()
 
   // Reserva atómica por item (Durable Object). Si alguno falla, libera lo reservado.
@@ -115,7 +176,10 @@ checkout.post('/', turnstileGuard, buyerAuth, async (c) => {
     }
   })
   const subtotalCents = itemRows.reduce((s, i) => s + i.lineTotalCents, 0)
+  // Comisión SOLO sobre producto: el envío liquida íntegro al seller, que es
+  // quien paga la paquetería. Ver lib/delivery.ts y CLAUDE.md (no custodia).
   const platformFeeCents = computePlatformFeeCents(subtotalCents, Number(c.env.PLATFORM_FEE_BPS))
+  const totalCents = subtotalCents + shippingCents
 
   try {
     await db.insert(orders).values({
@@ -125,8 +189,13 @@ checkout.post('/', turnstileGuard, buyerAuth, async (c) => {
       status: 'pending',
       subtotalCents,
       platformFeeCents,
-      totalCents: subtotalCents,
+      totalCents,
       currency: 'MXN',
+      deliveryMethod: delivery.method,
+      shippingCents,
+      ...(delivery.method === 'shipping'
+        ? addressColumns(delivery.address)
+        : { pickupSellerId: delivery.pickupSellerId }),
     })
     await db.insert(orderItems).values(itemRows)
 
@@ -142,6 +211,8 @@ checkout.post('/', turnstileGuard, buyerAuth, async (c) => {
         quantity: i.quantity,
       })),
       applicationFeeCents: platformFeeCents,
+      shippingCents,
+      shippingLabel: 'Envío a domicilio',
       webBaseUrl: c.env.WEB_BASE_URL,
     })
 

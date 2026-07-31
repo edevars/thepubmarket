@@ -1,11 +1,13 @@
 'use client'
 
+import type { DeliverySelection } from '@thepubmarket/shared'
 import { useSearchParams } from 'next/navigation'
 import { useLocale, useTranslations } from 'next-intl'
 import { Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import { useAuth } from '@/components/auth/AuthProvider'
 import { CartLine } from '@/components/cart/CartLine'
 import { OrderSummary } from '@/components/cart/OrderSummary'
+import { DeliveryStep } from '@/components/checkout/DeliveryStep'
 import { TURNSTILE_SLOT_CLASS, useTurnstile } from '@/components/security/useTurnstile'
 import { Link, useRouter } from '@/i18n/navigation'
 import { useCart } from '@/lib/cart'
@@ -27,88 +29,151 @@ function CartPageInner() {
   const params = useSearchParams()
   const { user, loading } = useAuth()
   const { items, count, subtotalCents } = useCart()
-  const [phase, setPhase] = useState<'browse' | 'redirecting'>('browse')
-  const [checkoutError, setCheckoutError] = useState<'generic' | 'verification' | null>(null)
+  // 'delivery' es un paso OBLIGATORIO entre el carrito y Stripe: una orden sin
+  // destino es una orden que la tienda no puede cumplir. Nada llama a
+  // `createCheckout` sin una selección de entrega.
+  const [phase, setPhase] = useState<'browse' | 'delivery' | 'redirecting'>('browse')
+  const [checkoutError, setCheckoutError] = useState<'generic' | 'verification' | 'pickup' | null>(
+    null,
+  )
   const autoPayDone = useRef(false)
   const turnstile = useTurnstile('checkout')
 
-  const startCheckout = useCallback(async () => {
-    const token = getToken()
-    if (!token) return
-    setCheckoutError(null)
-    // El token de Turnstile se pide ANTES de cambiar de fase: si Cloudflare
-    // decide mostrar un reto, el widget sigue montado en esta vista.
-    const turnstileToken = await turnstile.getToken()
-    if (turnstile.enabled && !turnstileToken) {
-      setCheckoutError('verification')
-      return
-    }
-    setPhase('redirecting')
-    const res = await createCheckout(
-      token,
-      { items: items.map((i) => ({ inventoryId: i.inventoryId, quantity: i.quantity })) },
-      turnstileToken,
-    )
-    if (res.ok) {
-      window.location.href = res.data.url
-      return
-    }
-    setCheckoutError(res.error.error === 'turnstile_failed' ? 'verification' : 'generic')
-    setPhase('browse')
-  }, [items, turnstile])
+  const startCheckout = useCallback(
+    async (delivery: DeliverySelection) => {
+      const token = getToken()
+      if (!token) return
+      setCheckoutError(null)
+      // El token de Turnstile se pide ANTES de cambiar de fase: si Cloudflare
+      // decide mostrar un reto, el widget sigue montado en esta vista.
+      const turnstileToken = await turnstile.getToken()
+      if (turnstile.enabled && !turnstileToken) {
+        setCheckoutError('verification')
+        return
+      }
+      setPhase('redirecting')
+      const res = await createCheckout(
+        token,
+        {
+          items: items.map((i) => ({ inventoryId: i.inventoryId, quantity: i.quantity })),
+          delivery,
+        },
+        turnstileToken,
+      )
+      if (res.ok) {
+        window.location.href = res.data.url
+        return
+      }
+      if (res.error.error === 'turnstile_failed') setCheckoutError('verification')
+      else if (res.error.error === 'pickup_point_unavailable') setCheckoutError('pickup')
+      else setCheckoutError('generic')
+      // Vuelve al paso de entrega, no al carrito: los datos que capturó siguen
+      // montados y puede corregir sin volver a teclear la dirección.
+      setPhase('delivery')
+    },
+    [items, turnstile],
+  )
 
-  // Entrada desde el drawer (`/cart?pay=1`): arranca el checkout si hay sesión.
+  // Entrada desde el drawer (`/cart?pay=1`): abre el paso de entrega. NO paga
+  // directo — antes lo hacía, y así no había forma de elegir cómo recibirlo.
   useEffect(() => {
     if (autoPayDone.current || loading) return
     if (params.get('pay') === '1' && user && items.length > 0) {
       autoPayDone.current = true
-      startCheckout()
+      setPhase('delivery')
     }
-  }, [params, user, loading, items.length, startCheckout])
+  }, [params, user, loading, items.length])
+
+  // Entrar al paso de entrega es el compromiso real de compra, y capturar la
+  // dirección toma varios segundos: arrancar aquí el token de Turnstile lo deja
+  // listo mucho antes de que den click en pagar.
+  useEffect(() => {
+    if (phase === 'delivery') turnstile.prewarm()
+  }, [phase, turnstile])
 
   const cancelRedirect = () => {
-    setPhase('browse')
+    setPhase('delivery')
   }
-
-  if (phase === 'redirecting') return <RedirectingView onCancel={cancelRedirect} />
-  if (items.length === 0) return <EmptyView />
-  if (loading) return <main className="px-5 py-16" />
-  if (!user) return <AuthGateView onKeepShopping={() => router.push('/catalog')} />
 
   const countLine = `${count} ${count === 1 ? t('item') : t('items')}`
 
-  return (
-    <main className="mx-auto w-full max-w-[1180px] px-7 pb-10 pt-8">
-      <div className="mb-[22px] flex flex-wrap items-end justify-between gap-3.5">
-        <div>
-          <div className="mb-[7px] font-mono text-[10px] uppercase tracking-[0.2em] text-cyan">
-            {t('eyebrow')}
+  const checkoutErrorMessage =
+    checkoutError === 'verification'
+      ? t('checkoutErrorVerification')
+      : checkoutError === 'pickup'
+        ? t('checkoutErrorPickup')
+        : checkoutError
+          ? t('checkoutError')
+          : null
+
+  /**
+   * La vista de la fase actual. Se calcula en vez de retornarse directo porque
+   * el contenedor de Turnstile tiene que estar montado en TODAS las fases: el
+   * hook renderiza el widget una sola vez, al montar, y si el div apareciera
+   * apenas al entrar al paso de entrega el widget nunca llegaría a existir.
+   */
+  function currentView() {
+    if (phase === 'redirecting') return <RedirectingView onCancel={cancelRedirect} />
+    if (items.length === 0) return <EmptyView />
+    if (loading) return <main className="px-5 py-16" />
+    if (!user) return <AuthGateView onKeepShopping={() => router.push('/catalog')} />
+
+    if (phase === 'delivery') {
+      return (
+        <DeliveryStep
+          // Una orden = un seller, así que la primera línea define la tienda.
+          sellerId={items[0]?.sellerId ?? ''}
+          subtotalCents={subtotalCents}
+          onConfirm={startCheckout}
+          onBack={() => setPhase('browse')}
+          errorMessage={checkoutErrorMessage}
+        />
+      )
+    }
+
+    return (
+      <main className="mx-auto w-full max-w-[1180px] px-7 pb-10 pt-8">
+        <div className="mb-[22px] flex flex-wrap items-end justify-between gap-3.5">
+          <div>
+            <div className="mb-[7px] font-mono text-[10px] uppercase tracking-[0.2em] text-cyan">
+              {t('eyebrow')}
+            </div>
+            <h1 className="font-display text-3xl font-bold tracking-[0.02em] text-white">
+              {t('title')}
+            </h1>
           </div>
-          <h1 className="font-display text-3xl font-bold tracking-[0.02em] text-white">
-            {t('title')}
-          </h1>
+          <span className="text-[13px] text-muted-2">{countLine}</span>
         </div>
-        <span className="text-[13px] text-muted-2">{countLine}</span>
-      </div>
 
-      {checkoutError && (
-        <p className="mb-[18px] border border-red-500/40 bg-red-500/10 px-4 py-2.5 text-sm text-red-400">
-          {checkoutError === 'verification' ? t('checkoutErrorVerification') : t('checkoutError')}
-        </p>
-      )}
+        {checkoutErrorMessage && (
+          <p className="mb-[18px] border border-red-500/40 bg-red-500/10 px-4 py-2.5 text-sm text-red-400">
+            {checkoutErrorMessage}
+          </p>
+        )}
 
-      <div className="grid grid-cols-1 gap-[18px] md:grid-cols-[1fr_320px] md:gap-6 md:items-start">
-        <div className="flex flex-col gap-2.5">
-          {items.map((item) => (
-            <CartLine key={item.inventoryId} item={item} variant="page" />
-          ))}
+        <div className="grid grid-cols-1 gap-[18px] md:grid-cols-[1fr_320px] md:gap-6 md:items-start">
+          <div className="flex flex-col gap-2.5">
+            {items.map((item) => (
+              <CartLine key={item.inventoryId} item={item} variant="page" />
+            ))}
+          </div>
+          <div className="flex flex-col gap-3">
+            <OrderSummary
+              subtotalCents={subtotalCents}
+              count={count}
+              onCheckout={() => setPhase('delivery')}
+            />
+          </div>
         </div>
-        <div className="flex flex-col gap-3">
-          <OrderSummary subtotalCents={subtotalCents} count={count} onCheckout={startCheckout} />
-          <div ref={turnstile.containerRef} className={TURNSTILE_SLOT_CLASS} />
-        </div>
-      </div>
-    </main>
+      </main>
+    )
+  }
+
+  return (
+    <>
+      {currentView()}
+      <div ref={turnstile.containerRef} className={TURNSTILE_SLOT_CLASS} />
+    </>
   )
 }
 

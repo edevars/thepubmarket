@@ -10,7 +10,7 @@
  * NO CUSTODIA: aquí no hay pagos. La "liquidación" que se muestra (comisión
  * vía application fee) es informativa; el dinero fluye directo en Stripe.
  */
-import { inventory, orderItems, orders, users } from '@thepubmarket/db'
+import { inventory, orderItems, orders, sellers, users } from '@thepubmarket/db'
 import { CONDITIONS, FINISHES, type SellerPanelMe } from '@thepubmarket/shared'
 import { and, count, desc, eq, gt, inArray, isNull, sql } from 'drizzle-orm'
 import { Hono } from 'hono'
@@ -160,9 +160,17 @@ sellerPanel.get('/orders', async (c) => {
 
   const orderIds = orderRows.map((o) => o.id)
   const buyerIds = [...new Set(orderRows.map((o) => o.buyerUserId))]
-  const [itemRows, buyerRows] = await Promise.all([
+  // Tiendas de recolección: puede ser esta misma tienda o una aliada, así que
+  // se resuelven aparte en vez de asumir que es siempre el seller de la sesión.
+  const pickupIds = [
+    ...new Set(orderRows.map((o) => o.pickupSellerId).filter((x): x is string => !!x)),
+  ]
+  const [itemRows, buyerRows, pickupRows] = await Promise.all([
     db.select().from(orderItems).where(inArray(orderItems.orderId, orderIds)).all(),
     db.select().from(users).where(inArray(users.id, buyerIds)).all(),
+    pickupIds.length > 0
+      ? db.select().from(sellers).where(inArray(sellers.id, pickupIds)).all()
+      : Promise.resolve([]),
   ])
 
   const itemsByOrder = new Map<string, typeof itemRows>()
@@ -172,10 +180,16 @@ sellerPanel.get('/orders', async (c) => {
     itemsByOrder.set(item.orderId, list)
   }
   const buyerById = new Map(buyerRows.map((u) => [u.id, u]))
+  const pickupById = new Map(pickupRows.map((s) => [s.id, s]))
 
   return c.json({
     items: orderRows.map((o) =>
-      orderToSellerOrder(o, itemsByOrder.get(o.id) ?? [], buyerById.get(o.buyerUserId)),
+      orderToSellerOrder(
+        o,
+        itemsByOrder.get(o.id) ?? [],
+        buyerById.get(o.buyerUserId),
+        o.pickupSellerId ? pickupById.get(o.pickupSellerId) : undefined,
+      ),
     ),
   })
 })

@@ -49,7 +49,14 @@ ordersRoutes.get('/', async (c) => {
 
   // Enriquecimiento: tienda (nombre/slug/verified) e inventario original de
   // cada línea (cond/set/imagen; puede ya no existir — FK set-null).
-  const sellerIds = [...new Set(rows.map((o) => o.sellerId))]
+  // Las tiendas de recolección salen de la MISMA consulta: son filas de
+  // `sellers` igual que la vendedora, así que basta sumar sus ids al set.
+  const sellerIds = [
+    ...new Set([
+      ...rows.map((o) => o.sellerId),
+      ...rows.map((o) => o.pickupSellerId).filter((x): x is string => !!x),
+    ]),
+  ]
   const inventoryIds = [...new Set(items.map((i) => i.inventoryId).filter((x): x is string => !!x))]
   const [sellerRows, inventoryRows] = await Promise.all([
     db.select().from(sellers).where(inArray(sellers.id, sellerIds)).all(),
@@ -62,7 +69,13 @@ ordersRoutes.get('/', async (c) => {
 
   const body: BuyerOrdersResponse = {
     items: rows.map((o) =>
-      orderToBuyerOrder(o, itemsByOrder.get(o.id) ?? [], sellerById.get(o.sellerId), inventoryById),
+      orderToBuyerOrder(
+        o,
+        itemsByOrder.get(o.id) ?? [],
+        sellerById.get(o.sellerId),
+        inventoryById,
+        o.pickupSellerId ? sellerById.get(o.pickupSellerId) : undefined,
+      ),
     ),
   }
   return c.json(body)

@@ -28,8 +28,22 @@ export interface CreateCheckoutArgs {
   orderId: string
   buyerEmail: string
   lines: CheckoutLine[]
-  /** Comisión de la plataforma en centavos (application fee). */
+  /**
+   * Comisión de la plataforma en centavos (application fee).
+   *
+   * Se calcula SOLO sobre el subtotal de producto. El envío entra como una
+   * línea más del cargo y liquida completo al seller: la plataforma no cobra
+   * comisión sobre flete que no realiza.
+   */
   applicationFeeCents: number
+  /**
+   * Envío cobrado al comprador, en centavos. 0 en recolección en tienda.
+   * Va como línea propia para que el recibo de Stripe lo desglose en vez de
+   * esconderlo dentro del precio de las cartas.
+   */
+  shippingCents?: number
+  /** Etiqueta de la línea de envío en el recibo (idioma del comprador). */
+  shippingLabel?: string
   webBaseUrl: string
   currency?: string
 }
@@ -42,17 +56,32 @@ export async function createCheckoutSession(
   args: CreateCheckoutArgs,
 ): Promise<Stripe.Checkout.Session> {
   const currency = args.currency ?? 'mxn'
+  const lineItems = args.lines.map((l) => ({
+    quantity: l.quantity,
+    price_data: {
+      currency,
+      unit_amount: l.unitPriceCents,
+      product_data: { name: l.name },
+    },
+  }))
+
+  // El envío es una línea más del MISMO direct charge: liquida al seller junto
+  // con el producto. No hay transfer aparte ni paso por la plataforma.
+  if (args.shippingCents && args.shippingCents > 0) {
+    lineItems.push({
+      quantity: 1,
+      price_data: {
+        currency,
+        unit_amount: args.shippingCents,
+        product_data: { name: args.shippingLabel ?? 'Envío' },
+      },
+    })
+  }
+
   return args.stripe.checkout.sessions.create(
     {
       mode: 'payment',
-      line_items: args.lines.map((l) => ({
-        quantity: l.quantity,
-        price_data: {
-          currency,
-          unit_amount: l.unitPriceCents,
-          product_data: { name: l.name },
-        },
-      })),
+      line_items: lineItems,
       payment_intent_data: {
         // Comisión de la plataforma; el resto liquida directo al seller.
         application_fee_amount: args.applicationFeeCents,
