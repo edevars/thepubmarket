@@ -16,6 +16,8 @@ import type {
   CreateListingRequest,
   InventoryItem,
   OrderSummary,
+  PickupPoint,
+  PickupPointsResponse,
   SellerOrder,
   SellerOrdersResponse,
   SellerPanelMe,
@@ -60,6 +62,20 @@ export async function createCheckout(
     ok: false,
     error: (await res.json().catch(() => ({ error: 'checkout_failed' }))) as CheckoutError,
   }
+}
+
+/**
+ * Tiendas donde se puede recoger una orden de este vendedor.
+ *
+ * Público (no lleva sesión): son los mismos datos de vitrina que `/tiendas`.
+ * Lista vacía es un resultado legítimo — un vendedor sin ciudad registrada no
+ * tiene ciudad contra la cual buscar aliadas —, así que la vista debe caer a
+ * envío a domicilio en vez de tratarlo como error.
+ */
+export async function fetchPickupPoints(sellerId: string): Promise<PickupPoint[]> {
+  const res = await fetch(`${API}/checkout/pickup-points?sellerId=${encodeURIComponent(sellerId)}`)
+  if (!res.ok) throw new Error(`pickup points request failed: ${res.status}`)
+  return ((await res.json()) as PickupPointsResponse).items
 }
 
 /** Órdenes del comprador para "Mis compras" (con tienda, tracking y estado). */

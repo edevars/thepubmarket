@@ -6,6 +6,8 @@ import type { InventoryRow, OrderItemRow, OrderRow, SellerRow } from '@thepubmar
 import type {
   BuyerOrder,
   Condition,
+  DeliveryMethod,
+  OrderDelivery,
   OrderItemSummary,
   OrderStatus,
   OrderSummary,
@@ -41,6 +43,48 @@ export function orderToSummary(order: OrderRow, items: OrderItemRow[]): OrderSum
     currency: order.currency,
     createdAt: order.createdAt,
     items: items.map(itemToSummary),
+  }
+}
+
+/**
+ * Entrega de una orden para las vistas.
+ *
+ * `method` es null en órdenes anteriores a TASK-019 — existen en producción y
+ * tienen que seguir renderizando, así que nada aquí asume que hay método.
+ * La tienda de recolección se pasa aparte porque vive en otra tabla; si ya no
+ * existe (baja del seller, FK set-null) queda en null y la vista degrada.
+ */
+export function orderToDelivery(
+  order: OrderRow,
+  pickupStore: SellerRow | undefined,
+): OrderDelivery {
+  const method = (order.deliveryMethod as DeliveryMethod | null) ?? null
+
+  return {
+    method,
+    address:
+      method === 'shipping' && order.shippingLine1
+        ? {
+            recipient: order.shippingRecipient ?? '',
+            phone: order.shippingPhone ?? '',
+            line1: order.shippingLine1,
+            line2: order.shippingLine2,
+            neighborhood: order.shippingNeighborhood,
+            city: order.shippingCity ?? '',
+            state: order.shippingState ?? '',
+            postalCode: order.shippingPostalCode ?? '',
+            country: order.shippingCountry ?? 'MX',
+          }
+        : null,
+    pickupPoint:
+      method === 'pickup' && pickupStore
+        ? {
+            id: pickupStore.id,
+            name: pickupStore.name,
+            slug: pickupStore.slug,
+            address: pickupStore.address ?? '',
+          }
+        : null,
   }
 }
 
@@ -83,6 +127,7 @@ export function orderToBuyerOrder(
   items: OrderItemRow[],
   seller: SellerRow | undefined,
   inventoryById: Map<string, InventoryRow>,
+  pickupStore?: SellerRow,
 ): BuyerOrder {
   return {
     id: order.id,
@@ -97,8 +142,9 @@ export function orderToBuyerOrder(
       slug: seller?.slug ?? '',
       verified: seller?.verified ?? false,
     },
+    delivery: orderToDelivery(order, pickupStore),
     subtotalCents: order.subtotalCents,
-    shippingCents: Math.max(0, order.totalCents - order.subtotalCents),
+    shippingCents: order.shippingCents,
     totalCents: order.totalCents,
     items: items.map((row) => {
       const inv = row.inventoryId ? inventoryById.get(row.inventoryId) : undefined
@@ -117,6 +163,7 @@ export function orderToSellerOrder(
   order: OrderRow,
   items: OrderItemRow[],
   buyer: { displayName: string | null; email: string } | undefined,
+  pickupStore?: SellerRow,
 ): SellerOrder {
   return {
     id: order.id,
@@ -128,9 +175,10 @@ export function orderToSellerOrder(
     deliveredAt: order.deliveredAt,
     trackingNumber: order.trackingNumber,
     buyerLabel: buyer ? maskBuyer(buyer.displayName, buyer.email) : '—',
+    delivery: orderToDelivery(order, pickupStore),
     subtotalCents: order.subtotalCents,
-    // Envío cobrado al comprador (0 mientras checkout no cobre envío).
-    shippingCents: Math.max(0, order.totalCents - order.subtotalCents),
+    // Envío cobrado al comprador. 0 en recolección en tienda.
+    shippingCents: order.shippingCents,
     totalCents: order.totalCents,
     platformFeeCents: order.platformFeeCents,
     netCents: order.subtotalCents - order.platformFeeCents,

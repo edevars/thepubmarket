@@ -5,7 +5,7 @@ status: In Progress
 assignee:
   - '@claude'
 created_date: '2026-07-31 00:56'
-updated_date: '2026-07-31 01:13'
+updated_date: '2026-07-31 01:14'
 labels:
   - 'epic:delivery'
   - api
@@ -24,6 +24,23 @@ references:
 documentation:
   - docs/ingenieria/estado-actual.md
   - CLAUDE.md
+modified_files:
+  - packages/shared/src/index.ts
+  - packages/db/src/schema.ts
+  - apps/api/migrations/0007_living_midnight.sql
+  - apps/api/src/lib/delivery.ts
+  - apps/api/src/lib/delivery.test.ts
+  - apps/api/src/lib/orders.ts
+  - apps/api/src/lib/stripe.ts
+  - apps/api/src/routes/checkout.ts
+  - apps/api/src/routes/orders.ts
+  - apps/api/src/routes/seller-panel.ts
+  - apps/web/src/components/checkout/DeliveryStep.tsx
+  - 'apps/web/src/app/[locale]/cart/page.tsx'
+  - apps/web/src/lib/client-api.ts
+  - apps/web/messages/es.json
+  - apps/web/messages/en.json
+  - docs/ingenieria/entrega.md
 priority: high
 type: feature
 ordinal: 19000
@@ -55,15 +72,15 @@ User-facing copy in Spanish; code, comments and docs in English.
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Buyer must choose between shipping to an address and pickup at an allied store before being sent to Stripe; the step cannot be skipped or bypassed
+- [x] #1 Buyer must choose between shipping to an address and pickup at an allied store before being sent to Stripe; the step cannot be skipped or bypassed
 - [ ] #2 Choosing shipping requires a complete delivery address and adds MXN 200 to the order total, shown as a separate line from the product subtotal before payment
 - [ ] #3 Choosing pickup lists only active stores in the same city as the selling store, adds no cost, and states the up-to-7-days expectation
 - [ ] #4 The chosen method, the address or the pickup store, and the shipping amount are persisted on the order and survive payment confirmation
 - [ ] #5 The application fee sent to Stripe is computed on the product subtotal only and excludes the shipping amount, verified against the created Checkout Session
 - [ ] #6 An order whose selling store has no other store in its city still offers shipping and never presents an empty or broken pickup option
-- [ ] #7 Orders created before delivery methods existed still render in /compras and /panel without errors
+- [x] #7 Orders created before delivery methods existed still render in /compras and /panel without errors
 - [ ] #8 Verified end to end against the deployed API in Stripe test mode: one shipping order and one pickup order both reach paid with the correct totals and persisted delivery data
-- [ ] #9 docs/ingenieria/ documents the delivery model, where the MXN 200 is mocked, and how same-city pickup eligibility is decided
+- [x] #9 docs/ingenieria/ documents the delivery model, where the MXN 200 is mocked, and how same-city pickup eligibility is decided
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -136,3 +153,25 @@ One bug caught during implementation: moving the Turnstile container inside the 
 
 Still unverified by me: `application_fee_amount` on the PaymentIntent. Stripe does not expose `payment_intent_data` on a retrieved session and no PaymentIntent exists until the session completes, so this needs the end-to-end paid order in AC #8.
 <!-- SECTION:NOTES:END -->
+
+## Comments
+
+<!-- COMMENTS:BEGIN -->
+created: 2026-07-31 01:14
+---
+Committed on `feat/task-019-delivery-method` (50b5eba). Checked only the criteria I can defend with evidence:
+
+- **#1** — the server rejects a checkout with no `delivery` (400 `invalid_body`), which is the bypass-proof half; no client path reaches `createCheckout` without a selection, and `?pay=1` now opens the step instead of auto-submitting.
+- **#7** — 13 pre-existing orders render in both `GET /orders` and `GET /seller/orders`.
+- **#9** — `docs/ingenieria/entrega.md`.
+
+Deliberately left unchecked:
+
+- **#2, #3, #6** — their server halves are verified (address validation, eligibility filtering, empty-list fallback), but each also asserts something about what the buyer *sees*. I have not observed the rendered step; this project's convention is to verify via typecheck/lint/curl rather than driving a browser.
+- **#4** — persistence verified; "survives payment confirmation" needs a completed payment.
+- **#5** — verified the Checkout Session totals and line items, and that the persisted fee is 10% of subtotal rather than of total. `application_fee_amount` itself sits on the PaymentIntent, which does not exist until the session completes.
+- **#8** — needs deploy plus two test-mode payments.
+
+#4, #5 and #8 all close together on one end-to-end run against the deployed API.
+---
+<!-- COMMENTS:END -->

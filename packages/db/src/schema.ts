@@ -203,6 +203,34 @@ export const orders = sqliteTable(
     currency: text('currency').notNull().default('MXN'),
     stripePaymentIntentId: text('stripe_payment_intent_id'),
     stripeCheckoutSessionId: text('stripe_checkout_session_id'),
+    // --- Entrega: cómo llega la orden al comprador (TASK-019) ---
+    // Se elige ANTES de pagar y queda fijada: el comprador ya pagó (o no) el
+    // envío que corresponde, así que el vendedor no puede cambiar el método.
+    //
+    // `delivery_method` es NULLABLE por retrocompatibilidad: hay órdenes en
+    // producción anteriores a esta columna y deben seguir leyéndose. Su valor
+    // se valida con zod en la app, NO con un CHECK: agregar constraints a
+    // `orders` obligaría a recrear la tabla, y D1 rechaza ese patrón (mismo
+    // motivo por el que el enum de `status` no se amplía).
+    deliveryMethod: text('delivery_method', { enum: ['shipping', 'pickup'] }),
+    // Cobrado al comprador y liquidado al seller dentro del MISMO direct charge.
+    // La plataforma no lo toca: la comisión se calcula solo sobre el subtotal
+    // de producto, nunca sobre el envío. Ver CLAUDE.md (no custodia).
+    shippingCents: integer('shipping_cents').notNull().default(0),
+    // Dirección de entrega — solo cuando delivery_method = 'shipping'.
+    shippingRecipient: text('shipping_recipient'),
+    shippingPhone: text('shipping_phone'),
+    shippingLine1: text('shipping_line1'),
+    shippingLine2: text('shipping_line2'),
+    shippingNeighborhood: text('shipping_neighborhood'),
+    shippingCity: text('shipping_city'),
+    shippingState: text('shipping_state'),
+    shippingPostalCode: text('shipping_postal_code'),
+    shippingCountry: text('shipping_country'),
+    // Tienda aliada donde se recoge — solo cuando delivery_method = 'pickup'.
+    // `set null` para no perder la orden si la tienda se da de baja; la vista
+    // degrada a "tienda no disponible" en vez de romper.
+    pickupSellerId: text('pickup_seller_id').references(() => sellers.id, { onDelete: 'set null' }),
     // --- Envío (lo gestiona el seller desde su panel; no toca pagos) ---
     // El estado de UI se DERIVA: paid sin shippedAt = por enviar; shippedAt =
     // enviada; deliveredAt (y status 'fulfilled') = entregada. El enum de

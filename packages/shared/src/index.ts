@@ -237,9 +237,105 @@ export interface OrderSummary {
   items: OrderItemSummary[]
 }
 
+// ---------------------------------------------------------------------
+// Entrega — cómo llega la orden al comprador (TASK-019)
+// ---------------------------------------------------------------------
+
+/**
+ * Cómo recibe el comprador su orden. Se elige ANTES de pagar y queda fijada en
+ * la orden: el vendedor no puede cambiarla, porque el comprador ya pagó (o no)
+ * el envío correspondiente.
+ */
+export type DeliveryMethod = 'shipping' | 'pickup'
+
+/**
+ * Costo de envío a domicilio, en centavos MXN.
+ *
+ * MOCK DELIBERADO. La tarifa real varía por destino y peso; mientras no exista
+ * integración con paqueterías se cobra una tarifa plana. Vive aquí —y no en la
+ * API— para que el resumen del carrito muestre exactamente lo que el servidor
+ * va a cobrar. El servidor SIEMPRE recalcula: este valor es para previsualizar,
+ * nunca se acepta un monto enviado por el cliente.
+ */
+export const SHIPPING_FLAT_CENTS = 20_000
+
+/**
+ * Días máximos que puede tardar una carta en llegar a la tienda de recolección
+ * cuando no es la tienda vendedora. Es una expectativa que se le comunica al
+ * comprador, no un plazo que el sistema haga cumplir.
+ */
+export const PICKUP_ETA_DAYS = 7
+
+/** Dirección de entrega capturada en el checkout. Se guarda en la orden. */
+export interface ShippingAddress {
+  /** Quién recibe (puede no ser el titular de la cuenta). */
+  recipient: string
+  phone: string
+  line1: string
+  /** Interior, referencias. Opcional. */
+  line2: string | null
+  /** Colonia / barrio. */
+  neighborhood: string | null
+  city: string
+  /** Estado de la República. */
+  state: string
+  postalCode: string
+  /** ISO 3166-1 alpha-2. Solo 'MX' por ahora (mercado inicial). */
+  country: string
+}
+
+/**
+ * Tienda aliada donde se puede recoger una orden: la vendedora o cualquier otra
+ * tienda ACTIVA de la misma ciudad. Solo datos de vitrina — nada de pagos.
+ */
+export interface PickupPoint {
+  id: string
+  name: string
+  slug: string
+  city: string
+  neighborhood: string
+  address: string
+  hours: SellerHours[]
+  /** true si es la tienda que vende la orden (no hay traslado de por medio). */
+  isSellingStore: boolean
+}
+
+/** Respuesta de `GET /checkout/pickup-points?sellerId=`. */
+export interface PickupPointsResponse {
+  items: PickupPoint[]
+}
+
+/**
+ * Elección de entrega que el comprador manda al crear el checkout.
+ *
+ * Unión discriminada a propósito: no existe un estado intermedio válido donde
+ * haya dirección Y tienda de recolección, ni uno donde no haya ninguna de las
+ * dos. El servidor la valida con el mismo shape.
+ */
+export type DeliverySelection =
+  | { method: 'shipping'; address: ShippingAddress }
+  | { method: 'pickup'; pickupSellerId: string }
+
 /** Cuerpo de `POST /checkout`: líneas del carrito (todas del mismo seller). */
 export interface CheckoutRequest {
   items: Array<{ inventoryId: string; quantity: number }>
+  /** Obligatorio: sin esto la tienda no sabe a dónde mandar el paquete. */
+  delivery: DeliverySelection
+}
+
+/**
+ * Entrega ya fijada en una orden, como la devuelve la API.
+ *
+ * `method` es null en órdenes anteriores a TASK-019: existen en producción y
+ * deben seguir renderizando. Toda vista que lo consuma tiene que tolerar ese
+ * null en vez de asumir que siempre hay método.
+ */
+export interface OrderDelivery {
+  method: DeliveryMethod | null
+  /** Presente solo cuando `method === 'shipping'`. */
+  address: ShippingAddress | null
+  /** Presente solo cuando `method === 'pickup'`: tienda donde se recoge. */
+  pickupPoint: { id: string; name: string; slug: string; address: string } | null
 }
 
 /** Respuesta de `POST /checkout`: a dónde redirigir para pagar. */
@@ -278,8 +374,10 @@ export interface SellerOrder {
   trackingNumber: string | null
   /** Comprador enmascarado (displayName o local-part truncado del email). */
   buyerLabel: string
+  /** Cómo entregar la orden: a domicilio o en tienda aliada. */
+  delivery: OrderDelivery
   subtotalCents: number
-  /** Envío cobrado al comprador (total − subtotal; 0 en Fase 2). */
+  /** Envío cobrado al comprador. 0 en recolección en tienda. */
   shippingCents: number
   totalCents: number
   platformFeeCents: number
@@ -349,8 +447,10 @@ export interface BuyerOrder {
   trackingNumber: string | null
   /** Tienda vendedora (una orden = un seller). */
   seller: { name: string; slug: string; verified: boolean }
+  /** Cómo llega la orden: a domicilio o a recoger en tienda aliada. */
+  delivery: OrderDelivery
   subtotalCents: number
-  /** Envío cobrado al comprador (total − subtotal; 0 en Fase 2). */
+  /** Envío cobrado al comprador. 0 en recolección en tienda. */
   shippingCents: number
   totalCents: number
   items: BuyerOrderItem[]
