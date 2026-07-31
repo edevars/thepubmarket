@@ -5,7 +5,7 @@ status: In Progress
 assignee:
   - '@claude'
 created_date: '2026-07-31 00:56'
-updated_date: '2026-07-31 00:57'
+updated_date: '2026-07-31 00:59'
 labels:
   - 'epic:delivery'
   - api
@@ -65,3 +65,50 @@ User-facing copy in Spanish; code, comments and docs in English.
 - [ ] #8 Verified end to end against the deployed API in Stripe test mode: one shipping order and one pickup order both reach paid with the correct totals and persisted delivery data
 - [ ] #9 docs/ingenieria/ documents the delivery model, where the MXN 200 is mocked, and how same-city pickup eligibility is decided
 <!-- AC:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+## Research findings (current system)
+
+- `checkout.ts` builds the order from cart lines only: `totalCents = subtotalCents`, no shipping, no address, no delivery choice.
+- `orders` has shipping *fulfilment* columns (`trackingNumber`, `shippedAt`, `deliveredAt`) but no destination.
+- `shippingCents` is currently **derived** in `lib/orders.ts` as `max(0, total - subtotal)`, which is always 0 today.
+- The cart drawer pays via `/cart?pay=1`, and the cart page **auto-submits checkout** from a `useEffect`. That auto-start is exactly what AC #1 forbids, so it has to become "open the delivery step".
+- `CartItem` already carries `sellerId`, so the client knows the selling store without a lookup.
+- `GET /sellers` already exposes city/address/hours publicly for active stores.
+- Schema comment is explicit that the `status` CHECK cannot be extended (D1 rejects table rebuilds). Same reasoning applies to adding CHECK constraints via `ALTER TABLE ADD COLUMN`, so delivery values are validated with zod in the app layer, not by the database.
+
+## Approach
+
+**1. Shared contract** (`packages/shared`)
+`DeliveryMethod`, `ShippingAddress`, `DeliverySelection` (discriminated union), `PickupPoint`, and the two placeholder constants `SHIPPING_FLAT_CENTS` / `PICKUP_ETA_DAYS`. The constant lives in shared so the cart preview and the server charge cannot drift — the server stays authoritative and never trusts a client-sent amount.
+
+**2. Schema + migration 0007**
+Add to `orders`: `delivery_method`, `shipping_cents` (NOT NULL DEFAULT 0), the `shipping_*` address columns, and `pickup_seller_id` → `sellers`. All nullable except `shipping_cents` so pre-existing rows stay valid. Replace the `total - subtotal` derivation with the real column.
+
+**3. API**
+- New `lib/delivery.ts`: city normalisation (trim/lowercase/strip accents — `sellers.city` is free text), pickup eligibility, and the amount for a method.
+- `GET /checkout/pickup-points?sellerId=` — active stores in the selling store's city. The same-city rule lives server-side only; the client renders what it is given.
+- `checkout.ts`: validate the selection, compute `shippingCents` **server-side**, persist delivery data, set `totalCents = subtotal + shipping`.
+- `stripe.ts`: append shipping as its own line item. `application_fee_amount` keeps using the product subtotal — the platform earns nothing on freight.
+- Unit tests for the delivery lib (city matching, eligibility, amounts).
+
+**4. Web**
+- `components/checkout/DeliveryStep.tsx`: method toggle, address form, pickup store picker with the 7-day expectation.
+- Cart page gains a `delivery` phase; `?pay=1` opens that step instead of auto-submitting.
+- `OrderSummary` shows shipping as its own line.
+- es/en messages.
+
+**5. Docs**: `docs/ingenieria/entrega.md`.
+
+## Decision taken, flagged for review
+
+The MXN 200 goes to the **seller**, inside the same direct charge — they are the ones paying the courier. The application fee stays on the product subtotal only. The alternative (platform keeps the shipping fee by folding it into the application fee) is also non-custodial and therefore legal, but it would mean the platform profits on freight it does not perform. Proceeding with the first; it is a one-line change if that call is wrong.
+
+## Risks
+
+- `?pay=1` must not bypass the delivery step — the auto-start effect is the regression to watch.
+- Legacy orders (no delivery method) must keep rendering; covered by AC #7.
+- Same-city matching is only as good as free-text `sellers.city`.
+<!-- SECTION:PLAN:END -->
