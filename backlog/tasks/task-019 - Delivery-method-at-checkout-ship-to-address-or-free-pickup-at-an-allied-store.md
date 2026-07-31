@@ -1,10 +1,11 @@
 ---
 id: TASK-019
 title: 'Delivery method at checkout: ship to address or free pickup at an allied store'
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - '@claude'
 created_date: '2026-07-31 00:56'
-updated_date: '2026-07-31 00:56'
+updated_date: '2026-07-31 00:57'
 labels:
   - 'epic:delivery'
   - api
