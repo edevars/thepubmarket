@@ -6,6 +6,7 @@ title: >-
 status: To Do
 assignee: []
 created_date: '2026-07-31 00:56'
+updated_date: '2026-07-31 00:56'
 labels:
   - 'epic:delivery'
   - api
@@ -46,3 +47,16 @@ Depends on TASK-019, which provides the persisted delivery method, address and p
 
 User-facing copy in Spanish; code, comments and docs in English.
 <!-- SECTION:DESCRIPTION:END -->
+
+## Acceptance Criteria
+<!-- AC:BEGIN -->
+- [ ] #1 Marking a shipping order shipped accepts an optional carrier alongside the tracking number and persists both
+- [ ] #2 A pickup order cannot be marked shipped; it is marked ready for pickup instead, and that transition is recorded with its own timestamp
+- [ ] #3 A pickup order can be closed as collected and a shipping order as delivered, with neither action applicable to the other method
+- [ ] #4 Every transition is rejected with a conflict when it does not apply to the order's current state, rather than silently succeeding
+- [ ] #5 The seller panel shows the full delivery address for shipping orders and the destination store for pickup orders
+- [ ] #6 /compras shows the buyer the delivery method, the tracking number with carrier once shipped, and the pickup store with its address once ready
+- [ ] #7 Orders created before delivery methods existed still render and can still be marked shipped and delivered
+- [ ] #8 Verified against the deployed API in Stripe test mode for both a shipping order and a pickup order, walking each through its full state sequence
+- [ ] #9 docs/ingenieria/ documents both fulfilment paths, the derived states, and which panel action produces each
+<!-- AC:END -->
