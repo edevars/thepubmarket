@@ -4,6 +4,7 @@ title: 'Delivery method at checkout: ship to address or free pickup at an allied
 status: To Do
 assignee: []
 created_date: '2026-07-31 00:56'
+updated_date: '2026-07-31 00:56'
 labels:
   - 'epic:delivery'
   - api
@@ -48,6 +49,18 @@ Flagged at creation, not blocking this task:
 - Who absorbs the cost of moving a card from the selling store to a different pickup store is an operational question, not a software one.
 - `sellers.city` is free text, so same-city matching is only as good as that data.
 
-User-facing copy in Spanish; code, comments and docs in English.</description>
-<parameter name="acceptanceCriteria">["Buyer must choose between shipping to an address and pickup at an allied store before being sent to Stripe; the step cannot be skipped or bypassed","Choosing shipping requires a complete delivery address and adds MXN 200 to the order total, shown as a separate line from the product subtotal before payment","Choosing pickup lists only active stores in the same city as the selling store, adds no cost, and states the up-to-7-days expectation","The chosen method, the address or the pickup store, and the shipping amount are persisted on the order and survive payment confirmation","The application fee sent to Stripe is computed on the product subtotal only and excludes the shipping amount, verified against the created Checkout Session","An order whose selling store has no other store in its city still offers shipping and never presents an empty or broken pickup option","Orders created before delivery methods existed still render in /compras and /panel without errors","Verified end to end against the deployed API in Stripe test mode: one shipping order and one pickup order both reach paid with the correct totals and persisted delivery data","docs/ingenieria/ documents the delivery model, where the MXN 200 is mocked, and how same-city pickup eligibility is decided"]
+User-facing copy in Spanish; code, comments and docs in English.
 <!-- SECTION:DESCRIPTION:END -->
+
+## Acceptance Criteria
+<!-- AC:BEGIN -->
+- [ ] #1 Buyer must choose between shipping to an address and pickup at an allied store before being sent to Stripe; the step cannot be skipped or bypassed
+- [ ] #2 Choosing shipping requires a complete delivery address and adds MXN 200 to the order total, shown as a separate line from the product subtotal before payment
+- [ ] #3 Choosing pickup lists only active stores in the same city as the selling store, adds no cost, and states the up-to-7-days expectation
+- [ ] #4 The chosen method, the address or the pickup store, and the shipping amount are persisted on the order and survive payment confirmation
+- [ ] #5 The application fee sent to Stripe is computed on the product subtotal only and excludes the shipping amount, verified against the created Checkout Session
+- [ ] #6 An order whose selling store has no other store in its city still offers shipping and never presents an empty or broken pickup option
+- [ ] #7 Orders created before delivery methods existed still render in /compras and /panel without errors
+- [ ] #8 Verified end to end against the deployed API in Stripe test mode: one shipping order and one pickup order both reach paid with the correct totals and persisted delivery data
+- [ ] #9 docs/ingenieria/ documents the delivery model, where the MXN 200 is mocked, and how same-city pickup eligibility is decided
+<!-- AC:END -->
