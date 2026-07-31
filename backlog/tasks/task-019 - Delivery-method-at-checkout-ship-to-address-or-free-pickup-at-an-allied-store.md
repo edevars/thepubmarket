@@ -5,7 +5,7 @@ status: In Progress
 assignee:
   - '@claude'
 created_date: '2026-07-31 00:56'
-updated_date: '2026-07-31 01:14'
+updated_date: '2026-07-31 01:20'
 labels:
   - 'epic:delivery'
   - api
@@ -152,6 +152,19 @@ Local D1 mutations used for the tests were reverted to seed state afterwards.
 One bug caught during implementation: moving the Turnstile container inside the delivery phase would have meant the widget never rendered, because `useTurnstile` only renders on mount. The container is now mounted in every phase and the view is computed rather than early-returned.
 
 Still unverified by me: `application_fee_amount` on the PaymentIntent. Stripe does not expose `payment_intent_data` on a retrieved session and no PaymentIntent exists until the session completes, so this needs the end-to-end paid order in AC #8.
+
+Deployed to production. Migration `0007` applied to remote D1 **before** the API deploy, so the new columns existed before any code read them.
+
+- API `thepubmarket-api` version `0f373afa-3a29-4c87-8c00-4ac641d82d6e`
+- Web `thepubmarket-web` version `65d5f020-9b9d-4bd7-ac7f-93f5d524a163`
+
+**Verified against production:**
+- All 12 delivery columns present on `orders`.
+- The 4 pre-existing production orders are all `delivery_method IS NULL`, all `shipping_cents = 0`, and **zero** rows violate `total_cents = subtotal_cents + shipping_cents`. The additive migration left production data consistent.
+- `GET /checkout/pickup-points` returns the 5 CDMX stores with the selling store first; `400 missing_seller_id` with no param and `404 not_found` for an unknown seller.
+- `https://thepubmarket.com/cart` (200) serves the new Spanish delivery copy.
+
+**What production blocks:** `POST /checkout` returns `403 turnstile_failed` without a widget token, which is Turnstile working as designed and also the reason I cannot drive a paid order from curl. AC #8 needs a browser session.
 <!-- SECTION:NOTES:END -->
 
 ## Comments
