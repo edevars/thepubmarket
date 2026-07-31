@@ -5,7 +5,7 @@ status: In Progress
 assignee:
   - '@claude'
 created_date: '2026-07-31 00:56'
-updated_date: '2026-07-31 00:59'
+updated_date: '2026-07-31 01:13'
 labels:
   - 'epic:delivery'
   - api
@@ -112,3 +112,27 @@ The MXN 200 goes to the **seller**, inside the same direct charge — they are t
 - Legacy orders (no delivery method) must keep rendering; covered by AC #7.
 - Same-city matching is only as good as free-text `sellers.city`.
 <!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Implementation done and verified locally against a running Worker (`wrangler dev`, Turnstile disabled via `--var TURNSTILE_SECRET_KEY:` so the paths could be driven from curl).
+
+**Rejection paths** — all return 400 before any inventory is reserved, so a rejected delivery choice leaks no holds:
+- no `delivery` in body → `invalid_body`
+- pickup at a store in another city (moved Coliseo TCG to Guadalajara) → `pickup_point_unavailable`
+- pickup at a suspended store (Nakama Singles) → `pickup_point_unavailable`
+- postal code `ABC` → `invalid_body`
+
+**Eligibility** — `GET /checkout/pickup-points` went 5 → 3 stores after moving one city and suspending another, and stayed at 3 when a remaining store's city was rewritten as `'  cdmx  '`, confirming normalisation. Selling store sorts first.
+
+**Money** — shipping order persisted `subtotal=21000, shipping=20000, total=41000, platform_fee=2100`. The fee is 10% of the subtotal, not of the total (which would be 4100). Retrieved the real Checkout Session from Stripe: `amount_total=41000` with two line items, `Mother of Runes 21000` and `Envío a domicilio 20000`. Pickup order persisted `shipping=0, total=21000, pickup_seller_id=<Bahamut>`.
+
+**Legacy orders** — 13 pre-existing orders render with `delivery.method=null` in both `GET /orders` and `GET /seller/orders` alongside the new ones, no errors.
+
+Local D1 mutations used for the tests were reverted to seed state afterwards.
+
+One bug caught during implementation: moving the Turnstile container inside the delivery phase would have meant the widget never rendered, because `useTurnstile` only renders on mount. The container is now mounted in every phase and the view is computed rather than early-returned.
+
+Still unverified by me: `application_fee_amount` on the PaymentIntent. Stripe does not expose `payment_intent_data` on a retrieved session and no PaymentIntent exists until the session completes, so this needs the end-to-end paid order in AC #8.
+<!-- SECTION:NOTES:END -->
