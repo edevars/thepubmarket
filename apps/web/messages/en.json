@@ -142,7 +142,7 @@
     "shippingTitle": "Ship to my address",
     "shippingBody": "We send it to the address you give us. You'll get the tracking number as soon as the store dispatches it.",
     "pickupTitle": "Pick up at an allied store",
-    "pickupBody": "Free. You can collect it at any of our allied stores in the same city. It can take up to {days} days to arrive; we'll email you when it's ready.",
+    "pickupBody": "Free. You can collect it at any of our allied stores in the same city. It can take up to {days} days to arrive; My purchases will show you when you can pick it up.",
     "pickupUnavailable": "No pickup stores in this city yet. You can still have it delivered.",
     "loadingStores": "Looking for nearby stores…",
     "chooseStore": "Which store will you collect it from?",

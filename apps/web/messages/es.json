@@ -142,7 +142,7 @@
     "shippingTitle": "Envío a domicilio",
     "shippingBody": "Te lo mandamos a la dirección que nos des. Recibirás el número de guía en cuanto la tienda lo despache.",
     "pickupTitle": "Recoger en tienda aliada",
-    "pickupBody": "Sin costo. Puedes recogerlo en cualquiera de nuestras tiendas aliadas de la misma ciudad. Puede tardar hasta {days} días en llegar; te avisamos por correo cuando esté listo.",
+    "pickupBody": "Sin costo. Puedes recogerlo en cualquiera de nuestras tiendas aliadas de la misma ciudad. Puede tardar hasta {days} días en llegar; verás en Mis compras cuándo puedas pasar por él.",
     "pickupUnavailable": "Por ahora no hay tiendas para recoger en esta ciudad. Puedes recibirlo a domicilio.",
     "loadingStores": "Buscando tiendas cercanas…",
     "chooseStore": "¿En qué tienda lo recoges?",
