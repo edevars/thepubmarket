@@ -21,6 +21,7 @@ import type {
   SellerOrder,
   SellerOrdersResponse,
   SellerPanelMe,
+  ShipOrderRequest,
   UpdateListingRequest,
 } from '@thepubmarket/shared'
 import { withTurnstileHeader } from './turnstile'
@@ -162,28 +163,44 @@ export async function fetchSellerOrders(token: string): Promise<SellerOrder[]> {
   return ((await res.json()) as SellerOrdersResponse).items
 }
 
-/** Marca una orden pagada como enviada, con guía de rastreo. */
+/**
+ * Transiciones de cumplimiento. Cada una aplica a UN método de entrega: la API
+ * responde 409 si no corresponde (marcar enviada una recolección, cerrar una
+ * recogida que nunca estuvo lista), así que `false` aquí significa "esa acción
+ * no aplica a esta orden", no un error de red.
+ */
+function fulfilmentAction(action: 'ship' | 'deliver' | 'ready' | 'collect') {
+  return async (token: string, id: string, body?: unknown): Promise<boolean> => {
+    const res = await fetch(`${API}/seller/orders/${encodeURIComponent(id)}/${action}`, {
+      method: 'POST',
+      headers: authHeaders(token),
+      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+    })
+    return res.ok
+  }
+}
+
+const postShip = fulfilmentAction('ship')
+
+/** Marca una orden de envío como enviada, con guía y paquetería opcional. */
 export async function shipOrder(
   token: string,
   id: string,
   trackingNumber: string,
+  carrier?: string | null,
 ): Promise<boolean> {
-  const res = await fetch(`${API}/seller/orders/${encodeURIComponent(id)}/ship`, {
-    method: 'POST',
-    headers: authHeaders(token),
-    body: JSON.stringify({ trackingNumber }),
-  })
-  return res.ok
+  const body: ShipOrderRequest = { trackingNumber, carrier: carrier?.trim() || null }
+  return postShip(token, id, body)
 }
 
-/** Marca una orden enviada como entregada. */
-export async function deliverOrder(token: string, id: string): Promise<boolean> {
-  const res = await fetch(`${API}/seller/orders/${encodeURIComponent(id)}/deliver`, {
-    method: 'POST',
-    headers: authHeaders(token),
-  })
-  return res.ok
-}
+/** Marca una orden enviada como entregada. Solo envío a domicilio. */
+export const deliverOrder = fulfilmentAction('deliver')
+
+/** Marca una orden de recolección como lista para recoger en la tienda destino. */
+export const readyOrder = fulfilmentAction('ready')
+
+/** Cierra una orden de recolección: el comprador ya se la llevó. */
+export const collectOrder = fulfilmentAction('collect')
 
 // =====================================================================
 // Onboarding y payouts de Stripe Connect (self-service)

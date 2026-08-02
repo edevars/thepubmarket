@@ -5,6 +5,7 @@ export const ORDER_STATUS_HEX: Record<SellerOrderStatus, string> = {
   pending: '#7a88a8',
   paid: '#3b7bff',
   shipped: '#35e0ee',
+  ready: '#f0b34a',
   delivered: '#46c98a',
   cancelled: '#7a88a8',
   refunded: '#d6584f',

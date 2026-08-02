@@ -1,6 +1,6 @@
 'use client'
 
-import type { BuyerOrder, SellerOrderStatus } from '@thepubmarket/shared'
+import { type BuyerOrder, PICKUP_ETA_DAYS, type SellerOrderStatus } from '@thepubmarket/shared'
 import { useLocale, useTranslations } from 'next-intl'
 import { useEffect, useRef, useState } from 'react'
 import { useAuth } from '@/components/auth/AuthProvider'
@@ -15,6 +15,7 @@ const STATUS_HEX: Record<SellerOrderStatus, string> = {
   pending: '#7a88a8',
   paid: '#4d8bff',
   shipped: '#35e0ee',
+  ready: '#f0b34a',
   delivered: '#46c98a',
   cancelled: '#7a88a8',
   refunded: '#ff6b7a',
@@ -26,8 +27,10 @@ function statusKey(s: SellerOrderStatus): string {
 
 type Tab = 'transit' | 'delivered' | 'all'
 
+/** "En camino" es todo lo que aún no está en manos del comprador, sin importar
+ * si viaja por paquetería o ya lo espera en el mostrador de una tienda. */
 const TAB_FILTER: Record<Tab, (o: BuyerOrder) => boolean> = {
-  transit: (o) => o.status === 'paid' || o.status === 'shipped',
+  transit: (o) => o.status === 'paid' || o.status === 'shipped' || o.status === 'ready',
   delivered: (o) => o.status === 'delivered',
   all: () => true,
 }
@@ -236,6 +239,7 @@ function OrderCard({
     .map((l) => `${l.quantity > 1 ? `${l.quantity}× ` : ''}${l.titleSnapshot}`)
     .join(', ')
   const showTracking = order.status === 'shipped' && !!order.trackingNumber
+  const showPickupReady = order.status === 'ready' && !!order.delivery.pickupPoint
 
   return (
     <div
@@ -251,6 +255,7 @@ function OrderCard({
             <span className="h-1 w-1 rotate-45 bg-line-strong" />
             <span className="font-mono text-[11px] text-faint">{fullDate}</span>
             <StatusBadge status={order.status} />
+            <DeliveryChip method={order.delivery.method} />
           </div>
           <div className="mb-2.5 flex flex-wrap items-center gap-2">
             {order.seller.slug ? (
@@ -346,6 +351,11 @@ function OrderCard({
           <span className="min-w-0 truncate font-mono text-[15px] font-semibold tracking-[0.04em] text-ink">
             {order.trackingNumber}
           </span>
+          {order.carrier && (
+            <span className="shrink-0 font-mono text-[11px] text-muted-2">
+              {t('carrier')}: {order.carrier}
+            </span>
+          )}
           <button
             type="button"
             onClick={() => order.trackingNumber && copy(order.trackingNumber)}
@@ -358,8 +368,36 @@ function OrderCard({
         </div>
       )}
 
+      {/* Lista para recoger: el aviso que el comprador está esperando. */}
+      {showPickupReady && order.delivery.pickupPoint && (
+        <div className="border-t border-[#f0b34a]/25 bg-[#f0b34a]/[0.06] px-4 py-3 sm:px-5">
+          <div className="mb-1 inline-flex items-center gap-2 font-mono text-[9px] uppercase tracking-[0.16em] text-[#f0b34a]">
+            <span className="clip-rhombus h-2 w-2 bg-[#f0b34a] shadow-[0_0_8px_rgba(240,179,74,0.6)]" />
+            {t('pickupReadyTitle')}
+          </div>
+          <div className="text-[13px] leading-relaxed text-ink-2">
+            <span className="font-semibold text-white">{order.delivery.pickupPoint.name}</span>
+            {order.delivery.pickupPoint.address && ` · ${order.delivery.pickupPoint.address}`}
+          </div>
+          <div className="mt-1 text-[12px] text-muted-2">
+            {t('pickupReadyBody', { folio: order.shortId })}
+          </div>
+        </div>
+      )}
+
       {expanded && <OrderDetail order={order} fmtDay={fmtDay} />}
     </div>
+  )
+}
+
+/** Etiqueta del método de entrega. Nada en órdenes anteriores a la elección. */
+function DeliveryChip({ method }: { method: BuyerOrder['delivery']['method'] }) {
+  const t = useTranslations('purchases')
+  if (!method) return null
+  return (
+    <span className="border border-line-strong px-2 py-0.5 font-mono text-[10px] uppercase tracking-[0.08em] text-muted-2">
+      {method === 'pickup' ? t('deliveryPickup') : t('deliveryShipping')}
+    </span>
   )
 }
 
@@ -369,14 +407,28 @@ function OrderDetail({ order, fmtDay }: { order: BuyerOrder; fmtDay: (unix: numb
   const { copied, copy } = useCopy()
 
   const terminal = order.status === 'cancelled' || order.status === 'refunded'
-  const reachedIdx = order.status === 'delivered' ? 2 : order.status === 'shipped' ? 1 : 0
+  const pickup = order.delivery.method === 'pickup'
+  const reachedIdx =
+    order.status === 'delivered'
+      ? 2
+      : order.status === 'shipped' || order.status === 'ready'
+        ? 1
+        : 0
   const showTracking = order.status === 'shipped' && !!order.trackingNumber
 
-  const steps = [
-    { name: t('tlPaid'), date: order.createdAt },
-    { name: t('tlShipped'), date: order.shippedAt },
-    { name: t('tlDelivered'), date: order.deliveredAt },
-  ]
+  // El paso intermedio cambia con el método: una orden de recolección no se
+  // envía, queda disponible en la tienda destino.
+  const steps = pickup
+    ? [
+        { name: t('tlPaid'), date: order.createdAt },
+        { name: t('tlReady'), date: order.readyAt },
+        { name: t('tlCollected'), date: order.deliveredAt },
+      ]
+    : [
+        { name: t('tlPaid'), date: order.createdAt },
+        { name: t('tlShipped'), date: order.shippedAt },
+        { name: t('tlDelivered'), date: order.deliveredAt },
+      ]
 
   return (
     <div className="border-t border-line-soft bg-[#070d18] px-4 pb-5 pt-5 sm:px-5">
@@ -453,6 +505,8 @@ function OrderDetail({ order, fmtDay }: { order: BuyerOrder; fmtDay: (unix: numb
           </button>
         </div>
       )}
+
+      <BuyerDeliveryBlock order={order} />
 
       {/* Contenido */}
       <div className="mb-2.5 font-display text-[13px] font-bold uppercase tracking-[0.1em] text-muted">
@@ -542,6 +596,62 @@ function OrderDetail({ order, fmtDay }: { order: BuyerOrder; fmtDay: (unix: numb
       </div>
     </div>
   )
+}
+
+/**
+ * A dónde llega la orden, en términos del comprador: su propia dirección, o la
+ * tienda donde va a recogerla. Nada se renderiza en órdenes anteriores a la
+ * elección de entrega (`method === null`), que sí existen en producción.
+ */
+function BuyerDeliveryBlock({ order }: { order: BuyerOrder }) {
+  const t = useTranslations('purchases')
+  const { method, address, pickupPoint } = order.delivery
+
+  if (method === 'shipping' && address) {
+    return (
+      <div className="mb-4.5 border border-line-soft bg-[#0a1120] px-3.5 py-3">
+        <div className="mb-1.5 font-mono text-[9px] uppercase tracking-[0.16em] text-faint">
+          {t('shipToTitle')}
+        </div>
+        <address className="not-italic text-[12.5px] leading-relaxed text-ink-2">
+          <span className="font-semibold text-white">{address.recipient}</span> · {address.line1}
+          {address.line2 ? `, ${address.line2}` : ''}
+          {address.neighborhood ? `, ${address.neighborhood}` : ''} · {address.postalCode}{' '}
+          {address.city}, {address.state}
+        </address>
+      </div>
+    )
+  }
+
+  if (method === 'pickup' && pickupPoint) {
+    return (
+      <div className="mb-4.5 border border-line-soft bg-[#0a1120] px-3.5 py-3">
+        <div className="mb-1.5 font-mono text-[9px] uppercase tracking-[0.16em] text-faint">
+          {t('pickupAtTitle')}
+        </div>
+        <div className="text-[12.5px] leading-relaxed text-ink-2">
+          <span className="font-semibold text-white">{pickupPoint.name}</span>
+          {pickupPoint.address ? ` · ${pickupPoint.address}` : ''}
+        </div>
+        {/* Antes de estar lista, el plazo es lo único que el comprador necesita. */}
+        {order.status !== 'ready' && order.status !== 'delivered' && (
+          <div className="mt-1.5 text-[12px] text-muted-2">
+            {t('pickupWaitBody', { days: PICKUP_ETA_DAYS })}
+          </div>
+        )}
+        {pickupPoint.slug && (
+          <Link
+            href={`/tiendas/${pickupPoint.slug}`}
+            className="mt-2 inline-block font-display text-[12px] font-semibold uppercase tracking-[0.08em] text-primary-hover transition hover:text-cyan"
+          >
+            {t('pickupStoreLink')}
+          </Link>
+        )}
+      </div>
+    )
+  }
+
+  return null
 }
 
 /** Skeleton de carga (3 tarjetas shimmer). */

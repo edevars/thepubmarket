@@ -350,14 +350,21 @@ export interface CheckoutResponse {
 // =====================================================================
 
 /**
- * Estado DERIVADO de una orden para el panel del seller. La columna
- * `orders.status` conserva su enum original; 'shipped'/'delivered' se derivan
- * de `shippedAt`/`deliveredAt` (entregada además fija status 'fulfilled').
+ * Estado DERIVADO de una orden. La columna `orders.status` conserva su enum
+ * original; el resto sale de los timestamps de cumplimiento:
+ *
+ * - `shipped` — `shippedAt`. Solo órdenes de envío a domicilio.
+ * - `ready` — `readyAt`. Solo recolección: ya está en la tienda destino y el
+ *   comprador puede ir por ella.
+ * - `delivered` — `deliveredAt` (fija además status 'fulfilled'). Terminal de
+ *   AMBOS métodos: entregada por paquetería o recogida en tienda son el mismo
+ *   hecho (el comprador ya tiene las cartas) y solo cambia la etiqueta.
  */
 export type SellerOrderStatus =
   | 'pending'
   | 'paid'
   | 'shipped'
+  | 'ready'
   | 'delivered'
   | 'cancelled'
   | 'refunded'
@@ -370,8 +377,12 @@ export interface SellerOrder {
   status: SellerOrderStatus
   createdAt: number
   shippedAt: number | null
+  /** Cuándo quedó lista para recoger. Solo órdenes de recolección. */
+  readyAt: number | null
   deliveredAt: number | null
   trackingNumber: string | null
+  /** Paquetería de la guía. Opcional: el seller puede no capturarla. */
+  carrier: string | null
   /** Comprador enmascarado (displayName o local-part truncado del email). */
   buyerLabel: string
   /** Cómo entregar la orden: a domicilio o en tienda aliada. */
@@ -416,6 +427,16 @@ export interface UpdateListingRequest {
   status?: 'active' | 'inactive'
 }
 
+/**
+ * Cuerpo de `POST /seller/orders/:id/ship`. Solo aplica a órdenes de envío a
+ * domicilio; una de recolección se marca con `/ready` (409 si se intenta aquí).
+ */
+export interface ShipOrderRequest {
+  trackingNumber: string
+  /** Paquetería. Opcional pero recomendada: sin ella la guía no se rastrea. */
+  carrier?: string | null
+}
+
 // =====================================================================
 // Mis Compras (vista del comprador: rastreo de sus órdenes)
 // =====================================================================
@@ -443,8 +464,12 @@ export interface BuyerOrder {
   status: SellerOrderStatus
   createdAt: number
   shippedAt: number | null
+  /** Cuándo quedó lista para recoger. Solo órdenes de recolección. */
+  readyAt: number | null
   deliveredAt: number | null
   trackingNumber: string | null
+  /** Paquetería de la guía, si el vendedor la capturó. */
+  carrier: string | null
   /** Tienda vendedora (una orden = un seller). */
   seller: { name: string; slug: string; verified: boolean }
   /** Cómo llega la orden: a domicilio o a recoger en tienda aliada. */

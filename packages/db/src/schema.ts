@@ -231,13 +231,24 @@ export const orders = sqliteTable(
     // `set null` para no perder la orden si la tienda se da de baja; la vista
     // degrada a "tienda no disponible" en vez de romper.
     pickupSellerId: text('pickup_seller_id').references(() => sellers.id, { onDelete: 'set null' }),
-    // --- Envío (lo gestiona el seller desde su panel; no toca pagos) ---
-    // El estado de UI se DERIVA: paid sin shippedAt = por enviar; shippedAt =
-    // enviada; deliveredAt (y status 'fulfilled') = entregada. El enum de
-    // `status` NO se amplía a propósito: cambiar su CHECK obligaría a recrear
-    // la tabla, patrón que D1 rechaza.
+    // --- Cumplimiento (lo gestiona el seller desde su panel; no toca pagos) ---
+    // El estado de UI se DERIVA de estos timestamps; el enum de `status` NO se
+    // amplía a propósito: cambiar su CHECK obligaría a recrear la tabla, patrón
+    // que D1 rechaza.
+    //
+    //   envío:      paid sin shippedAt = por enviar → shippedAt = enviada →
+    //               deliveredAt (+ status 'fulfilled') = entregada
+    //   recolección: paid sin readyAt = por preparar → readyAt = lista para
+    //               recoger → deliveredAt (+ 'fulfilled') = recogida
+    //
+    // `ready_at` es columna propia y no un `shipped_at` reutilizado: una orden
+    // de recolección nunca se envía, y mezclarlas haría que cualquier consulta
+    // de "qué mandamos por paquetería" contara recolecciones (TASK-020).
     trackingNumber: text('tracking_number'),
+    /** Paquetería. Texto libre y opcional: sin ella la guía no se puede rastrear. */
+    carrier: text('carrier'),
     shippedAt: integer('shipped_at'),
+    readyAt: integer('ready_at'),
     deliveredAt: integer('delivered_at'),
     ...timestamps,
   },

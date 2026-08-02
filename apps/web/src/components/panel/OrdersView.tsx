@@ -8,13 +8,23 @@ import { usePanel } from './PanelProvider'
 import { PanelSkeleton } from './ResumenView'
 import { ORDER_STATUS_HEX, orderStatusKey } from './status'
 
-type Tab = 'pending' | 'shipped' | 'completed' | 'all'
+type Tab = 'pending' | 'inProgress' | 'completed' | 'all'
 
+/**
+ * Los tabs agrupan por lo que el vendedor tiene que hacer, no por método:
+ * 'paid' es "requiere tu acción" tanto si hay que empacarla como si hay que
+ * prepararla para mostrador, y 'shipped'/'ready' son "ya salió de tus manos".
+ */
 const TAB_FILTER: Record<Tab, (o: SellerOrder) => boolean> = {
   pending: (o) => o.status === 'paid',
-  shipped: (o) => o.status === 'shipped',
+  inProgress: (o) => o.status === 'shipped' || o.status === 'ready',
   completed: (o) => o.status === 'delivered',
   all: () => true,
+}
+
+/** true = se cumple en mostrador. Las órdenes sin método (legacy) son envío. */
+function isPickup(order: SellerOrder): boolean {
+  return order.delivery.method === 'pickup'
 }
 
 /** Vista Órdenes y envíos: tabs, filas expandibles, timeline y liquidación. */
@@ -28,7 +38,11 @@ export function OrdersView() {
 
   const tabs: { key: Tab; label: string; count: number }[] = [
     { key: 'pending', label: t('tabPending'), count: orders.filter(TAB_FILTER.pending).length },
-    { key: 'shipped', label: t('tabShipped'), count: orders.filter(TAB_FILTER.shipped).length },
+    {
+      key: 'inProgress',
+      label: t('tabInProgress'),
+      count: orders.filter(TAB_FILTER.inProgress).length,
+    },
     {
       key: 'completed',
       label: t('tabCompleted'),
@@ -186,35 +200,95 @@ function OrderRow({
   )
 }
 
+/**
+ * Qué necesita esta orden para cumplirse: a dónde va el paquete, o a qué tienda
+ * hay que llevarla. Es la única parte del panel que muestra la dirección
+ * completa del comprador, y solo a su propio vendedor.
+ *
+ * Tres formas de degradar sin romper: sin método (orden anterior a la elección
+ * de entrega), con método `shipping` pero sin dirección, y con `pickup` cuya
+ * tienda destino se dio de baja.
+ */
+function DeliveryBlock({ order }: { order: SellerOrder }) {
+  const t = useTranslations('panel')
+  const { me } = usePanel()
+  const { method, address, pickupPoint } = order.delivery
+
+  const title =
+    method === 'pickup' ? t('deliveryPickup') : method === 'shipping' ? t('deliveryShipping') : null
+
+  return (
+    <div className="border border-line-soft bg-input p-3.5">
+      <div className="mb-2 flex items-center gap-2">
+        <span className="font-mono text-[9px] uppercase tracking-[0.16em] text-faint">
+          {t('deliveryTitle')}
+        </span>
+        {title && (
+          <span className="font-display text-[11px] font-bold uppercase tracking-[0.06em] text-ink-2">
+            {title}
+          </span>
+        )}
+      </div>
+
+      {method === 'shipping' && address ? (
+        <address className="not-italic text-[12.5px] leading-relaxed text-ink-2">
+          <div className="font-semibold text-white">{address.recipient}</div>
+          <div>
+            {address.line1}
+            {address.line2 ? `, ${address.line2}` : ''}
+          </div>
+          {address.neighborhood && <div>{address.neighborhood}</div>}
+          <div>
+            {address.postalCode} · {address.city}, {address.state}
+          </div>
+          <div className="mt-1 font-mono text-[11px] text-muted">{address.phone}</div>
+        </address>
+      ) : method === 'pickup' && pickupPoint ? (
+        <div className="text-[12.5px] leading-relaxed text-ink-2">
+          <div className="font-semibold text-white">{pickupPoint.name}</div>
+          {pickupPoint.address && <div>{pickupPoint.address}</div>}
+          <div className="mt-1.5 text-[11.5px] text-muted-2">
+            {pickupPoint.id === me.seller.id ? t('pickupAtYourStore') : t('pickupNeedsTransfer')}
+          </div>
+        </div>
+      ) : (
+        <div className="text-[12.5px] text-muted-2">
+          {method === null ? t('deliveryLegacy') : t('deliveryMissing')}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function OrderDetail({ order }: { order: SellerOrder }) {
   const t = useTranslations('panel')
   const locale = useLocale()
-  const { markShipped, markDelivered } = usePanel()
+  const { markShipped, markDelivered, markReady, markCollected } = usePanel()
   const [tracking, setTracking] = useState('')
+  const [carrier, setCarrier] = useState('')
   const [busy, setBusy] = useState(false)
 
+  const pickup = isPickup(order)
   const terminal = order.status === 'cancelled' || order.status === 'refunded'
   const stageIdx =
     order.status === 'paid'
       ? 0
-      : order.status === 'shipped'
+      : order.status === 'shipped' || order.status === 'ready'
         ? 1
         : order.status === 'delivered'
           ? 2
           : -1
-  const stages = [t('tlPaid'), t('tlShipped'), t('tlDelivered')]
+  // El punto medio del timeline es distinto según el método: una orden de
+  // recolección nunca se envía, se pone disponible en la tienda destino.
+  const stages = pickup
+    ? [t('tlPaid'), t('tlReady'), t('tlCollected')]
+    : [t('tlPaid'), t('tlShipped'), t('tlDelivered')]
 
-  async function confirmShip() {
-    if (tracking.trim().length < 3 || busy) return
-    setBusy(true)
-    await markShipped(order.id, tracking.trim())
-    setBusy(false)
-  }
-
-  async function confirmDeliver() {
+  /** Corre una transición y bloquea el detalle mientras tanto. */
+  async function run(action: () => Promise<boolean>) {
     if (busy) return
     setBusy(true)
-    await markDelivered(order.id)
+    await action()
     setBusy(false)
   }
 
@@ -277,10 +351,18 @@ function OrderDetail({ order }: { order: SellerOrder }) {
           </div>
         </div>
 
+        <DeliveryBlock order={order} />
+
         {order.trackingNumber && (
-          <div className="flex items-center gap-2 font-mono text-[11px] text-muted">
+          <div className="flex flex-wrap items-center gap-2 font-mono text-[11px] text-muted">
             <span className="text-faint">{t('trackingShort')}:</span>
             <span className="text-cyan">{order.trackingNumber}</span>
+            {order.carrier && (
+              <>
+                <span className="h-1 w-1 rotate-45 bg-line-strong" />
+                <span className="text-muted-2">{order.carrier}</span>
+              </>
+            )}
           </div>
         )}
       </div>
@@ -332,39 +414,62 @@ function OrderDetail({ order }: { order: SellerOrder }) {
           </dl>
         </div>
 
-        {/* Acción de envío */}
-        {order.status === 'paid' && (
-          <div className="border border-line-soft bg-input p-4">
-            <div className="mb-2 font-mono text-[9px] uppercase tracking-[0.16em] text-faint">
-              {t('trackingLabel')}
+        {/* Acción: depende del método elegido por el comprador y del avance. */}
+        {order.status === 'paid' &&
+          (pickup ? (
+            <div className="border border-line-soft bg-input p-4">
+              <p className="mb-3 text-[12px] leading-relaxed text-muted-2">{t('readyHint')}</p>
+              <button
+                type="button"
+                onClick={() => run(() => markReady(order.id))}
+                disabled={busy}
+                className="clip-btn bg-primary px-4 py-2 font-display text-[12px] font-bold uppercase tracking-[0.08em] text-[#06121f] transition hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                {t('markReady')}
+              </button>
             </div>
-            <div className="flex gap-2">
+          ) : (
+            <div className="border border-line-soft bg-input p-4">
+              <div className="mb-2 font-mono text-[9px] uppercase tracking-[0.16em] text-faint">
+                {t('trackingLabel')}
+              </div>
               <input
                 value={tracking}
                 onChange={(e) => setTracking(e.target.value)}
                 placeholder={t('trackingPlaceholder')}
                 aria-label={t('trackingLabel')}
-                className="min-w-0 flex-1 border border-line bg-[#0a1120] px-3 py-2 font-mono text-[12px] text-ink outline-none focus:border-primary"
+                className="mb-2 w-full border border-line bg-[#0a1120] px-3 py-2 font-mono text-[12px] text-ink outline-none focus:border-primary"
               />
-              <button
-                type="button"
-                onClick={confirmShip}
-                disabled={tracking.trim().length < 3 || busy}
-                className="clip-btn bg-primary px-4 py-2 font-display text-[12px] font-bold uppercase tracking-[0.08em] text-[#06121f] transition hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                {t('confirm')}
-              </button>
+              <div className="mb-2 font-mono text-[9px] uppercase tracking-[0.16em] text-faint">
+                {t('carrierLabel')}
+              </div>
+              <div className="flex gap-2">
+                <input
+                  value={carrier}
+                  onChange={(e) => setCarrier(e.target.value)}
+                  placeholder={t('carrierPlaceholder')}
+                  aria-label={t('carrierLabel')}
+                  className="min-w-0 flex-1 border border-line bg-[#0a1120] px-3 py-2 font-mono text-[12px] text-ink outline-none focus:border-primary"
+                />
+                <button
+                  type="button"
+                  onClick={() => run(() => markShipped(order.id, tracking.trim(), carrier))}
+                  disabled={tracking.trim().length < 3 || busy}
+                  className="clip-btn bg-primary px-4 py-2 font-display text-[12px] font-bold uppercase tracking-[0.08em] text-[#06121f] transition hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  {t('confirm')}
+                </button>
+              </div>
             </div>
-          </div>
-        )}
-        {order.status === 'shipped' && (
+          ))}
+        {(order.status === 'shipped' || order.status === 'ready') && (
           <button
             type="button"
-            onClick={confirmDeliver}
+            onClick={() => run(() => (pickup ? markCollected(order.id) : markDelivered(order.id)))}
             disabled={busy}
             className="clip-btn self-start border border-cond-nm/50 bg-cond-nm/10 px-4 py-2.5 font-display text-[12px] font-bold uppercase tracking-[0.08em] text-cond-nm transition hover:bg-cond-nm/20 disabled:opacity-40"
           >
-            {t('markDelivered')}
+            {pickup ? t('markCollected') : t('markDelivered')}
           </button>
         )}
       </div>

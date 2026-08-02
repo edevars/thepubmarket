@@ -8,9 +8,11 @@ import type {
 } from '@thepubmarket/shared'
 import { createContext, useCallback, useContext, useEffect, useState } from 'react'
 import {
+  collectOrder,
   deliverOrder,
   fetchSellerInventory,
   fetchSellerOrders,
+  readyOrder,
   shipOrder,
   updateListing,
 } from '@/lib/client-api'
@@ -34,8 +36,14 @@ interface PanelContextValue {
   patchItem: (id: string, body: UpdateListingRequest) => Promise<boolean>
   /** Inserta el item recién publicado al inicio (flujo Agregar). */
   addItem: (item: InventoryItem) => void
-  markShipped: (id: string, trackingNumber: string) => Promise<boolean>
+  /** Envío a domicilio: marca enviada con guía y paquetería opcional. */
+  markShipped: (id: string, trackingNumber: string, carrier?: string | null) => Promise<boolean>
+  /** Envío a domicilio: cierra la orden como entregada. */
   markDelivered: (id: string) => Promise<boolean>
+  /** Recolección: la orden ya está en la tienda destino y se puede recoger. */
+  markReady: (id: string) => Promise<boolean>
+  /** Recolección: el comprador ya se la llevó. */
+  markCollected: (id: string) => Promise<boolean>
 }
 
 const PanelContext = createContext<PanelContextValue | null>(null)
@@ -78,34 +86,56 @@ export function PanelProvider({ token, me, children }: PanelProviderProps) {
     setInventory((prev) => [item, ...prev])
   }, [])
 
+  /**
+   * Aplica el resultado de una transición a la orden en memoria. Solo se llama
+   * cuando la API confirmó el cambio: si respondió 409 (la acción no aplicaba a
+   * esa orden) el estado local no se toca y la vista sigue mostrando la verdad.
+   */
+  const patchOrder = useCallback((id: string, patch: Partial<SellerOrder>) => {
+    setOrders((prev) => prev.map((o) => (o.id === id ? { ...o, ...patch } : o)))
+  }, [])
+
   const markShipped = useCallback(
-    async (id: string, trackingNumber: string) => {
-      const ok = await shipOrder(token, id, trackingNumber)
+    async (id: string, trackingNumber: string, carrier?: string | null) => {
+      const ok = await shipOrder(token, id, trackingNumber, carrier)
       if (ok) {
-        const now = Math.floor(Date.now() / 1000)
-        setOrders((prev) =>
-          prev.map((o) =>
-            o.id === id ? { ...o, status: 'shipped', trackingNumber, shippedAt: now } : o,
-          ),
-        )
+        patchOrder(id, {
+          status: 'shipped',
+          trackingNumber,
+          carrier: carrier?.trim() || null,
+          shippedAt: Math.floor(Date.now() / 1000),
+        })
       }
       return ok
     },
-    [token],
+    [token, patchOrder],
   )
 
   const markDelivered = useCallback(
     async (id: string) => {
       const ok = await deliverOrder(token, id)
-      if (ok) {
-        const now = Math.floor(Date.now() / 1000)
-        setOrders((prev) =>
-          prev.map((o) => (o.id === id ? { ...o, status: 'delivered', deliveredAt: now } : o)),
-        )
-      }
+      if (ok) patchOrder(id, { status: 'delivered', deliveredAt: Math.floor(Date.now() / 1000) })
       return ok
     },
-    [token],
+    [token, patchOrder],
+  )
+
+  const markReady = useCallback(
+    async (id: string) => {
+      const ok = await readyOrder(token, id)
+      if (ok) patchOrder(id, { status: 'ready', readyAt: Math.floor(Date.now() / 1000) })
+      return ok
+    },
+    [token, patchOrder],
+  )
+
+  const markCollected = useCallback(
+    async (id: string) => {
+      const ok = await collectOrder(token, id)
+      if (ok) patchOrder(id, { status: 'delivered', deliveredAt: Math.floor(Date.now() / 1000) })
+      return ok
+    },
+    [token, patchOrder],
   )
 
   const pendingCount = orders.filter((o) => o.status === 'paid').length
@@ -124,6 +154,8 @@ export function PanelProvider({ token, me, children }: PanelProviderProps) {
         addItem,
         markShipped,
         markDelivered,
+        markReady,
+        markCollected,
       }}
     >
       {children}
