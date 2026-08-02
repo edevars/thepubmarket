@@ -21,7 +21,12 @@ const STATUS_HEX: Record<SellerOrderStatus, string> = {
   refunded: '#ff6b7a',
 }
 
-function statusKey(s: SellerOrderStatus): string {
+/**
+ * `delivered` cubre ambos métodos, pero al comprador nadie le entregó una orden
+ * que él mismo fue a recoger. Un solo estado, dos etiquetas.
+ */
+function statusKey(s: SellerOrderStatus, isPickup = false): string {
+  if (s === 'delivered' && isPickup) return 'stCollected'
   return `st${s.charAt(0).toUpperCase()}${s.slice(1)}`
 }
 
@@ -175,7 +180,13 @@ export function ComprasView() {
 }
 
 /** Badge de estado (color + fondo tenue). */
-function StatusBadge({ status }: { status: SellerOrderStatus }) {
+function StatusBadge({
+  status,
+  method,
+}: {
+  status: SellerOrderStatus
+  method?: BuyerOrder['delivery']['method']
+}) {
   const t = useTranslations('purchases')
   const color = STATUS_HEX[status]
   return (
@@ -183,7 +194,7 @@ function StatusBadge({ status }: { status: SellerOrderStatus }) {
       className="inline-flex items-center gap-1.5 border px-2 py-0.5 font-mono text-[10px] font-semibold uppercase tracking-[0.1em]"
       style={{ color, borderColor: `${color}80`, background: `${color}1f` }}
     >
-      {t(statusKey(status))}
+      {t(statusKey(status, method === 'pickup'))}
     </span>
   )
 }
@@ -254,7 +265,7 @@ function OrderCard({
             <span className="font-mono text-[13px] font-semibold text-ink">{order.shortId}</span>
             <span className="h-1 w-1 rotate-45 bg-line-strong" />
             <span className="font-mono text-[11px] text-faint">{fullDate}</span>
-            <StatusBadge status={order.status} />
+            <StatusBadge status={order.status} method={order.delivery.method} />
             <DeliveryChip method={order.delivery.method} />
           </div>
           <div className="mb-2.5 flex flex-wrap items-center gap-2">
@@ -477,7 +488,7 @@ function OrderDetail({ order, fmtDay }: { order: BuyerOrder; fmtDay: (unix: numb
 
       {terminal && (
         <div className="mb-4 inline-flex items-center gap-2.5 border border-line bg-input px-3 py-2">
-          <StatusBadge status={order.status} />
+          <StatusBadge status={order.status} method={order.delivery.method} />
         </div>
       )}
 

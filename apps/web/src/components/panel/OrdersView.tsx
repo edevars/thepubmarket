@@ -183,7 +183,7 @@ function OrderRow({
           className="shrink-0 border px-2.5 py-1 font-display text-[11px] font-bold uppercase tracking-[0.06em]"
           style={{ color, borderColor: `${color}66`, background: `${color}14` }}
         >
-          {t(orderStatusKey(order.status))}
+          {t(orderStatusKey(order.status, isPickup(order)))}
         </span>
 
         <button

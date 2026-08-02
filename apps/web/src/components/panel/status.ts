@@ -11,8 +11,15 @@ export const ORDER_STATUS_HEX: Record<SellerOrderStatus, string> = {
   refunded: '#d6584f',
 }
 
-/** Clave i18n del label del estado (namespace `panel`). */
-export function orderStatusKey(s: SellerOrderStatus): string {
+/**
+ * Clave i18n del label del estado (namespace `panel`).
+ *
+ * `delivered` es un solo estado derivado para ambos métodos, pero no se llama
+ * igual: a una orden de recolección nadie se la entregó, el comprador pasó por
+ * ella. Solo cambia la etiqueta — el estado sigue siendo uno.
+ */
+export function orderStatusKey(s: SellerOrderStatus, isPickup = false): string {
+  if (s === 'delivered' && isPickup) return 'stCollected'
   return `st${s.charAt(0).toUpperCase()}${s.slice(1)}`
 }
 

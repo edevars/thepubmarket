@@ -463,6 +463,7 @@
     "stShipped": "Enviada",
     "stReady": "Lista",
     "stDelivered": "Entregada",
+    "stCollected": "Recogida",
     "stCancelled": "Cancelada",
     "stRefunded": "Reembolsada",
     "connectPendingTitle": "Completa tu onboarding con Stripe",
@@ -530,6 +531,7 @@
     "stShipped": "Enviada",
     "stReady": "Lista",
     "stDelivered": "Entregada",
+    "stCollected": "Recogida",
     "stCancelled": "Cancelada",
     "stRefunded": "Reembolsada"
   }

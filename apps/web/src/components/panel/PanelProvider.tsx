@@ -29,7 +29,10 @@ interface PanelContextValue {
   orders: SellerOrder[]
   /** Carga inicial de inventario+órdenes en curso. */
   loadingData: boolean
-  /** Órdenes pagadas sin enviar (badge del sidebar / banner del resumen). */
+  /**
+   * Órdenes pagadas que esperan acción del vendedor —empacar y enviar, o
+   * preparar para mostrador— (badge del sidebar / banner del resumen).
+   */
   pendingCount: number
   refresh: () => Promise<void>
   /** PATCH de un item propio; actualiza el estado local con la fila real. */
