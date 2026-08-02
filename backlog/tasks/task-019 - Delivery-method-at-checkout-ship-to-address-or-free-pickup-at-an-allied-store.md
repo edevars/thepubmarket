@@ -1,11 +1,11 @@
 ---
 id: TASK-019
 title: 'Delivery method at checkout: ship to address or free pickup at an allied store'
-status: In Progress
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-07-31 00:56'
-updated_date: '2026-07-31 01:20'
+updated_date: '2026-08-02 22:27'
 labels:
   - 'epic:delivery'
   - api
@@ -73,13 +73,13 @@ User-facing copy in Spanish; code, comments and docs in English.
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
 - [x] #1 Buyer must choose between shipping to an address and pickup at an allied store before being sent to Stripe; the step cannot be skipped or bypassed
-- [ ] #2 Choosing shipping requires a complete delivery address and adds MXN 200 to the order total, shown as a separate line from the product subtotal before payment
-- [ ] #3 Choosing pickup lists only active stores in the same city as the selling store, adds no cost, and states the up-to-7-days expectation
-- [ ] #4 The chosen method, the address or the pickup store, and the shipping amount are persisted on the order and survive payment confirmation
-- [ ] #5 The application fee sent to Stripe is computed on the product subtotal only and excludes the shipping amount, verified against the created Checkout Session
-- [ ] #6 An order whose selling store has no other store in its city still offers shipping and never presents an empty or broken pickup option
+- [x] #2 Choosing shipping requires a complete delivery address and adds MXN 200 to the order total, shown as a separate line from the product subtotal before payment
+- [x] #3 Choosing pickup lists only active stores in the same city as the selling store, adds no cost, and states the up-to-7-days expectation
+- [x] #4 The chosen method, the address or the pickup store, and the shipping amount are persisted on the order and survive payment confirmation
+- [x] #5 The application fee sent to Stripe is computed on the product subtotal only and excludes the shipping amount, verified against the created Checkout Session
+- [x] #6 An order whose selling store has no other store in its city still offers shipping and never presents an empty or broken pickup option
 - [x] #7 Orders created before delivery methods existed still render in /compras and /panel without errors
-- [ ] #8 Verified end to end against the deployed API in Stripe test mode: one shipping order and one pickup order both reach paid with the correct totals and persisted delivery data
+- [x] #8 Verified end to end against the deployed API in Stripe test mode: one shipping order and one pickup order both reach paid with the correct totals and persisted delivery data
 - [x] #9 docs/ingenieria/ documents the delivery model, where the MXN 200 is mocked, and how same-city pickup eligibility is decided
 <!-- AC:END -->
 
@@ -165,6 +165,37 @@ Deployed to production. Migration `0007` applied to remote D1 **before** the API
 - `https://thepubmarket.com/cart` (200) serves the new Spanish delivery copy.
 
 **What production blocks:** `POST /checkout` returns `403 turnstile_failed` without a widget token, which is Turnstile working as designed and also the reason I cannot drive a paid order from curl. AC #8 needs a browser session.
+
+## Closed out — verified in production, Stripe test mode
+
+Two real purchases went through thepubmarket.com against the deployed API. Final rows in remote D1:
+
+| order | method | subtotal | shipping | total | fee |
+|---|---|---|---|---|---|
+| `80bcdf12` | shipping | 9000 | 20000 | 29000 | 900 |
+| `8f60e606` | pickup | 320000 | 0 | 320000 | 32000 |
+
+The shipping order persisted a full address (`CDMX`, CP `03650`); the pickup order persisted `pickup_seller_id`. Both survived payment confirmation and the whole fulfilment sequence afterwards (TASK-020) with their delivery data intact — **AC #2, #3, #4, #8**.
+
+**AC #5 — the claim this task could not close.** Retrieved both sessions from Stripe on the connected account (`acct_1TwA3pKpkJIW4eIn`, so direct charges: the money never touches a platform account):
+
+```
+pi_3U07cvKpkJIW4eIn10fcpOz9  amount=29000  application_fee_amount=900
+   Path to Exile        9000
+   Envío a domicilio   20000
+```
+
+**900 is 10% of the 9000 product subtotal, not of the 29000 charged** — 10% of the total would have been 2900. Two line items, shipping as its own line, and the freight settles to the seller inside the same direct charge. The non-custody design holds against real Stripe data rather than inference.
+
+**AC #6 — verified locally in a browser.** Moved every allied store to a different city (Guadalajara, Monterrey, Puebla, Mérida) leaving The Pub Game Store alone in CDMX, then opened the delivery step. Shipping still offered at $200 with its address form; pickup offered **exactly one** store — the selling store itself, badged `TIENDA VENDEDORA` with *"Listo en cuanto la tienda lo prepare — no hay traslado de por medio"*.
+
+Worth recording: **the pickup list can never actually be empty for an active seller**, because `isEligiblePickupPoint` always accepts the selling store as its own pickup point. The empty-list fallback in the front end only triggers if the request itself fails. So "never presents an empty or broken pickup option" holds by construction, not just by handling.
+
+Also confirmed rendered: no delivery method preselected, and `CONTINUAR AL PAGO` disabled with *"Elige una forma de entrega para continuar"* until one is chosen — the bypass-proof half of **AC #1** on the client side.
+
+Local seller cities restored to seed state; browser session and cart cleared.
+
+**Copy bug from this task, found and fixed later (`d4c0131`):** the pickup option promised *"te avisamos por correo cuando esté listo"*. Nothing sends that email — lifecycle mail is TASK-017. It was live in front of real buyers from this task shipping until the TASK-020 deploy. Now says the order shows up as ready in Mis compras.
 <!-- SECTION:NOTES:END -->
 
 ## Comments
