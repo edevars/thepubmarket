@@ -3,11 +3,11 @@ id: TASK-020
 title: >-
   Fulfilment by delivery method: carrier on shipment, ready-for-pickup state,
   address and store in panel
-status: In Progress
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-07-31 00:56'
-updated_date: '2026-08-02 22:09'
+updated_date: '2026-08-02 22:22'
 labels:
   - 'epic:delivery'
   - api
@@ -73,7 +73,7 @@ User-facing copy in Spanish; code, comments and docs in English.
 - [x] #5 The seller panel shows the full delivery address for shipping orders and the destination store for pickup orders
 - [x] #6 /compras shows the buyer the delivery method, the tracking number with carrier once shipped, and the pickup store with its address once ready
 - [x] #7 Orders created before delivery methods existed still render and can still be marked shipped and delivered
-- [ ] #8 Verified against the deployed API in Stripe test mode for both a shipping order and a pickup order, walking each through its full state sequence
+- [x] #8 Verified against the deployed API in Stripe test mode for both a shipping order and a pickup order, walking each through its full state sequence
 - [x] #9 docs/ingenieria/ documents both fulfilment paths, the derived states, and which panel action produces each
 <!-- AC:END -->
 
@@ -201,4 +201,35 @@ The new buyer copy is live on thepubmarket.com. The panel could not be checked o
 **Still open, flagged not fixed:** `panel.gateSignedOutBody` and `purchases.gateBody` describe a magic-link sign-in (*"Te enviamos un enlace de acceso por correo"*, *"We'll email you a magic link — no passwords"*) but auth is email + password. Same class of stale promise, different feature area — left alone rather than silently rewritten.
 
 AC #8 remains the only unchecked criterion: it needs a paid pickup order in production, which needs a card entered at Stripe Checkout.
+
+## AC #8 — verified in production, Stripe test mode
+
+The two real purchases were walked through their full sequences from the panel. Final rows in remote D1:
+
+| order | method | tracking | carrier | shipped_at | ready_at | delivered_at |
+|---|---|---|---|---|---|---|
+| `80bcdf12` | shipping | `iasldjalsjd` | Estafeta | set | **null** | set |
+| `8f60e606` | pickup | null | null | **null** | set | set |
+
+The columns stayed in their own lanes under real traffic: the pickup order never got a `shipped_at`, the shipping order never got a `ready_at`, and both closed on `delivered_at` + `status='fulfilled'`. That is the whole design holding up end to end.
+
+Amounts: shipping order `subtotal 9000 + shipping 20000 = total 29000`, fee `900`. Pickup order `subtotal 320000 + shipping 0 = 320000`, fee `32000`.
+
+**Non-custody, confirmed against Stripe rather than inferred:** retrieving both sessions on the connected account (`acct_1TwA3pKpkJIW4eIn`, so these are direct charges — the money never touches a platform account) gives
+
+```
+pi_3U07cvKpkJIW4eIn10fcpOz9  amount=29000  application_fee_amount=900
+   Path to Exile        9000
+   Envío a domicilio   20000
+```
+
+**900 is 10% of the 9000 product subtotal, not of the 29000 charged.** 10% of the total would have been 2900. The platform earns nothing on freight, and the shipping fee settles to the seller inside the same direct charge. This was the one claim TASK-019 could not verify — `application_fee_amount` lives on the PaymentIntent, which does not exist until a session completes.
+
+## Bug found while verifying, NOT part of this task
+
+`orders.stripe_payment_intent_id` is **NULL on every order in production**, including these two whose PaymentIntents clearly exist. `checkout.ts:219` reads `session.payment_intent` at session-creation time, but a Checkout Session in `mode: payment` has no PaymentIntent until the buyer starts paying — so it is always null there, and nothing backfills it. The webhook only starts the workflow; the workflow only sets `paid`.
+
+Consequences: an order cannot be joined to its payment for a refund or dispute without going through the stored checkout session first (recoverable, so degraded rather than fatal), and `idx_orders_stripe_payment_intent_id` is inert since SQLite permits unlimited NULLs in a unique index — so it is not providing the idempotency guard its name implies.
+
+Not filed as a task — flagging for a decision.
 <!-- SECTION:NOTES:END -->
