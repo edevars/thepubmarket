@@ -125,6 +125,10 @@ Locally: `wrangler dev` with Turnstile disabled, walk a shipping order paid → 
 
 - The status union is consumed in 6 places; missing one shows as an order that renders with no colour or falls out of every tab. Typecheck catches the `Record<SellerOrderStatus, …>` maps but not the `.filter()` predicates — those get checked by hand.
 - Legacy orders (`delivery_method IS NULL`) must stay shippable; that is the one branch where a NULL is load-bearing rather than tolerated.
+
+## Adjustment during implementation
+
+The `/ready` conflict code shipped as `not_pickup_ready`, not `not_ready_markable` as written above — the latter is not English anyone would write twice.
 <!-- SECTION:PLAN:END -->
 
 ## Implementation Notes
