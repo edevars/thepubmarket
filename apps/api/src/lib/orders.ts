@@ -90,13 +90,20 @@ export function orderToDelivery(
 
 /**
  * Estado derivado para el panel del seller. La columna `status` conserva su
- * enum original; enviado/entregado salen de los timestamps de envío (entregada
- * además fija status 'fulfilled' al marcarse).
+ * enum original; el avance del cumplimiento sale de los timestamps.
+ *
+ * El orden de las guardas importa: `delivered` gana sobre `shipped`/`ready`
+ * porque es terminal para ambos métodos (entregada por paquetería y recogida en
+ * tienda son el mismo hecho, y al marcarse fija status 'fulfilled'). `shipped` y
+ * `ready` son excluyentes en la práctica —la API no deja marcar lista una orden
+ * de envío ni al revés—, pero se evalúa `shipped` primero para que una fila
+ * inconsistente no desaparezca de los filtros de las vistas.
  */
 export function deriveSellerOrderStatus(order: OrderRow): SellerOrderStatus {
   if (order.status === 'cancelled' || order.status === 'refunded') return order.status
   if (order.deliveredAt != null || order.status === 'fulfilled') return 'delivered'
   if (order.shippedAt != null) return 'shipped'
+  if (order.readyAt != null) return 'ready'
   if (order.status === 'paid') return 'paid'
   return 'pending'
 }
@@ -135,8 +142,10 @@ export function orderToBuyerOrder(
     status: deriveSellerOrderStatus(order),
     createdAt: order.createdAt,
     shippedAt: order.shippedAt,
+    readyAt: order.readyAt,
     deliveredAt: order.deliveredAt,
     trackingNumber: order.trackingNumber,
+    carrier: order.carrier,
     seller: {
       name: seller?.name ?? '—',
       slug: seller?.slug ?? '',
@@ -172,8 +181,10 @@ export function orderToSellerOrder(
     status: deriveSellerOrderStatus(order),
     createdAt: order.createdAt,
     shippedAt: order.shippedAt,
+    readyAt: order.readyAt,
     deliveredAt: order.deliveredAt,
     trackingNumber: order.trackingNumber,
+    carrier: order.carrier,
     buyerLabel: buyer ? maskBuyer(buyer.displayName, buyer.email) : '—',
     delivery: orderToDelivery(order, pickupStore),
     subtotalCents: order.subtotalCents,

@@ -1,7 +1,8 @@
 /**
  * API del Panel del Vendedor (`/seller/*`). Autoservicio de la tienda:
- * inventario propio (alta, precio, cantidad, pausa), órdenes con envío
- * (marcar enviada con guía / entregada) y búsqueda en Scryfall para el alta.
+ * inventario propio (alta, precio, cantidad, pausa), cumplimiento de órdenes
+ * según el método que eligió el comprador (enviar con guía / entregar, o
+ * preparar para recoger / cerrar como recogida) y búsqueda en Scryfall.
  *
  * TODO el router va detrás de `sellerAuth`: sesión email+contraseña + fila activa en
  * `sellers` (c.get('seller')). Cada query filtra por el seller de la sesión —
@@ -10,9 +11,10 @@
  * NO CUSTODIA: aquí no hay pagos. La "liquidación" que se muestra (comisión
  * vía application fee) es informativa; el dinero fluye directo en Stripe.
  */
+import type { Db, SellerRow } from '@thepubmarket/db'
 import { inventory, orderItems, orders, sellers, users } from '@thepubmarket/db'
 import { CONDITIONS, FINISHES, type SellerPanelMe } from '@thepubmarket/shared'
-import { and, count, desc, eq, gt, inArray, isNull, sql } from 'drizzle-orm'
+import { and, count, desc, eq, gt, inArray, isNull, or, sql } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { z } from 'zod'
 import { createListing, type ListingInput, rowToInventoryItem } from '../lib/inventory'
@@ -39,7 +41,38 @@ const updateSchema = z
   })
   .refine((v) => Object.keys(v).length > 0, { message: 'no_fields_to_update' })
 
-const shipSchema = z.object({ trackingNumber: z.string().trim().min(3).max(64) })
+const shipSchema = z.object({
+  trackingNumber: z.string().trim().min(3).max(64),
+  // Paquetería. Opcional a propósito: una guía sin paquetería sigue siendo
+  // mejor que ninguna guía, pero sin ella el comprador no sabe dónde rastrear.
+  // Texto libre: el catálogo de paqueterías mexicanas cambia más seguido de lo
+  // que justificaría un enum en el schema.
+  carrier: z.string().trim().min(2).max(60).nullish(),
+})
+
+/**
+ * Órdenes que se cumplen por paquetería: las de envío a domicilio y las
+ * anteriores a TASK-019, que no tienen método registrado. El NULL es
+ * load-bearing, no tolerancia: son órdenes reales en producción y el único
+ * cumplimiento que existía cuando se crearon era enviarlas.
+ */
+const shippingOrLegacy = or(isNull(orders.deliveryMethod), eq(orders.deliveryMethod, 'shipping'))
+
+/** Órdenes que se cumplen en mostrador. Nunca incluye las de método nulo. */
+const isPickup = eq(orders.deliveryMethod, 'pickup')
+
+/**
+ * Tienda de recolección de una orden, para devolverla completa tras una
+ * transición. Puede ser otra tienda aliada, no siempre la de la sesión, y puede
+ * haberse dado de baja (FK set-null): en ese caso la vista degrada sola.
+ */
+async function pickupStoreOf(
+  db: Db,
+  pickupSellerId: string | null,
+): Promise<SellerRow | undefined> {
+  if (!pickupSellerId) return undefined
+  return (await db.select().from(sellers).where(eq(sellers.id, pickupSellerId)).get()) ?? undefined
+}
 
 export const sellerPanel = new Hono<AppEnv>()
 
@@ -194,7 +227,21 @@ sellerPanel.get('/orders', async (c) => {
   })
 })
 
-/** POST /seller/orders/:id/ship — marca enviada con guía. Solo pagadas sin enviar. */
+/**
+ * Cumplimiento de órdenes (TASK-020). Cada método tiene su propia secuencia y
+ * las cuatro transiciones son excluyentes entre sí:
+ *
+ *   envío       paid --/ship--> enviada --/deliver--> entregada
+ *   recolección paid --/ready--> lista   --/collect--> recogida
+ *
+ * Todas las guardas viven en el WHERE del UPDATE: si la orden no está en el
+ * estado que la transición requiere, no se actualiza ninguna fila y se responde
+ * 409 en vez de fingir éxito. Eso cubre también el cruce de métodos (marcar
+ * enviada una recolección) y la propiedad (orden de otra tienda = 409, no 404,
+ * porque no se distingue de un estado inválido sin filtrar por dueño primero).
+ */
+
+/** POST /seller/orders/:id/ship — enviada con guía. Solo envío a domicilio. */
 sellerPanel.post('/orders/:id/ship', async (c) => {
   const seller = c.get('seller')
   if (!seller) return c.json({ error: 'not_a_seller' }, 403)
@@ -210,6 +257,7 @@ sellerPanel.post('/orders/:id/ship', async (c) => {
     .update(orders)
     .set({
       trackingNumber: parsed.data.trackingNumber,
+      carrier: parsed.data.carrier ?? null,
       shippedAt: sql`(unixepoch())`,
       updatedAt: sql`(unixepoch())`,
     })
@@ -218,6 +266,7 @@ sellerPanel.post('/orders/:id/ship', async (c) => {
         eq(orders.id, id),
         eq(orders.sellerId, seller.id),
         eq(orders.status, 'paid'),
+        shippingOrLegacy,
         isNull(orders.shippedAt),
       ),
     )
@@ -227,7 +276,7 @@ sellerPanel.post('/orders/:id/ship', async (c) => {
   return c.json(orderToSellerOrder(row, [], undefined))
 })
 
-/** POST /seller/orders/:id/deliver — marca entregada (cierra en 'fulfilled'). */
+/** POST /seller/orders/:id/deliver — entregada por paquetería (cierra en 'fulfilled'). */
 sellerPanel.post('/orders/:id/deliver', async (c) => {
   const seller = c.get('seller')
   if (!seller) return c.json({ error: 'not_a_seller' }, 403)
@@ -246,6 +295,7 @@ sellerPanel.post('/orders/:id/deliver', async (c) => {
         eq(orders.id, id),
         eq(orders.sellerId, seller.id),
         eq(orders.status, 'paid'),
+        shippingOrLegacy,
         sql`${orders.shippedAt} IS NOT NULL`,
         isNull(orders.deliveredAt),
       ),
@@ -254,6 +304,67 @@ sellerPanel.post('/orders/:id/deliver', async (c) => {
 
   if (!row) return c.json({ error: 'not_deliverable' }, 409)
   return c.json(orderToSellerOrder(row, [], undefined))
+})
+
+/**
+ * POST /seller/orders/:id/ready — lista para recoger. Solo recolección.
+ *
+ * Es el evento que el comprador está esperando: a partir de aquí puede ir a la
+ * tienda. Marcarla NO cierra la orden; eso lo hace `/collect` cuando el
+ * comprador se la lleva.
+ */
+sellerPanel.post('/orders/:id/ready', async (c) => {
+  const seller = c.get('seller')
+  if (!seller) return c.json({ error: 'not_a_seller' }, 403)
+  const id = c.req.param('id')
+  const db = c.get('db')
+
+  const [row] = await db
+    .update(orders)
+    .set({ readyAt: sql`(unixepoch())`, updatedAt: sql`(unixepoch())` })
+    .where(
+      and(
+        eq(orders.id, id),
+        eq(orders.sellerId, seller.id),
+        eq(orders.status, 'paid'),
+        isPickup,
+        isNull(orders.readyAt),
+      ),
+    )
+    .returning()
+
+  if (!row) return c.json({ error: 'not_pickup_ready' }, 409)
+  return c.json(orderToSellerOrder(row, [], undefined, await pickupStoreOf(db, row.pickupSellerId)))
+})
+
+/** POST /seller/orders/:id/collect — recogida en mostrador (cierra en 'fulfilled'). */
+sellerPanel.post('/orders/:id/collect', async (c) => {
+  const seller = c.get('seller')
+  if (!seller) return c.json({ error: 'not_a_seller' }, 403)
+  const id = c.req.param('id')
+  const db = c.get('db')
+
+  const [row] = await db
+    .update(orders)
+    .set({
+      deliveredAt: sql`(unixepoch())`,
+      status: 'fulfilled',
+      updatedAt: sql`(unixepoch())`,
+    })
+    .where(
+      and(
+        eq(orders.id, id),
+        eq(orders.sellerId, seller.id),
+        eq(orders.status, 'paid'),
+        isPickup,
+        sql`${orders.readyAt} IS NOT NULL`,
+        isNull(orders.deliveredAt),
+      ),
+    )
+    .returning()
+
+  if (!row) return c.json({ error: 'not_collectable' }, 409)
+  return c.json(orderToSellerOrder(row, [], undefined, await pickupStoreOf(db, row.pickupSellerId)))
 })
 
 /** GET /seller/scryfall/search?q= — búsqueda para el alta (cache KV). */

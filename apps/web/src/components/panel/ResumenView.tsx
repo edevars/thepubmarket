@@ -17,8 +17,10 @@ export function ResumenView() {
 
   const activeCount = inventory.filter((i) => i.status === 'active' && i.quantity > 0).length
   const invValueCents = inventory.reduce((s, i) => s + i.priceCents * i.quantity, 0)
+  // Ventas ya cumplidas o en camino, sin importar el método: una orden lista
+  // para recoger salió de las manos del vendedor igual que una enviada.
   const monthSalesCents = orders
-    .filter((o) => o.status === 'shipped' || o.status === 'delivered')
+    .filter((o) => o.status === 'shipped' || o.status === 'ready' || o.status === 'delivered')
     .reduce((s, o) => s + o.subtotalCents, 0)
 
   const tiles = [
