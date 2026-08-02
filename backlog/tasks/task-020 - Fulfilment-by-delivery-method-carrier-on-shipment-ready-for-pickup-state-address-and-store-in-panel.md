@@ -7,7 +7,7 @@ status: In Progress
 assignee:
   - '@claude'
 created_date: '2026-07-31 00:56'
-updated_date: '2026-08-02 21:45'
+updated_date: '2026-08-02 22:09'
 labels:
   - 'epic:delivery'
   - api
@@ -185,4 +185,20 @@ Both sequences were driven end to end **through the UI**, not curl: the shipping
 Cleanup: seeded orders, order lines and the seller↔user link removed from local D1; session token cleared from the browser.
 
 **Correction to the note above:** the API suite is **68 tests across 6 files**, 59 of them pre-existing plus the 9 new ones — not "68 → 77".
+
+## Deployed to production
+
+Migration `0008` applied to remote D1 **before** the API deploy, so the columns existed before any code read them. The five pre-existing production orders came through with `carrier` and `ready_at` NULL and nothing else touched.
+
+- API `thepubmarket-api` version `19e9b84e-c6d3-45ca-ac0f-39216f0a8856`
+- Web `thepubmarket-web` version `e7ad06c0-8748-417b-9d7a-454b5fc882cc`
+- `main` at `d4c0131`
+
+The new buyer copy is live on thepubmarket.com. The panel could not be checked over HTTP — `/panel` sits behind Cloudflare Access and returns its sign-in page, which is Access working as designed.
+
+**Unrelated bug found and fixed while verifying (`d4c0131`):** the pickup option at checkout promised *"te avisamos por correo cuando esté listo"*. Nothing sends that email — order lifecycle mail is TASK-017, still To Do. It shipped with TASK-019 and had been in front of real buyers since. Now says the order shows up as ready in Mis compras, matching the TASK-020 copy.
+
+**Still open, flagged not fixed:** `panel.gateSignedOutBody` and `purchases.gateBody` describe a magic-link sign-in (*"Te enviamos un enlace de acceso por correo"*, *"We'll email you a magic link — no passwords"*) but auth is email + password. Same class of stale promise, different feature area — left alone rather than silently rewritten.
+
+AC #8 remains the only unchecked criterion: it needs a paid pickup order in production, which needs a card entered at Stripe Checkout.
 <!-- SECTION:NOTES:END -->
