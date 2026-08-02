@@ -3,10 +3,11 @@ id: TASK-020
 title: >-
   Fulfilment by delivery method: carrier on shipment, ready-for-pickup state,
   address and store in panel
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - '@claude'
 created_date: '2026-07-31 00:56'
-updated_date: '2026-07-31 00:56'
+updated_date: '2026-08-02 03:59'
 labels:
   - 'epic:delivery'
   - api
@@ -60,3 +61,53 @@ User-facing copy in Spanish; code, comments and docs in English.
 - [ ] #8 Verified against the deployed API in Stripe test mode for both a shipping order and a pickup order, walking each through its full state sequence
 - [ ] #9 docs/ingenieria/ documents both fulfilment paths, the derived states, and which panel action produces each
 <!-- AC:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+## Research findings (current system)
+
+- `POST /seller/orders/:id/ship` takes `{trackingNumber}` only and guards on `status='paid' AND shippedAt IS NULL`. `/deliver` guards on `shippedAt IS NOT NULL AND deliveredAt IS NULL`. Both already return **409** when the guard misses (`not_shippable` / `not_deliverable`), so AC #4's convention exists — it just has no notion of delivery method.
+- Neither route filters by `delivery_method`, so today a **pickup order can be marked shipped**. That is the bug at the centre of AC #2.
+- `deriveSellerOrderStatus()` in `lib/orders.ts` is the single place statuses come from; both the panel and /compras consume the same `SellerOrderStatus` union.
+- Status is consumed in 6 places that must all learn the new value: `panel/status.ts` (colour map), `OrdersView` (tab filter, timeline, action block), `ComprasView` (colour map, tab filter, timeline, tracking block), `ResumenView` (month sales), `PanelProvider` (optimistic patch, `pendingCount`).
+- `/ship` and `/deliver` respond with `orderToSellerOrder(row, [], undefined)` — no lines, no pickup store. The client only merges status and timestamps, so that is not a bug today, but the new pickup routes should resolve their store rather than echo a null one.
+
+## Approach
+
+**1. Migration 0008 — two additive columns**
+`carrier` (text, nullable) and `ready_at` (integer, nullable) on `orders`. Pure `ALTER TABLE ADD COLUMN`, same constraint as 0007: D1 rejects table rebuilds, so no CHECK and no touching the `status` enum.
+
+`ready_at` is a **new column rather than reusing `shipped_at`**. Overloading `shipped_at` to mean "arrived at the pickup store" would save a column and cost the truth: every query asking "what did we ship" would silently count pickups. The states stay derived from timestamps, which is the convention this schema already follows.
+
+**2. Derived state**
+`SellerOrderStatus` gains `'ready'` (readyAt set, not yet collected). It does **not** gain `'collected'`: collection and delivery are the same terminal fact — the buyer has the cards — so both set `deliveredAt` and derive `'delivered'`. Only the label differs by method ("Entregada" / "Recogida"). One terminal state keeps the existing tab filters and the month-sales sum correct without touching them.
+
+**3. API**
+- `shipSchema` gains `carrier` (optional, trimmed, 2–60).
+- `/ship` and `/deliver` restricted to `delivery_method = 'shipping' OR IS NULL` — the NULL keeps legacy orders shippable (AC #7).
+- New `/orders/:id/ready` — pickup only, from paid, `ready_at IS NULL`. 409 `not_ready_markable`.
+- New `/orders/:id/collect` — pickup only, requires `ready_at IS NOT NULL`, sets `delivered_at` + `status='fulfilled'`. 409 `not_collectable`.
+- Every guard is a WHERE clause on the UPDATE, so a wrong transition changes no rows and returns 409 instead of silently succeeding (AC #4).
+- Unit tests for `deriveSellerOrderStatus` in a new `lib/orders.test.ts`.
+
+**4. Web**
+- `client-api`: carrier on `shipOrder`, plus `readyOrder` / `collectOrder`.
+- `PanelProvider`: `markReady` / `markCollected`, and carrier threaded through `markShipped`.
+- `OrdersView`: delivery block (full address for shipping, destination store for pickup), method-aware timeline and action — tracking + carrier input for shipping, a single "marcar lista para recoger" for pickup.
+- `ComprasView`: method shown on the card, carrier beside the tracking number, and once ready, the pickup store with its address and what to do next.
+- `'ready'` added to both colour maps; transit/en-curso tabs include it.
+
+**5. Docs**: fulfilment section in `docs/ingenieria/entrega.md` — both paths, the derived states, and which panel action produces each.
+
+## Verification and what blocks it
+
+Locally: `wrangler dev` with Turnstile disabled, walk a shipping order paid → shipped → delivered and a pickup order paid → ready → collected, plus every cross-method rejection (ship a pickup, ready a shipping, collect before ready).
+
+**AC #8 is blocked the same way TASK-019's was.** Production has no pickup order and `POST /checkout` fails closed on Turnstile, so I cannot create one from curl. It needs the browser run already pending on TASK-019.
+
+## Risks
+
+- The status union is consumed in 6 places; missing one shows as an order that renders with no colour or falls out of every tab. Typecheck catches the `Record<SellerOrderStatus, …>` maps but not the `.filter()` predicates — those get checked by hand.
+- Legacy orders (`delivery_method IS NULL`) must stay shippable; that is the one branch where a NULL is load-bearing rather than tolerated.
+<!-- SECTION:PLAN:END -->
