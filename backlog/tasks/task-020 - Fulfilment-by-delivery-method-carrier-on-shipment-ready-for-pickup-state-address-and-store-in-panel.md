@@ -7,7 +7,7 @@ status: In Progress
 assignee:
   - '@claude'
 created_date: '2026-07-31 00:56'
-updated_date: '2026-08-02 04:12'
+updated_date: '2026-08-02 21:45'
 labels:
   - 'epic:delivery'
   - api
@@ -70,8 +70,8 @@ User-facing copy in Spanish; code, comments and docs in English.
 - [x] #2 A pickup order cannot be marked shipped; it is marked ready for pickup instead, and that transition is recorded with its own timestamp
 - [x] #3 A pickup order can be closed as collected and a shipping order as delivered, with neither action applicable to the other method
 - [x] #4 Every transition is rejected with a conflict when it does not apply to the order's current state, rather than silently succeeding
-- [ ] #5 The seller panel shows the full delivery address for shipping orders and the destination store for pickup orders
-- [ ] #6 /compras shows the buyer the delivery method, the tracking number with carrier once shipped, and the pickup store with its address once ready
+- [x] #5 The seller panel shows the full delivery address for shipping orders and the destination store for pickup orders
+- [x] #6 /compras shows the buyer the delivery method, the tracking number with carrier once shipped, and the pickup store with its address once ready
 - [x] #7 Orders created before delivery methods existed still render and can still be marked shipped and delivered
 - [ ] #8 Verified against the deployed API in Stripe test mode for both a shipping order and a pickup order, walking each through its full state sequence
 - [x] #9 docs/ingenieria/ documents both fulfilment paths, the derived states, and which panel action produces each
@@ -166,4 +166,23 @@ Local D1 mutations (seeded orders, the seller↔user link) were reverted afterwa
 **Copy that changed meaning, not just wording:** the panel's "Por enviar" tab, the pending-orders banner and the stat tile now say *preparar* instead of *enviar* — with pickup orders in the queue, "esperando envío" was counting orders nobody would ever ship. The `tabShipped` key became `tabInProgress` (shipped + ready).
 
 The panel does **not** promise the buyer gets notified when an order is ready, because today nothing sends that email — that is TASK-017. The copy says the buyer will see it in Mis compras, which is what actually happens.
+
+## Branch review + browser verification (2555ecd)
+
+Reviewed the full diff and then drove both views in Chrome against a local Worker and `next dev`, with four seeded orders: shipping, pickup at an allied store, pickup at the selling store, and a legacy one with `delivery_method IS NULL`. Authenticated by injecting the session token I had already minted through the API rather than typing credentials into the login form.
+
+**Two defects the browser run caught, both now fixed:**
+
+1. **A collected order was labelled "Entregada"** — right next to the chip "Recoger en tienda". Nobody delivered it; the buyer walked into the store. `delivered` is still one derived state for both methods (that is the design), but the label now follows the method, which is what the schema comment and `entrega.md` already claimed. Fixed in both views and both locales, plus a new `stCollected` key.
+2. **Month sales excluded ready-for-pickup orders.** `ResumenView` summed `shipped || delivered`, so a pickup order sitting at the destination store — sold, paid, out of the seller's hands — did not count. Caught because I had just changed that tile's caption to "Órdenes en curso + completadas", which made the omission a lie.
+
+**AC #5 (panel) verified rendered:** shipping order shows `ENTREGA · ENVÍO A DOMICILIO` with recipient, both address lines, neighbourhood, `06700 · Ciudad de México, CDMX` and phone. Pickup shows `RECOLECCIÓN EN TIENDA`, the destination store with its address, and *"Hay que trasladarla a esa tienda antes de marcarla lista"* — which flips to *"Se recoge en tu propia tienda: no hay traslado"* when the pickup point is the selling store. The legacy order shows *"Orden anterior a la elección de entrega. Se cumple como envío"* and still offers the shipping form.
+
+**AC #6 (/compras) verified rendered:** method chip on every card; `GUÍA DE RASTREO EST-9988776655 · Paquetería: Estafeta` once shipped; the amber *"Ya puedes recogerla"* strip with store, address and folio once ready; `SE RECOGE EN … Puede tardar hasta 7 días en llegar a la tienda. Aquí verás cuándo esté lista.` while still being prepared — no promise of a notification that does not exist yet. Timelines read Pagada → Enviada → Entregada or Pagada → Lista → Recogida by method.
+
+Both sequences were driven end to end **through the UI**, not curl: the shipping order to entregada, the pickup order to recogida. Tab counts moved correctly at every step (`Por preparar` 7→6→5, `En curso` 1→2→3, `Completadas` 1→3). English locale spot-checked: `COLLECTED` / `DELIVERED`, `STORE PICKUP` / `SHIP TO ADDRESS`.
+
+Cleanup: seeded orders, order lines and the seller↔user link removed from local D1; session token cleared from the browser.
+
+**Correction to the note above:** the API suite is **68 tests across 6 files**, 59 of them pre-existing plus the 9 new ones — not "68 → 77".
 <!-- SECTION:NOTES:END -->
