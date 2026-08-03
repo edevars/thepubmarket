@@ -5,7 +5,7 @@ status: In Progress
 assignee:
   - claude
 created_date: '2026-08-03 04:03'
-updated_date: '2026-08-03 04:10'
+updated_date: '2026-08-03 04:17'
 labels:
   - api
   - stripe
@@ -44,14 +44,14 @@ Code, comments and docs in English.
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 A webhook delivery whose processing fails is answered with an error status so Stripe retries it; the signature-failure 400 path is unchanged
-- [ ] #2 A redelivered event whose earlier processing never completed is processed again instead of being discarded as duplicate
-- [ ] #3 A redelivered event whose processing already completed is discarded without re-executing any effect
+- [x] #1 A webhook delivery whose processing fails is answered with an error status so Stripe retries it; the signature-failure 400 path is unchanged
+- [x] #2 A redelivered event whose earlier processing never completed is processed again instead of being discarded as duplicate
+- [x] #3 A redelivered event whose processing already completed is discarded without re-executing any effect
 - [ ] #4 A real failure creating the post-payment Workflow instance is not swallowed: only the instance-already-exists case is tolerated, anything else surfaces as a processing failure
-- [ ] #5 Every handled event type is safe to re-run and safe under concurrent duplicate delivery, and that contract is stated in the handler so future additions (e.g. TASK-017 emails) preserve it
-- [ ] #6 Unprocessed or failing events are observable from D1 (event id, type, attempts, last error), with the diagnostic query documented in docs/ingenieria/
-- [ ] #7 The schema change is a D1-safe additive migration and all pre-existing webhook_events rows are treated as already processed, so deploying does not re-run history
-- [ ] #8 Verified locally with stripe listen: a forced processing failure converges after Stripe's retry, and a duplicate delivery of a processed event does not repeat effects
+- [x] #5 Every handled event type is safe to re-run and safe under concurrent duplicate delivery, and that contract is stated in the handler so future additions (e.g. TASK-017 emails) preserve it
+- [x] #6 Unprocessed or failing events are observable from D1 (event id, type, attempts, last error), with the diagnostic query documented in docs/ingenieria/
+- [x] #7 The schema change is a D1-safe additive migration and all pre-existing webhook_events rows are treated as already processed, so deploying does not re-run history
+- [x] #8 Verified locally with stripe listen: a forced processing failure converges after Stripe's retry, and a duplicate delivery of a processed event does not repeat effects
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -72,6 +72,18 @@ Design approved by the user (2026-08-02, see comment #1 for full rationale and a
 
 Non-custodial check: no change to fund flow; reliability of bookkeeping/settlement only.
 <!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+**Implemented and verified locally.** Migration `0009_elite_wind_dancer.sql` (drizzle-kit generated + hand-appended history UPDATE), `webhookEvents` gains status/processed_at/attempts/last_error, `webhooks.ts` rewritten to claim → work → mark processed with the switch extracted into `processEvent()` that throws on real failure. Conflict path: row unreadable → 500 (answering 'duplicate' on an unverified conflict would lose the event); `processed` → duplicate; `received` → attempts+1 and re-run. Workflow creation tolerates only verified already-exists via `POST_PAYMENT.get()`. Typecheck, biome, 71 lib tests green.
+
+**AC#8 evidence (local, wrangler dev + stripe listen):** temporary forced throw in the `payment_intent.payment_failed` case → `stripe trigger` → delivery answered **500**, row `evt_3U0DGCKpkJAI3F8V1ZETH92h` stayed `received` attempts=1 with `last_error` recorded. Removed the throw → `stripe events resend` → **200**, row converged to `processed` attempts=2, handler effect logged exactly once. Third delivery of the now-processed event → **200 duplicate**, attempts unchanged at 2, effect NOT re-executed (no second log line). Migration applied locally marked all 45 pre-existing rows `processed` (AC#7: history never re-runs).
+
+**AC#4 left unchecked on purpose:** a real Workflows create() failure cannot be produced on demand; the rethrow branch is code-level only so far. Will check it once the prod test payment (same one that closes TASK-021 AC#7) exercises the rewritten happy path end to end.
+
+**Pending — prod rollout (plan step 6):** `wrangler d1 migrations apply thepubmarket-db --remote` then `wrangler deploy`, both handed to the user because deploy is blocked for the agent by the permission classifier. Task stays In Progress until that ships; status must reflect what is actually deployed.
+<!-- SECTION:NOTES:END -->
 
 ## Comments
 
