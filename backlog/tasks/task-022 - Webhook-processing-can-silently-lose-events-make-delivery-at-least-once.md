@@ -1,10 +1,11 @@
 ---
 id: TASK-022
 title: 'Webhook processing can silently lose events: make delivery at-least-once'
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - claude
 created_date: '2026-08-03 04:03'
-updated_date: '2026-08-03 04:04'
+updated_date: '2026-08-03 04:10'
 labels:
   - api
   - stripe
@@ -52,6 +53,25 @@ Code, comments and docs in English.
 - [ ] #7 The schema change is a D1-safe additive migration and all pre-existing webhook_events rows are treated as already processed, so deploying does not re-run history
 - [ ] #8 Verified locally with stripe listen: a forced processing failure converges after Stripe's retry, and a duplicate delivery of a processed event does not repeat effects
 <!-- AC:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+Design approved by the user (2026-08-02, see comment #1 for full rationale and alternatives). Execution steps:
+
+1. **Migration 0009** — additive `ALTER TABLE webhook_events`: `status` (default 'received'), `processed_at`, `attempts` (default 0), `last_error`; then `UPDATE ... SET status='processed', processed_at=unixepoch()` so history never re-runs (AC#7). Match the hand-written 0007/0008 pattern if that's how they were made (verify migrations dir first).
+2. **`packages/db/src/schema.ts`** — add the four columns to `webhookEvents`.
+3. **`apps/api/src/routes/webhooks.ts`** — claim → work → mark processed:
+   - INSERT claim (`attempts: 1`). On conflict, read row: `processed` → `{received, duplicate}`; `received` → `attempts+1`, fall through and re-run. Row unreadable → 500 (do NOT answer duplicate on an unverified conflict).
+   - Wrap the switch: success → `status='processed', processed_at`; throw → record `last_error`, log, return 500 so Stripe retries. Unknown event types are trivially processed.
+   - `checkout.session.completed`: replace `.catch(() => {})` — on `create()` error, `POST_PAYMENT.get(orderId)`; instance exists → race lost, fine; get throws → rethrow the original create error into the 500 path.
+   - Header comment: state the at-least-once contract — every case must stay idempotent AND concurrent-safe; dedupe is an optimization, not the guarantee.
+4. **Verify locally (AC#8)** — `wrangler d1 migrations apply --local`, `wrangler dev` + `stripe listen`; force a temporary throw in one case, `stripe trigger payment_intent.payment_failed` → expect 500 + row `received` with `last_error`; revert throw, `stripe events resend evt_…` → 200 + row `processed`; resend again → `duplicate: true`, no re-execution.
+5. **Docs (AC#6)** — section in `docs/ingenieria/pagos.md`: the at-least-once model, the dead-letter query over `status='received'`, what to do with a poisoned event.
+6. **Prod rollout** — needs BOTH `wrangler d1 migrations apply thepubmarket-db --remote` and `wrangler deploy`; deploy is blocked for the agent by the permission classifier, so hand both commands to the user (same deploy also closes TASK-021 AC#7).
+
+Non-custodial check: no change to fund flow; reliability of bookkeeping/settlement only.
+<!-- SECTION:PLAN:END -->
 
 ## Comments
 
