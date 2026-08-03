@@ -1,10 +1,11 @@
 ---
 id: TASK-021
 title: Persist the Stripe PaymentIntent id on the order
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - claude
 created_date: '2026-08-03 01:12'
-updated_date: '2026-08-03 01:12'
+updated_date: '2026-08-03 01:16'
 labels:
   - api
   - stripe
