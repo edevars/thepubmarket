@@ -4,6 +4,7 @@ title: Persist the Stripe PaymentIntent id on the order
 status: To Do
 assignee: []
 created_date: '2026-08-03 01:12'
+updated_date: '2026-08-03 01:12'
 labels:
   - api
   - stripe
@@ -43,3 +44,14 @@ Found while verifying TASK-020 in production. Not caused by it — this has been
 
 Code, comments and docs in English.
 <!-- SECTION:DESCRIPTION:END -->
+
+## Acceptance Criteria
+<!-- AC:BEGIN -->
+- [ ] #1 A newly paid order has its PaymentIntent id persisted on the order row by the time the post-payment flow finishes
+- [ ] #2 The dead read of session.payment_intent at Checkout Session creation is removed or documented as always-null, so nobody reintroduces it
+- [ ] #3 Persisting the id is idempotent: a redelivered or duplicate webhook does not fail the request or overwrite the row with a different value
+- [ ] #4 An order that is never paid keeps a NULL PaymentIntent id rather than a placeholder
+- [ ] #5 The five existing production orders with NULL ids are either backfilled from their stored checkout sessions or explicitly left alone with the reason recorded
+- [ ] #6 docs/ingenieria/ states where the id comes from and why it cannot be read at session-creation time
+- [ ] #7 Verified against the deployed API in Stripe test mode with one real payment: the order row carries the same PaymentIntent id Stripe reports
+<!-- AC:END -->
