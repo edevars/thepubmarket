@@ -5,7 +5,7 @@ status: In Progress
 assignee:
   - claude
 created_date: '2026-08-03 01:12'
-updated_date: '2026-08-03 01:18'
+updated_date: '2026-08-03 01:27'
 labels:
   - api
   - stripe
@@ -103,3 +103,23 @@ write that fails there is swallowed on redelivery. The Workflow retries per step
 Bookkeeping only: no change to who is charged, where the charge is created, or how the
 application fee is computed. The platform still never touches the funds.
 <!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+**Code (AC#1–#4) — done.** `paymentIntentIdFrom()` added to `lib/stripe.ts` with unit tests covering the plain-id, expanded-object and null cases. `checkout.ts` no longer reads `session.payment_intent`; it writes only the session id and carries a comment naming TASK-021 so the read is not reintroduced. `webhooks.ts` extracts the id on `checkout.session.completed` and passes it into the Workflow (warns when the event carries none). `post-payment.ts` gained step `link-payment-intent`, placed after `settle-order` so a bookkeeping failure can never block settlement; the write is guarded with `AND stripe_payment_intent_id IS NULL` and logs an `error` if a different id arrives for an order that already has one. Typecheck, biome and the 71 lib tests pass.
+
+**Backfill (AC#5) — done, and the count in the description was off: there were 7 orders in prod, not 5.** Every one had a NULL id. Retrieved each Checkout Session from Stripe with `--stripe-account acct_1TwA3pKpkJIW4eIn` (direct charges live in the seller's account; without the flag Stripe answers `resource_missing`, which reads as 'does not exist' when it means 'not mine'):
+
+| Order | Session status | Action |
+|---|---|---|
+| 8f60e606 | complete / paid | `pi_3U07dzKpkJIW4eIn0swzP1KX` |
+| 80bcdf12 | complete / paid | `pi_3U07cvKpkJIW4eIn10fcpOz9` |
+| ae466740 | complete / paid | `pi_3TylczKpkJIW4eIn0zTEaf5C` |
+| 5f943f0e | complete / paid | `pi_3TwDwVKpkJIW4eIn0xcJyxL1` |
+| 24374651, cfeaaf10, f5fb98a8 | expired / unpaid | **left NULL on purpose** — no PaymentIntent ever existed |
+
+Applied to `--remote` with four `UPDATE ... WHERE id = ? AND stripe_payment_intent_id IS NULL`, one row changed each. Re-read confirms the four paid orders carry their id and the three cancelled ones stay NULL.
+
+**Docs (AC#6) — done.** New `docs/ingenieria/pagos.md`: the three Stripe objects and when each exists, why `payment_intent` is always null at session creation, why the write lives in the Workflow rather than the webhook handler, order↔payment lookups (both directions, for disputes), why the unique index was inert and is not anymore, the backfill record, and a diagnosis table. Indexed in `docs/ingenieria/README.md` (added the missing `entrega.md` row while there).
+<!-- SECTION:NOTES:END -->
