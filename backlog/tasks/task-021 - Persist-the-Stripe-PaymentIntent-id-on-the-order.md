@@ -5,7 +5,7 @@ status: In Progress
 assignee:
   - claude
 created_date: '2026-08-03 01:12'
-updated_date: '2026-08-06 00:22'
+updated_date: '2026-08-06 00:26'
 labels:
   - api
   - stripe
@@ -124,4 +124,6 @@ Applied to `--remote` with four `UPDATE ... WHERE id = ? AND stripe_payment_inte
 **Docs (AC#6) — done.** New `docs/ingenieria/pagos.md`: the three Stripe objects and when each exists, why `payment_intent` is always null at session creation, why the write lives in the Workflow rather than the webhook handler, order↔payment lookups (both directions, for disputes), why the unique index was inert and is not anymore, the backfill record, and a diagnosis table. Indexed in `docs/ingenieria/README.md` (added the missing `entrega.md` row while there).
 
 **Committed** on branch `fix/task-021-022-payments-reliability` as `c73e599` (TASK-021 only; TASK-022 is a separate commit on the same branch). The commit carries the pre-TASK-022 shape of `webhooks.ts` — the PaymentIntent extraction on top of the old dedupe handler — so each commit stands on its own: typecheck, biome and the 71 tests pass at `c73e599`. AC#1–#6 checked; AC#7 still needs the prod deploy plus one test payment.
+
+**Deployed 2026-08-05** as part of the shared rollout (version `1a8dacbe-ece7-4d5b-86dc-3be3325ad7a7`, see TASK-022 for the migration/deploy record). AC#7 is the only thing left and it needs a human: a hosted Checkout Session can only be completed by entering a test card on Stripe's page, so it cannot be driven from here.
 <!-- SECTION:NOTES:END -->
