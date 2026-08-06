@@ -1,9 +1,11 @@
 ---
 id: TASK-025
 title: Expose seller photos in catalog API and serve images from R2
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - '@claude'
 created_date: '2026-08-06 00:13'
+updated_date: '2026-08-06 01:03'
 labels:
   - 'epic:inventory-photos'
   - api
