@@ -1,11 +1,11 @@
 ---
 id: TASK-022
 title: 'Webhook processing can silently lose events: make delivery at-least-once'
-status: In Progress
+status: To Do
 assignee:
   - claude
 created_date: '2026-08-03 04:03'
-updated_date: '2026-08-06 06:45'
+updated_date: '2026-08-06 07:14'
 labels:
   - api
   - stripe
@@ -25,7 +25,7 @@ documentation:
   - docs/ingenieria/validacion-e2e-task-005.md
 priority: low
 type: bug
-ordinal: 22000
+ordinal: 47000
 ---
 
 ## Description

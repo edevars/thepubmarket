@@ -11,7 +11,8 @@ import type { CatalogGamesResponse, Tcg } from '@thepubmarket/shared'
 import { TCGS } from '@thepubmarket/shared'
 import { and, asc, count, desc, eq, gt, inArray, like, type SQL } from 'drizzle-orm'
 import { Hono } from 'hono'
-import { rowToInventoryItem } from '../lib/inventory'
+import { getCardText } from '../lib/catalog-db'
+import { catalogIdOf, rowToInventoryItem } from '../lib/inventory'
 import { loadPhotosByInventoryId } from '../lib/photos'
 import type { AppEnv } from '../types'
 
@@ -151,15 +152,23 @@ catalog.get('/:id', async (c) => {
   if (!row) {
     return c.json({ error: 'not_found' }, 404)
   }
-  const [seller, photosByInventoryId] = await Promise.all([
+  const [seller, photosByInventoryId, text] = await Promise.all([
     db.select().from(sellers).where(eq(sellers.id, row.sellerId)).get(),
     loadPhotosByInventoryId(db, [row.id], new URL(c.req.url).origin),
+    // Rules/flavor text no viven en el snapshot de `inventory`: se juntan
+    // aparte desde `catalog_cards` (hoy Riftbound). Un juego sin catálogo
+    // local (MTG) o una impresión ya retirada del catálogo devuelve null y el
+    // detalle se sirve igual, solo sin esos dos campos.
+    getCardText(db, row.tcg as Tcg, catalogIdOf(row)),
   ])
-  return c.json(
-    rowToInventoryItem(
-      row,
-      { name: seller?.name ?? '', verified: seller?.verified ?? false },
-      photosByInventoryId.get(row.id) ?? [],
-    ),
+  const item = rowToInventoryItem(
+    row,
+    { name: seller?.name ?? '', verified: seller?.verified ?? false },
+    photosByInventoryId.get(row.id) ?? [],
   )
+  if (text) {
+    item.card.rulesText = text.rulesText
+    item.card.flavorText = text.flavorText
+  }
+  return c.json(item)
 })
