@@ -33,6 +33,34 @@ command -v jq >/dev/null || {
   exit 1
 }
 
+# Colour is on only for an interactive terminal, so piping to a file or to
+# `tee` keeps plain text. NO_COLOR=1 disables it. chalk-cli styles this script's
+# own banner lines; the streaming render below uses raw ANSI instead, because
+# chalk costs ~100ms per invocation and the render emits hundreds of lines.
+if [[ -t 1 && -z "${NO_COLOR:-}" ]] && command -v chalk >/dev/null; then
+  COLOR=1
+else
+  COLOR=0
+fi
+
+# c '{cyan.bold text}' → styled text, or the same text unstyled when colour is
+# off. chalk strips styling when its stdout is not a tty, hence FORCE_COLOR.
+c() {
+  if ((COLOR)); then
+    FORCE_COLOR=1 chalk -t "$1"
+  else
+    sed -E 's/\{[a-zA-Z.#]+ //g; s/\}//g' <<<"$1"
+  fi
+}
+
+if ((COLOR)); then
+  A_RESET=$'\033[0m' A_DIM=$'\033[2m' A_BOLD=$'\033[1m'
+  A_CYAN=$'\033[36m' A_GREEN=$'\033[32m' A_YELLOW=$'\033[33m' A_MAGENTA=$'\033[35m'
+  A_RED=$'\033[31m'
+else
+  A_RESET='' A_DIM='' A_BOLD='' A_CYAN='' A_GREEN='' A_YELLOW='' A_MAGENTA='' A_RED=''
+fi
+
 # Human-readable aliases; anything else is passed through as a literal model id.
 case "$MODEL" in
 opus) MODEL_ID="claude-opus-5" ;;
@@ -78,7 +106,7 @@ write_checkpoint() {
     echo "An In Progress task without the \`blocked\` label means the last session"
     echo "was interrupted mid-task; /dispatch-task resumes it automatically."
   } >"$REPO_ROOT/CHECKPOINT.md"
-  echo "==> Checkpoint written to CHECKPOINT.md (${reason})"
+  c "{bold.magenta ==> Checkpoint written to CHECKPOINT.md} {dim (${reason})}"
 }
 
 # Render stream-json events as readable progress lines, tracking which
@@ -93,12 +121,12 @@ foreach inputs as $e (
   | if $e.type == "system" and $e.subtype == "task_started" then
       ($e.subagent_type // (($e.task_type // "agent") | sub("^local_"; ""))) as $kind
       | .active[$e.tool_use_id] = $kind
-      | .out += ["▶ start " + $kind + "  " + (($e.description // "") | tostring | .[0:60])]
+      | .out += [$green + $bold + "▶ start " + $kind + $reset + $dim + "  " + (($e.description // "") | tostring | .[0:60]) + $reset]
     elif $e.type == "user" and ($e.parent_tool_use_id == null) then
       reduce (($e.message.content // []) | if type == "array" then .[] | select(.type == "tool_result") | .tool_use_id else empty end) as $id (
         .;
         if (.active | has($id)) then
-          .out += ["■ done  " + .active[$id]] | del(.active[$id])
+          .out += [$dim + "■ done  " + .active[$id] + $reset] | del(.active[$id])
         else . end
       )
     elif $e.type == "assistant" then
@@ -106,36 +134,36 @@ foreach inputs as $e (
       | .out += [
           ($e.message.content // [])[]
           | if .type == "tool_use" then
-              (if $who == "" then "· " else "    [" + $who + "] " end)
-              + .name + "  "
-              + ((.input.description // .input.command // .input.file_path // .input.prompt // "") | tostring | .[0:80] | gsub("\n"; " "))
+              (if $who == "" then $dim + "· " + $reset else "    " + $magenta + "[" + $who + "] " + $reset end)
+              + $cyan + .name + $reset + "  "
+              + $dim + ((.input.description // .input.command // .input.file_path // .input.prompt // "") | tostring | .[0:80] | gsub("\n"; " ")) + $reset
             elif .type == "text" and ((.text | length) > 0) then
               (if $who == "" then "\n" + .text + "\n" else empty end)
             else empty end
         ]
     elif $e.type == "result" then
-      .out += ["\n==> " + (($e.result // "") | tostring | .[0:2000])]
+      .out += ["\n" + $bold + "==> " + (($e.result // "") | tostring | .[0:2000]) + $reset]
     else . end
   | if ((.out | length) > 0)
        and (($e.type == "system" and $e.subtype == "task_started")
             or ($e.type == "user" and ($e.parent_tool_use_id == null))) then
-      .out += ["   activos: " + ((.active | length) | tostring)
-               + (if (.active | length) > 0 then " → " + ([.active[]] | join(", ")) else "" end)]
+      .out += [$yellow + "   activos: " + ((.active | length) | tostring)
+               + (if (.active | length) > 0 then " → " + ([.active[]] | join(", ")) else "" end) + $reset]
     else . end;
   .out[]
 )
 '
 
-echo "==> orchestrator model: ${MODEL} (${MODEL_ID}) · usage limit: ${USAGE_LIMIT}%"
+c "{bold.cyan ==> orchestrator model:} {green ${MODEL}} {dim (${MODEL_ID})} {dim ·} {bold.cyan usage limit:} {green ${USAGE_LIMIT}%}"
 
 for ((i = 1; i <= MAX_ITERATIONS; i++)); do
   read_usage
   if [[ -z "$SESSION_PCT" || -z "$WEEK_PCT" ]]; then
-    echo "!! Could not parse 'claude -p /usage'; aborting to avoid ungated spend." >&2
+    c "{red.bold !! Could not parse 'claude -p /usage'; aborting to avoid ungated spend.}" >&2
     write_checkpoint "usage check failed"
     exit 1
   fi
-  echo "==> [$i/$MAX_ITERATIONS] usage: session ${SESSION_PCT}% / week ${WEEK_PCT}% (limit ${USAGE_LIMIT}%)"
+  c "{bold.cyan ==> [$i/$MAX_ITERATIONS]} {bold usage:} session {yellow ${SESSION_PCT}%} / week {yellow ${WEEK_PCT}%} {dim (limit ${USAGE_LIMIT}%)}"
   if ((SESSION_PCT >= USAGE_LIMIT || WEEK_PCT >= USAGE_LIMIT)); then
     write_checkpoint "usage limit reached (>= ${USAGE_LIMIT}%)"
     exit 0
@@ -143,19 +171,33 @@ for ((i = 1; i <= MAX_ITERATIONS; i++)); do
 
   STAMP="$(date '+%Y%m%d-%H%M%S')"
   LOG_FILE="$LOG_DIR/$STAMP.jsonl"
-  echo "==> [$i/$MAX_ITERATIONS] dispatching next task — raw log: $LOG_FILE"
+  c "{bold.cyan ==> [$i/$MAX_ITERATIONS]} {bold dispatching next task} {dim — raw log: $LOG_FILE}"
 
   claude -p "/dispatch-task" --model "$MODEL_ID" --dangerously-skip-permissions \
     --output-format stream-json --verbose 2>"$LOG_DIR/$STAMP.err" |
     tee "$LOG_FILE" |
-    jq -n -r --unbuffered "$RENDER_FILTER" 2>/dev/null || true
+    jq -n -r --unbuffered \
+      --arg reset "$A_RESET" --arg dim "$A_DIM" --arg bold "$A_BOLD" \
+      --arg cyan "$A_CYAN" --arg green "$A_GREEN" --arg yellow "$A_YELLOW" \
+      --arg magenta "$A_MAGENTA" \
+      "$RENDER_FILTER" 2>/dev/null || true
 
   RESULT="$(jq -r 'select(.type=="result") | .result // empty' "$LOG_FILE" 2>/dev/null |
     grep -Eo 'DISPATCH_RESULT: [A-Z_]+[^"]*' | tail -1 || true)"
   # Fallback: the marker may land in an assistant message if the run was cut short.
   [[ -n "$RESULT" ]] || RESULT="$(grep -Eo 'DISPATCH_RESULT: [A-Z_]+[^"\\]*' "$LOG_FILE" | tail -1 || true)"
 
-  echo "==> [$i/$MAX_ITERATIONS] ${RESULT:-<no result>}"
+  # RESULT is printed with raw ANSI, not a chalk template: a task id or reason
+  # containing braces would be parsed as template markup and mangled.
+  case "$RESULT" in
+  "DISPATCH_RESULT: DONE"*) R_COLOR="$A_GREEN" ;;
+  "DISPATCH_RESULT: BLOCKED"*) R_COLOR="$A_YELLOW" ;;
+  "DISPATCH_RESULT: NO_TASKS"*) R_COLOR="$A_CYAN" ;;
+  *) R_COLOR="$A_RED" ;;
+  esac
+  printf '%s %s%s%s\n' "$(c "{bold.cyan ==> [$i/$MAX_ITERATIONS]}")" \
+    "$R_COLOR$A_BOLD" "${RESULT:-<no result>}" "$A_RESET"
+
   case "$RESULT" in
   "DISPATCH_RESULT: NO_TASKS"*)
     write_checkpoint "backlog empty"
@@ -164,7 +206,7 @@ for ((i = 1; i <= MAX_ITERATIONS; i++)); do
   "DISPATCH_RESULT: DONE"*) ;;
   "DISPATCH_RESULT: BLOCKED"*) ;; # task got the `blocked` label; next iteration picks another
   *)
-    echo "!! Session ended without DISPATCH_RESULT (killed or errored). See $LOG_DIR/$STAMP.err" >&2
+    c "{red.bold !! Session ended without DISPATCH_RESULT (killed or errored).} {dim See $LOG_DIR/$STAMP.err}" >&2
     write_checkpoint "session ended without result"
     exit 1
     ;;
