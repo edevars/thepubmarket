@@ -24,6 +24,8 @@ import {
 import { and, count, desc, eq, gt, inArray, isNull, or, sql } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { z } from 'zod'
+import { CatalogError } from '../lib/catalog'
+import { catalogProviderFor, supportedTcgs } from '../lib/catalog-providers'
 import { createListing, type ListingInput, rowToInventoryItem } from '../lib/inventory'
 import { orderToSellerOrder } from '../lib/orders'
 import {
@@ -34,27 +36,27 @@ import {
   MAX_PHOTO_BYTES,
   rowToInventoryPhoto,
 } from '../lib/photos'
-import { ScryfallError, searchCards } from '../lib/scryfall'
 import { rowToSeller } from '../lib/sellers'
 import type { AppEnv } from '../types'
 
-const createSchema = z
-  .object({
-    // Un tcg fuera de la lista soportada se rechaza aquí; un tcg válido pero
-    // sin catálogo integrado lo rechaza createListing con `tcg_not_supported`.
-    tcg: z.enum(TCGS as [Tcg, ...Tcg[]]).default('mtg'),
-    /** Id de la impresión en el catálogo de su juego (UUID de Scryfall en MTG). */
-    catalogId: z.string().min(1).max(64).optional(),
-    // Alias legacy: clientes previos al multi-juego mandan scryfallId (MTG).
-    // Se retira cuando el panel migre al contrato nuevo (TASK-031/032).
-    scryfallId: z.string().uuid().optional(),
-    condition: z.enum(CONDITIONS as [string, ...string[]]),
-    finish: z.enum(FINISHES as [string, ...string[]]),
-    language: z.string().min(2).max(8).default('es'),
-    priceCents: z.number().int().min(1),
-    quantity: z.number().int().min(1),
-  })
-  .refine((v) => Boolean(v.catalogId ?? v.scryfallId), { message: 'catalog_id_required' })
+const createSchema = z.object({
+  // Un tcg fuera de la lista soportada se rechaza aquí; un tcg válido pero
+  // sin catálogo integrado lo rechaza createListing con `tcg_not_supported`.
+  tcg: z.enum(TCGS as [Tcg, ...Tcg[]]).default('mtg'),
+  /** Id de la impresión en el catálogo de su juego (UUID de Scryfall en MTG). */
+  catalogId: z.string().min(1).max(64),
+  condition: z.enum(CONDITIONS as [string, ...string[]]),
+  finish: z.enum(FINISHES as [string, ...string[]]),
+  language: z.string().min(2).max(8).default('es'),
+  priceCents: z.number().int().min(1),
+  quantity: z.number().int().min(1),
+})
+
+/** Query de `GET /seller/catalog/search`. */
+const searchQuerySchema = z.object({
+  game: z.enum(TCGS as [Tcg, ...Tcg[]]).default('mtg'),
+  q: z.string().min(1),
+})
 
 const updateSchema = z
   .object({
@@ -169,11 +171,10 @@ sellerPanel.post('/inventory', async (c) => {
     return c.json({ error: 'invalid_body', issues: parsed.error.issues }, 400)
   }
 
-  const { scryfallId, ...offer } = parsed.data
   const result = await createListing(
     c.get('db'),
     c.env.SESSIONS,
-    { ...offer, catalogId: offer.catalogId ?? scryfallId } as ListingInput,
+    parsed.data as ListingInput,
     seller.id,
   )
   if (!result.ok) {
@@ -608,15 +609,32 @@ sellerPanel.post('/orders/:id/collect', async (c) => {
   return c.json(orderToSellerOrder(row, [], undefined, await pickupStoreOf(db, row.pickupSellerId)))
 })
 
-/** GET /seller/scryfall/search?q= — búsqueda para el alta (cache KV). */
-sellerPanel.get('/scryfall/search', async (c) => {
-  const q = c.req.query('q')?.trim()
-  if (!q) return c.json({ error: 'missing_query' }, 400)
+/**
+ * GET /seller/catalog/search?game=&q= — búsqueda en el catálogo del juego
+ * (cache KV). `game` omitido = 'mtg', por los clientes previos al multi-juego.
+ */
+sellerPanel.get('/catalog/search', async (c) => {
+  const parsed = searchQuerySchema.safeParse({
+    game: c.req.query('game') ?? undefined,
+    q: c.req.query('q')?.trim(),
+  })
+  if (!parsed.success) {
+    return c.json({ error: 'invalid_query', issues: parsed.error.issues }, 400)
+  }
+
+  const provider = catalogProviderFor(parsed.data.game)
+  if (!provider) {
+    return c.json(
+      { error: 'tcg_not_supported', tcg: parsed.data.game, supported: supportedTcgs() },
+      400,
+    )
+  }
+
   try {
-    return c.json({ results: await searchCards(q, c.env.SESSIONS) })
+    return c.json({ results: await provider.searchCards(parsed.data.q, c.env.SESSIONS) })
   } catch (err) {
-    if (err instanceof ScryfallError) {
-      return c.json({ error: 'scryfall_error', status: err.status }, 502)
+    if (err instanceof CatalogError) {
+      return c.json({ error: 'catalog_error', tcg: parsed.data.game, status: err.status }, 502)
     }
     throw err
   }

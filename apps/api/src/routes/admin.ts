@@ -6,10 +6,11 @@
  * (`POST /sellers/:id/link` escribe `sellers.user_id`). No existe ruta pública
  * equivalente: el modelo es vetted, por invitación, sin auto-registro.
  *
- * Flujo: el operador busca la carta en Scryfall (`/admin/scryfall/search`),
- * toma su scryfall_id y publica un single (`POST /admin/inventory`). Al publicar
- * se guarda un snapshot de los datos canónicos de la carta para que el catálogo
- * público no dependa de Scryfall en cada render.
+ * Flujo: el operador busca la carta en el catálogo de su juego
+ * (`/admin/catalog/search?game=`), toma su catalogId y publica un single
+ * (`POST /admin/inventory`). Al publicar se guarda un snapshot de los datos
+ * canónicos para que el catálogo público no dependa del proveedor en cada
+ * render.
  *
  * Acceso a datos con Drizzle (@thepubmarket/db). Dinero SIEMPRE en enteros
  * (centavos MXN). Sin pagos ni reservas aquí.
@@ -20,10 +21,11 @@ import { ANCHOR_SELLER_ID, CONDITIONS, FINISHES, TCGS, type Tcg } from '@thepubm
 import { desc, eq, sql } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { z } from 'zod'
+import { CatalogError } from '../lib/catalog'
+import { catalogProviderFor, supportedTcgs } from '../lib/catalog-providers'
 import { createListing, type ListingInput, rowToInventoryItem } from '../lib/inventory'
 import { loadPhotosByInventoryId } from '../lib/photos'
 import { clientIp } from '../lib/rate-limit'
-import { ScryfallError, searchCards } from '../lib/scryfall'
 import type { AppEnv } from '../types'
 
 const createSchema = z
@@ -33,8 +35,8 @@ const createSchema = z
     tcg: z.enum(TCGS as [Tcg, ...Tcg[]]).default('mtg'),
     /** Id de la impresión en el catálogo de su juego (UUID de Scryfall en MTG). */
     catalogId: z.string().min(1).max(64).optional(),
-    // Alias legacy: scripts/clientes previos al multi-juego mandan scryfallId
-    // (MTG). Se retira cuando migren al contrato nuevo (TASK-031/035).
+    // Alias legacy: scripts/load-inventory.mjs todavía manda scryfallId (MTG).
+    // Se retira cuando ese script migre al contrato nuevo (TASK-035).
     scryfallId: z.string().uuid().optional(),
     condition: z.enum(CONDITIONS as [string, ...string[]]),
     finish: z.enum(FINISHES as [string, ...string[]]),
@@ -45,6 +47,12 @@ const createSchema = z
     sellerId: z.string().uuid().default(ANCHOR_SELLER_ID),
   })
   .refine((v) => Boolean(v.catalogId ?? v.scryfallId), { message: 'catalog_id_required' })
+
+/** Query de `GET /admin/catalog/search`. */
+const searchQuerySchema = z.object({
+  game: z.enum(TCGS as [Tcg, ...Tcg[]]).default('mtg'),
+  q: z.string().min(1),
+})
 
 const updateSchema = z
   .object({
@@ -57,15 +65,32 @@ const updateSchema = z
 
 export const admin = new Hono<AppEnv>()
 
-/** GET /admin/scryfall/search?q= — lookup de cartas para encontrar el scryfall_id. */
-admin.get('/scryfall/search', async (c) => {
-  const q = c.req.query('q')?.trim()
-  if (!q) return c.json({ error: 'missing_query' }, 400)
+/**
+ * GET /admin/catalog/search?game=&q= — lookup de cartas para encontrar el
+ * catalogId a publicar. `game` omitido = 'mtg'.
+ */
+admin.get('/catalog/search', async (c) => {
+  const parsed = searchQuerySchema.safeParse({
+    game: c.req.query('game') ?? undefined,
+    q: c.req.query('q')?.trim(),
+  })
+  if (!parsed.success) {
+    return c.json({ error: 'invalid_query', issues: parsed.error.issues }, 400)
+  }
+
+  const provider = catalogProviderFor(parsed.data.game)
+  if (!provider) {
+    return c.json(
+      { error: 'tcg_not_supported', tcg: parsed.data.game, supported: supportedTcgs() },
+      400,
+    )
+  }
+
   try {
-    return c.json({ results: await searchCards(q, c.env.SESSIONS) })
+    return c.json({ results: await provider.searchCards(parsed.data.q, c.env.SESSIONS) })
   } catch (err) {
-    if (err instanceof ScryfallError) {
-      return c.json({ error: 'scryfall_error', status: err.status }, 502)
+    if (err instanceof CatalogError) {
+      return c.json({ error: 'catalog_error', tcg: parsed.data.game, status: err.status }, 502)
     }
     throw err
   }

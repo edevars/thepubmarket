@@ -48,7 +48,7 @@ export function AddCardFlow() {
   const [published, setPublished] = useState<InventoryItem | null>(null)
   const [managingPhotos, setManagingPhotos] = useState(false)
 
-  // Búsqueda con debounce contra /seller/scryfall/search.
+  // Búsqueda con debounce contra /seller/catalog/search.
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current)

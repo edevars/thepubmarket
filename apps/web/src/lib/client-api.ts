@@ -23,6 +23,7 @@ import type {
   SellerOrdersResponse,
   SellerPanelMe,
   ShipOrderRequest,
+  Tcg,
   UpdateListingRequest,
 } from '@thepubmarket/shared'
 import { withTurnstileHeader } from './turnstile'
@@ -207,9 +208,13 @@ export async function reorderPhotos(
   return ((await res.json()) as { photos: InventoryPhoto[] }).photos
 }
 
-/** Busca impresiones en el catálogo canónico (Scryfall) para el alta. */
-export async function searchPrintings(token: string, q: string): Promise<CardSnapshot[]> {
-  const res = await fetch(`${API}/seller/scryfall/search?q=${encodeURIComponent(q)}`, {
+/** Busca impresiones en el catálogo canónico del juego para el alta. */
+export async function searchPrintings(
+  token: string,
+  q: string,
+  game: Tcg = 'mtg',
+): Promise<CardSnapshot[]> {
+  const res = await fetch(`${API}/seller/catalog/search?game=${game}&q=${encodeURIComponent(q)}`, {
     headers: authHeaders(token),
   })
   if (!res.ok) return []

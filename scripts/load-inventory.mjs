@@ -3,7 +3,7 @@
  * Carga de inventario real (Fase 1, admin interno) contra la API local.
  *
  * Por cada entrada de scripts/inventory-seed.json:
- *   1. resuelve la impresión exacta en Scryfall vía GET /admin/scryfall/search
+ *   1. resuelve la impresión exacta en Scryfall vía GET /admin/catalog/search
  *      (nombre exacto + set), eligiendo la impresión cuyo setCode coincide;
  *   2. publica el single vía POST /admin/inventory (header x-admin-key).
  *
@@ -37,7 +37,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
 async function searchPrinting(name, set) {
   const q = set ? `!"${name}" set:${set}` : `!"${name}"`
-  const res = await fetch(`${API_URL}/admin/scryfall/search?q=${encodeURIComponent(q)}`, {
+  const res = await fetch(`${API_URL}/admin/catalog/search?game=mtg&q=${encodeURIComponent(q)}`, {
     headers: { 'x-admin-key': ADMIN_KEY },
   })
   if (!res.ok) {

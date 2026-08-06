@@ -18,8 +18,7 @@ import type {
   Tcg,
 } from '@thepubmarket/shared'
 import { CatalogError } from './catalog'
-import { getCardById as getRiftboundCard } from './riftcodex'
-import { getCardById as getMtgCard } from './scryfall'
+import { catalogProviderFor, supportedTcgs } from './catalog-providers'
 
 /**
  * Convierte una fila de Drizzle al contrato público `InventoryItem`.
@@ -81,17 +80,6 @@ export type CreateListingResult =
   | { ok: false; error: string; status: 400 | 404 | 500 | 502; extra?: Record<string, unknown> }
 
 /**
- * Resolución de impresión por juego. Un juego aparece aquí cuando su catálogo
- * está integrado; mientras tanto publicar en él devuelve `tcg_not_supported`.
- */
-const CATALOG_PROVIDERS: Partial<
-  Record<Tcg, (catalogId: string, kv: KVNamespace) => Promise<CardSnapshot>>
-> = {
-  mtg: getMtgCard,
-  riftbound: getRiftboundCard,
-}
-
-/**
  * Publica un single: trae el snapshot canónico del catálogo del juego (cache
  * KV → proveedor), valida que el acabado exista para esa impresión e inserta
  * la fila con status activo.
@@ -102,19 +90,19 @@ export async function createListing(
   input: ListingInput,
   sellerId: string,
 ): Promise<CreateListingResult> {
-  const lookup = CATALOG_PROVIDERS[input.tcg]
-  if (!lookup) {
+  const provider = catalogProviderFor(input.tcg)
+  if (!provider) {
     return {
       ok: false,
       error: 'tcg_not_supported',
       status: 400,
-      extra: { tcg: input.tcg, supported: Object.keys(CATALOG_PROVIDERS) },
+      extra: { tcg: input.tcg, supported: supportedTcgs() },
     }
   }
 
   let card: CardSnapshot
   try {
-    card = await lookup(input.catalogId, kv)
+    card = await provider.getCardById(input.catalogId, kv)
   } catch (err) {
     if (err instanceof CatalogError) {
       // Solo Scryfall distingue el 404; RiftCodex responde 500 a un id
