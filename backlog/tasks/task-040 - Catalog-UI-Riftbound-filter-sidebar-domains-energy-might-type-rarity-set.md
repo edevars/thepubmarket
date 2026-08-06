@@ -6,12 +6,14 @@ title: >-
 status: To Do
 assignee: []
 created_date: '2026-08-06 05:44'
+updated_date: '2026-08-06 05:49'
 labels:
   - 'epic:riftbound-ux'
   - web
 milestone: m-3
 dependencies:
   - TASK-039
+  - TASK-045
 references:
   - apps/web/src/components/catalog/FilterSidebar.tsx
   - apps/web/src/components/catalog/CatalogView.tsx
@@ -42,4 +44,5 @@ Depends on TASK-039, which provides the GET /catalog filter parameters these con
 - [ ] #3 Switching to another game (or clearing the game) removes Riftbound-specific filters and controls; other games' filtering is unaffected
 - [ ] #4 Empty result states render correctly and the sidebar works on mobile viewports
 - [ ] #5 Filter labels localized in es and en; typecheck, biome, and existing web tests green
+- [ ] #6 Filter micro-interactions use the shared motion foundation (TASK-045): chip add/remove and card grid updates transition smoothly, respecting prefers-reduced-motion; a web-design-guidelines skill audit of touched surfaces reports no violations
 <!-- AC:END -->
