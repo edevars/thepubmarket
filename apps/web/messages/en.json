@@ -261,6 +261,7 @@
     "attrMight": "Might",
     "attrPower": "Power",
     "attrArtist": "Artist",
+    "cardText": "Card text",
     "addCart": "Add to cart",
     "soldOut": "Sold out",
     "inStock": "{count, plural, one {# in stock} other {# in stock}}",
