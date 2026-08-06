@@ -1,10 +1,11 @@
 ---
 id: TASK-031
 title: Multi-game catalog search and listing creation in seller/admin APIs
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - Claude
 created_date: '2026-08-06 02:19'
-updated_date: '2026-08-06 02:20'
+updated_date: '2026-08-06 02:53'
 labels:
   - 'epic:riftbound'
   - api
