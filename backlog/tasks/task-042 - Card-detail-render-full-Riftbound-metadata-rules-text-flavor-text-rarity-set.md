@@ -6,12 +6,14 @@ title: >-
 status: To Do
 assignee: []
 created_date: '2026-08-06 05:44'
+updated_date: '2026-08-06 05:50'
 labels:
   - 'epic:riftbound-ux'
   - web
 milestone: m-3
 dependencies:
   - TASK-038
+  - TASK-045
 references:
   - apps/web/src/components/detail/CardDetailView.tsx
   - apps/web/src/components/detail/game-attributes.ts
@@ -41,4 +43,5 @@ Depends on TASK-038, which makes rules text, flavor text, rarity, and set metada
 - [ ] #3 Existing attribute rows (type/supertype, domains, energy, might) are retained and consistent with the new sections
 - [ ] #4 Missing fields are hidden gracefully (no empty labels); non-Riftbound listings are unaffected
 - [ ] #5 Labels localized in es and en; typecheck, biome, and tests green including game-attributes tests
+- [ ] #6 New metadata sections are visually first-class: deliberate typographic hierarchy and entrance/expand transitions from the shared motion foundation (TASK-045), respecting prefers-reduced-motion; a web-design-guidelines skill audit of the detail page reports no violations
 <!-- AC:END -->
