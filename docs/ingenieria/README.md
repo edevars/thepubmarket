@@ -41,6 +41,7 @@ ponerse al día sin recargar todo el contexto.
 | ¿Cómo voy de una orden a su pago en Stripe (o al revés, en una disputa)? | [`pagos.md`](./pagos.md) |
 | ¿Cómo doy de alta un vendedor vetted nuevo? | [`invitacion-sellers.md`](./invitacion-sellers.md) |
 | ¿Cómo sube el vendedor fotos reales del ejemplar y cómo se sirven? | [`fotos-inventario.md`](./fotos-inventario.md) |
+| ¿De dónde salen los datos de carta y cómo agrego otro TCG? | [`catalogo-multijuego.md`](./catalogo-multijuego.md) |
 
 ---
 

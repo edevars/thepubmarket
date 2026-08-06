@@ -160,5 +160,35 @@
     "language": "es",
     "priceCents": 21000,
     "quantity": 5
+  },
+  {
+    "game": "riftbound",
+    "name": "Jinx - Loose Cannon",
+    "set": "OGN",
+    "condition": "NM",
+    "finish": "nonfoil",
+    "language": "en",
+    "priceCents": 24000,
+    "quantity": 3
+  },
+  {
+    "game": "riftbound",
+    "name": "Bewitching Spirit",
+    "set": "UNL",
+    "condition": "NM",
+    "finish": "nonfoil",
+    "language": "en",
+    "priceCents": 4500,
+    "quantity": 8
+  },
+  {
+    "game": "riftbound",
+    "name": "Vi - Hotheaded",
+    "set": "UNL",
+    "condition": "LP",
+    "finish": "foil",
+    "language": "en",
+    "priceCents": 18000,
+    "quantity": 2
   }
 ]

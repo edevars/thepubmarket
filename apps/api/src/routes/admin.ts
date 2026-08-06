@@ -28,25 +28,20 @@ import { loadPhotosByInventoryId } from '../lib/photos'
 import { clientIp } from '../lib/rate-limit'
 import type { AppEnv } from '../types'
 
-const createSchema = z
-  .object({
-    // Un tcg fuera de la lista soportada se rechaza aquí; un tcg válido pero
-    // sin catálogo integrado lo rechaza createListing con `tcg_not_supported`.
-    tcg: z.enum(TCGS as [Tcg, ...Tcg[]]).default('mtg'),
-    /** Id de la impresión en el catálogo de su juego (UUID de Scryfall en MTG). */
-    catalogId: z.string().min(1).max(64).optional(),
-    // Alias legacy: scripts/load-inventory.mjs todavía manda scryfallId (MTG).
-    // Se retira cuando ese script migre al contrato nuevo (TASK-035).
-    scryfallId: z.string().uuid().optional(),
-    condition: z.enum(CONDITIONS as [string, ...string[]]),
-    finish: z.enum(FINISHES as [string, ...string[]]),
-    // Idioma del single ofrecido (ISO corto: 'en', 'es', 'ja'…).
-    language: z.string().min(2).max(8).default('en'),
-    priceCents: z.number().int().min(0),
-    quantity: z.number().int().min(1),
-    sellerId: z.string().uuid().default(ANCHOR_SELLER_ID),
-  })
-  .refine((v) => Boolean(v.catalogId ?? v.scryfallId), { message: 'catalog_id_required' })
+const createSchema = z.object({
+  // Un tcg fuera de la lista soportada se rechaza aquí; un tcg válido pero
+  // sin catálogo integrado lo rechaza createListing con `tcg_not_supported`.
+  tcg: z.enum(TCGS as [Tcg, ...Tcg[]]).default('mtg'),
+  /** Id de la impresión en el catálogo de su juego (UUID de Scryfall en MTG). */
+  catalogId: z.string().min(1).max(64),
+  condition: z.enum(CONDITIONS as [string, ...string[]]),
+  finish: z.enum(FINISHES as [string, ...string[]]),
+  // Idioma del single ofrecido (ISO corto: 'en', 'es', 'ja'…).
+  language: z.string().min(2).max(8).default('en'),
+  priceCents: z.number().int().min(0),
+  quantity: z.number().int().min(1),
+  sellerId: z.string().uuid().default(ANCHOR_SELLER_ID),
+})
 
 /** Query de `GET /admin/catalog/search`. */
 const searchQuerySchema = z.object({
@@ -102,19 +97,14 @@ admin.post('/inventory', async (c) => {
   if (!parsed.success) {
     return c.json({ error: 'invalid_body', issues: parsed.error.issues }, 400)
   }
-  const { sellerId, scryfallId, ...offer } = parsed.data
+  const { sellerId, ...offer } = parsed.data
   const db = c.get('db')
 
   const seller = await db.select().from(sellers).where(eq(sellers.id, sellerId)).get()
   if (!seller) return c.json({ error: 'seller_not_found' }, 404)
 
   // Lógica de alta compartida con el panel del seller (lib/inventory).
-  const result = await createListing(
-    db,
-    c.env.SESSIONS,
-    { ...offer, catalogId: offer.catalogId ?? scryfallId } as ListingInput,
-    sellerId,
-  )
+  const result = await createListing(db, c.env.SESSIONS, offer as ListingInput, sellerId)
   if (!result.ok) {
     return c.json({ error: result.error, ...result.extra }, result.status)
   }
