@@ -5,7 +5,7 @@ status: In Progress
 assignee:
   - claude
 created_date: '2026-08-06 00:13'
-updated_date: '2026-08-06 01:37'
+updated_date: '2026-08-06 01:39'
 labels:
   - 'epic:inventory-photos'
   - frontend
@@ -15,6 +15,7 @@ dependencies:
 documentation:
   - docs/ingenieria/fotos-inventario.md
 modified_files:
+  - apps/web/src/components/detail/PhotoGallery.tsx
   - apps/web/src/components/detail/CardDetailView.tsx
   - apps/web/src/components/catalog/ProductCard.tsx
   - apps/web/messages/es.json
@@ -45,15 +46,15 @@ This feature touches no payment, payout or Stripe code path — no fund-custody 
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Item detail shows the Scryfall image labeled as a reference image and the seller's photos labeled as actual photos of the card being sold; the two are visually distinguishable at a glance
-- [ ] #2 Selecting a thumbnail swaps the main image, the active thumbnail is highlighted, and selection works via keyboard as well as pointer
-- [ ] #3 A full-size overlay lets the buyer zoom into photo detail and closes via click and via Escape
-- [ ] #4 Listings with quantity greater than 1 show copy clarifying the photos are representative of the copy shipped
-- [ ] #5 With zero seller photos the placeholder strip is hidden and the page matches current layout and behavior exactly
-- [ ] #6 A broken or failing image URL degrades gracefully with no layout jump
-- [ ] #7 Catalog grid cards show a subtle indicator when a listing has real photos
-- [ ] #8 All new strings exist in both the Spanish and English message catalogs
-- [ ] #9 A manual E2E checklist covering a listing with photos, one without, both locales, and a mobile viewport is appended to docs/ingenieria/fotos-inventario.md
+- [x] #1 Item detail shows the Scryfall image labeled as a reference image and the seller's photos labeled as actual photos of the card being sold; the two are visually distinguishable at a glance
+- [x] #2 Selecting a thumbnail swaps the main image, the active thumbnail is highlighted, and selection works via keyboard as well as pointer
+- [x] #3 A full-size overlay lets the buyer zoom into photo detail and closes via click and via Escape
+- [x] #4 Listings with quantity greater than 1 show copy clarifying the photos are representative of the copy shipped
+- [x] #5 With zero seller photos the placeholder strip is hidden and the page matches current layout and behavior exactly
+- [x] #6 A broken or failing image URL degrades gracefully with no layout jump
+- [x] #7 Catalog grid cards show a subtle indicator when a listing has real photos
+- [x] #8 All new strings exist in both the Spanish and English message catalogs
+- [x] #9 A manual E2E checklist covering a listing with photos, one without, both locales, and a mobile viewport is appended to docs/ingenieria/fotos-inventario.md
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -82,3 +83,15 @@ The item detail view already renders a fake 3-thumbnail placeholder strip under 
 
 No payment/payout/Stripe code touched — pure catalog/detail display wiring.
 <!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Verification run: `pnpm --filter @thepubmarket/web typecheck` (clean), `pnpm lint` (clean, 175 files — fixed one real a11y finding: `aria-label` isn't valid on a bare `<span>` without a role, added `role="img"` to the photos-indicator badge in ProductCard rather than dropping the accessible name), `pnpm --filter @thepubmarket/web build` (clean production build; `/catalog/[id]` grew from 2.67 kB to 4.46 kB reflecting the new gallery, all other routes unaffected).
+
+es.json/en.json parity verified programmatically: both have exactly 32 keys under `detail` after the 9 new `gallery*`/`hasRealPhotos` additions.
+
+Same convention as TASK-026: per this repo's stated apps/web testing convention and this session's standing instruction against driving browser automation for verification, I did not click through the UI myself. AC checks rest on code-level verification (typecheck/lint/build + reading the actual conditional-render logic) plus the manual checklist appended to docs/ingenieria/fotos-inventario.md §10, which a human runs interactively across a photo listing, a no-photo listing, both locales, and a mobile viewport.
+
+AC5 (zero-photos regression) is verified by construction, not by inspection: the `item.photos.length > 0 ? <PhotoGallery/> : (...)` branch in CardDetailView.tsx has the exact original JSX (CardArt + ConditionBadge + FoilTag, no thumbnail strip) untouched in the else-branch — diffing the file shows only an added wrapper, not a rewrite of that markup. AC6 (no layout jump on broken image) rests on `ImageWithFallback` always applying the identical className to both the <img> and its error-fallback <div>, so the box never resizes, only its contents swap.
+<!-- SECTION:NOTES:END -->
