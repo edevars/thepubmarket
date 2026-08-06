@@ -5,7 +5,7 @@ status: In Progress
 assignee:
   - claude
 created_date: '2026-08-03 04:03'
-updated_date: '2026-08-03 04:17'
+updated_date: '2026-08-06 00:22'
 labels:
   - api
   - stripe
@@ -83,6 +83,10 @@ Non-custodial check: no change to fund flow; reliability of bookkeeping/settleme
 **AC#4 left unchecked on purpose:** a real Workflows create() failure cannot be produced on demand; the rethrow branch is code-level only so far. Will check it once the prod test payment (same one that closes TASK-021 AC#7) exercises the rewritten happy path end to end.
 
 **Pending — prod rollout (plan step 6):** `wrangler d1 migrations apply thepubmarket-db --remote` then `wrangler deploy`, both handed to the user because deploy is blocked for the agent by the permission classifier. Task stays In Progress until that ships; status must reflect what is actually deployed.
+
+**Committed** on branch `fix/task-021-022-payments-reliability` as `e0a6f6d` (migration 0009, schema, the `webhooks.ts` rewrite and the at-least-once section of `pagos.md`), on top of TASK-021's `c73e599`. Also corrected a stale line in `pagos.md` §2: it described the dedupe-before-work handler in the present tense, which this task removes.
+
+Still pending, unchanged: `wrangler d1 migrations apply thepubmarket-db --remote` + `wrangler deploy`, then the test payment that also closes TASK-021 AC#7 and exercises AC#4's rewritten happy path.
 <!-- SECTION:NOTES:END -->
 
 ## Comments
