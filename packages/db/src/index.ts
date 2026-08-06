@@ -8,6 +8,7 @@ export * from './schema'
 
 import type {
   inventory,
+  inventoryPhotos,
   orderItems,
   orders,
   sellerInvitations,
@@ -25,6 +26,8 @@ export type SellerInvitationRow = typeof sellerInvitations.$inferSelect
 export type NewSellerInvitation = typeof sellerInvitations.$inferInsert
 export type InventoryRow = typeof inventory.$inferSelect
 export type NewInventory = typeof inventory.$inferInsert
+export type InventoryPhotoRow = typeof inventoryPhotos.$inferSelect
+export type NewInventoryPhoto = typeof inventoryPhotos.$inferInsert
 export type OrderRow = typeof orders.$inferSelect
 export type NewOrder = typeof orders.$inferInsert
 export type OrderItemRow = typeof orderItems.$inferSelect

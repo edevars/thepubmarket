@@ -5,13 +5,19 @@
  */
 
 import { type Db, type InventoryRow, inventory } from '@thepubmarket/db'
-import type { Condition, Finish, InventoryItem, Tcg } from '@thepubmarket/shared'
+import type { Condition, Finish, InventoryItem, InventoryPhoto, Tcg } from '@thepubmarket/shared'
 import { getCardById, ScryfallError } from './scryfall'
 
-/** Convierte una fila de Drizzle al contrato público `InventoryItem`. */
+/**
+ * Convierte una fila de Drizzle al contrato público `InventoryItem`.
+ *
+ * `photos` es opcional y default vacío: quien no consulte `inventory_photos`
+ * devuelve una publicación sin galería, que es un estado válido.
+ */
 export function rowToInventoryItem(
   row: InventoryRow,
   seller: { name: string; verified: boolean },
+  photos: InventoryPhoto[] = [],
 ): InventoryItem {
   return {
     id: row.id,
@@ -32,6 +38,7 @@ export function rowToInventoryItem(
       finishes: [],
       imageUrl: row.imageUrl,
     },
+    photos,
     condition: (row.condition ?? 'NM') as Condition,
     language: row.cardLang ?? '',
     finish: row.finish,

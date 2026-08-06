@@ -76,6 +76,25 @@ export interface CardSnapshot {
 }
 
 /**
+ * Foto real del ejemplar físico subida por el vendedor, complementaria a la
+ * imagen canónica de Scryfall (`CardSnapshot.imageUrl`). Sirve para juzgar la
+ * condición antes de pagar.
+ *
+ * `url` la sirve la API; la llave de R2 nunca sale del servidor.
+ */
+export interface InventoryPhoto {
+  /** UUID de la foto (fila de `inventory_photos`). */
+  id: string
+  /** URL servida por la API para mostrar la imagen. */
+  url: string
+  /** Posición en la galería, 0-based. */
+  sortOrder: number
+}
+
+/** Tope de fotos por publicación. Se aplica en la app, no en el esquema. */
+export const MAX_PHOTOS_PER_ITEM = 6
+
+/**
  * Un item de inventario: un single físico a la venta, ligado a una impresión de
  * Scryfall. Combina el snapshot de la carta con los datos de la oferta.
  */
@@ -92,6 +111,11 @@ export interface InventoryItem {
   tcg: Tcg
   /** Carta (snapshot de Scryfall). */
   card: CardSnapshot
+  /**
+   * Fotos reales del ejemplar, ordenadas por `sortOrder`. Arreglo vacío cuando
+   * el vendedor no subió ninguna: la publicación sigue siendo válida.
+   */
+  photos: InventoryPhoto[]
   /** Condición física. */
   condition: Condition
   /** Idioma del single ofrecido (puede diferir del de la impresión base). */

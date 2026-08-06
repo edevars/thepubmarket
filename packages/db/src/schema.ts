@@ -180,6 +180,56 @@ export const inventory = sqliteTable(
 )
 
 // =====================================================================
+// inventory_photos — fotos REALES del ejemplar físico que sube el vendedor,
+// complementarias a la imagen canónica de Scryfall (`inventory.image_url`).
+// En singles la condición manda sobre el precio, así que esto es confianza,
+// no decoración: el comprador juzga rayones, whitening, centrado y curvatura
+// del foil antes de pagar.
+//
+// Tabla propia y NO una columna JSON en `inventory`: da integridad referencial
+// (CASCADE), permite borrar/reordenar sin read-modify-write con carreras, y es
+// puro CREATE TABLE (D1-friendly). En este esquema el JSON queda reservado para
+// blobs pequeños de configuración, nunca para listas de entidades.
+//
+// `seller_id` está desnormalizado a propósito: la verificación de propiedad en
+// el panel es un WHERE directo, sin join contra `inventory` (mismo patrón que
+// apps/api/src/routes/seller-panel.ts).
+//
+// Aquí SOLO vive la metadata; el binario está en R2 bajo `r2_key`. POLÍTICA DE
+// HUÉRFANOS: se borra primero la fila y después el objeto de R2 en best-effort.
+// Un objeto suelto en R2 es inalcanzable (servir una foto se resuelve por la
+// fila) y cuesta centavos; el orden inverso mostraría imágenes rotas. Sin cron
+// de reconciliación en v1.
+//
+// El tope de 6 fotos por publicación se aplica en la app, no en el esquema.
+// =====================================================================
+export const inventoryPhotos = sqliteTable(
+  'inventory_photos',
+  {
+    id: text('id').primaryKey(),
+    inventoryId: text('inventory_id')
+      .notNull()
+      .references(() => inventory.id, { onDelete: 'cascade' }),
+    sellerId: text('seller_id')
+      .notNull()
+      .references(() => sellers.id, { onDelete: 'cascade' }),
+    /** Llave del objeto en R2. Única: dos filas nunca apuntan al mismo binario. */
+    r2Key: text('r2_key').notNull(),
+    contentType: text('content_type').notNull(),
+    sizeBytes: integer('size_bytes').notNull(),
+    /** Orden de la galería, 0-based. Lo reasigna el vendedor al reordenar. */
+    sortOrder: integer('sort_order').notNull().default(0),
+    ...timestamps,
+  },
+  (t) => [
+    uniqueIndex('idx_inventory_photos_r2_key').on(t.r2Key),
+    index('idx_inventory_photos_inventory_id').on(t.inventoryId),
+    check('inventory_photos_size_bytes_check', sql`${t.sizeBytes} > 0`),
+    check('inventory_photos_sort_order_check', sql`${t.sortOrder} >= 0`),
+  ],
+)
+
+// =====================================================================
 // orders — una orden referencia EXACTAMENTE UN seller (Stripe Connect).
 // =====================================================================
 export const orders = sqliteTable(
@@ -316,6 +366,7 @@ export const schema = {
   sellers,
   sellerInvitations,
   inventory,
+  inventoryPhotos,
   orders,
   orderItems,
   webhookEvents,

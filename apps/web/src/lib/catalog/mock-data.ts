@@ -103,6 +103,8 @@ function listing(s: Spec): InventoryItem {
       finishes: s.foil ? ['nonfoil', 'foil'] : ['nonfoil'],
       imageUrl: SCRYFALL_IMAGES[s.id] ?? null,
     },
+    // Los mocks no llevan fotos del ejemplar: son cartas inventadas.
+    photos: [],
     condition: s.cond,
     language: s.lang,
     finish: s.foil ? 'foil' : 'nonfoil',
