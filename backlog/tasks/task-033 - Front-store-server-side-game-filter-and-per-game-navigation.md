@@ -1,9 +1,11 @@
 ---
 id: TASK-033
 title: 'Front store: server-side game filter and per-game navigation'
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - Claude
 created_date: '2026-08-06 02:20'
+updated_date: '2026-08-06 03:11'
 labels:
   - 'epic:riftbound'
   - web
