@@ -27,6 +27,7 @@ import { z } from 'zod'
 import { CatalogError } from '../lib/catalog'
 import { catalogProviderFor, supportedTcgs } from '../lib/catalog-providers'
 import { createListing, type ListingInput, rowToInventoryItem } from '../lib/inventory'
+import { sendOrderReady, sendOrderShipped } from '../lib/order-emails'
 import { orderToSellerOrder } from '../lib/orders'
 import {
   buildPhotoKey,
@@ -516,6 +517,12 @@ sellerPanel.post('/orders/:id/ship', async (c) => {
     .returning()
 
   if (!row) return c.json({ error: 'not_shippable' }, 409)
+
+  // Aviso al comprador (TASK-017). El UPDATE de arriba está guardado por
+  // `shippedAt IS NULL`: una segunda llamada responde 409 y nunca llega aquí,
+  // así que el envío no puede duplicarse. Va en waitUntil para no colgar la
+  // respuesta del panel del proveedor de correo.
+  c.executionCtx.waitUntil(sendOrderShipped(c.env, c.get('db'), row.id))
   return c.json(orderToSellerOrder(row, [], undefined))
 })
 
@@ -577,6 +584,10 @@ sellerPanel.post('/orders/:id/ready', async (c) => {
     .returning()
 
   if (!row) return c.json({ error: 'not_pickup_ready' }, 409)
+
+  // Aviso al comprador: es el evento que estaba esperando. Mismo razonamiento
+  // de idempotencia que `/ship` — el guard `readyAt IS NULL` lo garantiza.
+  c.executionCtx.waitUntil(sendOrderReady(c.env, db, row.id))
   return c.json(orderToSellerOrder(row, [], undefined, await pickupStoreOf(db, row.pickupSellerId)))
 })
 

@@ -12,10 +12,13 @@
 | Disparador | Destinatario | Contenido |
 |---|---|---|
 | `POST /auth/password/forgot` con cuenta existente | comprador o vendedor | link de reset, vence en 15 min, un solo uso |
+| Workflow post-pago, step `notify-buyer` | comprador | confirmación de compra: folio, líneas con set/condición, totales y cómo llega |
+| Workflow post-pago, step `notify-seller` | tienda vendedora | venta nueva: qué sacar del stock, a dónde va, link al panel |
+| `POST /seller/orders/:id/ship` | comprador | va en camino: número de guía y paquetería |
+| `POST /seller/orders/:id/ready` | comprador | listo para recoger: tienda, dirección y horarios |
 
-Es todo. Los correos del ciclo de vida de una orden (confirmación de compra,
-aviso a la tienda, aviso de envío) son **TASK-017** y consumen el mismo
-transporte descrito abajo. No se agrega una segunda ruta al proveedor.
+Los cuatro de orden se arman en `apps/api/src/lib/order-emails.ts` y salen por
+el mismo transporte de abajo. No hay una segunda ruta al proveedor.
 
 **Esto no es una herramienta de marketing.** Email Sending es para correo
 transaccional; boletines y campañas no van por aquí.
@@ -30,6 +33,7 @@ Tres piezas, con una frontera clara entre ellas:
 |---|---|
 | `apps/api/src/lib/email.ts` | **Único** punto que toca el binding `EMAIL`. Nunca lanza. |
 | `apps/api/src/lib/email-templates.ts` | Plantillas puras: datos → `{subject, html, text}`. Sin red, sin env. |
+| `apps/api/src/lib/order-emails.ts` | Arma los datos de una orden y dispara el envío. Nunca lanza. |
 | `apps/api/wrangler.jsonc` | Binding `send_email` + vars `EMAIL_MODE` / `EMAIL_FROM` / `EMAIL_FROM_NAME`. |
 
 Propiedades deliberadas:
@@ -204,3 +208,50 @@ Regla dura, no preferencia:
 - Ninguna cifra de comisión o application fee en correo al comprador.
 - Nada que sugiera que la plataforma retiene o mueve fondos — ver
   [`../../CLAUDE.md`](../../CLAUDE.md), restricción de no custodia.
+
+---
+
+## 8. Correos de orden: quién dispara qué, y por qué no se duplican
+
+Los cuatro correos de orden viven en `lib/order-emails.ts`. Ese módulo **no**
+implementa idempotencia: la hereda de quien lo llama, y esa es la parte que hay
+que preservar al agregar un correo nuevo.
+
+| Correo | Disparador | Por qué no se duplica |
+|---|---|---|
+| Confirmación (comprador) | step `notify-buyer` del Workflow post-pago | Workflows hace checkpoint de cada `step.do`; la instancia usa `id = orderId`, así que no se crea dos veces. El webhook además deduplica por `event.id` (TASK-022). |
+| Venta nueva (tienda) | step `notify-seller` | Igual, en un step aparte: si uno se reintentara, no reenvía el otro. |
+| Va en camino (comprador) | `POST /seller/orders/:id/ship` | El UPDATE está guardado por `shipped_at IS NULL`; una segunda llamada responde 409 y nunca llega al envío. |
+| Listo para recoger (comprador) | `POST /seller/orders/:id/ready` | Mismo patrón con `ready_at IS NULL`. |
+
+Dos reglas que sostienen todo esto:
+
+- **Un correo nunca hace fallar una orden.** `sendEmail` no lanza, y encima
+  `order-emails.ts` envuelve cada envío en un `try/catch` que solo loguea. Un
+  step que no puede lanzar tampoco reintenta — que es justamente lo que evita
+  el reenvío.
+- **Los envíos del panel van en `waitUntil`.** La respuesta del vendedor no se
+  cuelga esperando al proveedor.
+
+### Qué NO llevan
+
+Los correos al comprador **jamás** incluyen la comisión de la plataforma ni
+nada que sugiera que The Pub Market retiene el dinero: la compra es con la
+tienda. Hay un test que falla si alguna plantilla al comprador menciona
+comisión, fee o saldo (`email-templates.test.ts`).
+
+### No llegó un correo — dónde buscar
+
+1. **¿En qué modo está el ambiente?** Con `EMAIL_MODE` distinto de `send` no se
+   envía nada y el mensaje completo queda en el log con el prefijo `[email]`.
+   En local eso es lo normal (§`EMAIL_MODE`).
+2. **`[email] send failed → destinatario (asunto): motivo`** — el proveedor
+   rechazó. El cuerpo nunca se loguea.
+3. **`[order-email] <tipo> failed for order <id>`** — falló armando los datos,
+   no enviando. La orden está bien; el correo no salió.
+4. **`[order-email] ... no linked user`** — la tienda todavía no reclama su
+   cuenta (`sellers.user_id` en NULL), así que no hay a dónde mandarle el aviso
+   de venta nueva. Se resuelve con la invitación (ver `invitacion-sellers.md`).
+5. **¿Llegó el evento de Stripe?** Si no hubo webhook, tampoco hubo Workflow ni
+   correos: revisa el ledger de eventos en `pagos.md`
+   (`SELECT ... FROM webhook_events WHERE status='received'`).

@@ -7,7 +7,8 @@
  *      Contabilidad, no dinero: va después del settle y nunca lo bloquea.
  *   3. commit-reservations: confirma (libera) los holds en los Durable Objects
  *      DESPUÉS de descontar D1 → sin ventana de sobreventa.
- *   4. notify: recibo al comprador (stub en Fase 2).
+ *   4. notify-buyer / notify-seller: confirmación de compra y aviso de venta
+ *      nueva (TASK-017). Best-effort: nunca hacen fallar la liquidación.
  *
  * Idempotencia en capas: webhook deduplica por event.id; la instancia del
  * workflow usa `id = orderId` (no se crea dos veces); cada `step.do` queda
@@ -17,6 +18,7 @@
 import { WorkflowEntrypoint, type WorkflowEvent, type WorkflowStep } from 'cloudflare:workers'
 import { createDb, orderItems, orders } from '@thepubmarket/db'
 import { eq } from 'drizzle-orm'
+import { sendOrderConfirmation, sendSellerNewOrderNotice } from '../lib/order-emails'
 
 export interface PostPaymentParams {
   orderId: string
@@ -100,9 +102,18 @@ export class PostPaymentWorkflow extends WorkflowEntrypoint<Env, PostPaymentPara
       )
     })
 
-    // 4. Notificar (stub). TODO(prod): recibo por email al comprador/seller.
-    await step.do('notify', async () => {
-      console.log(`[post-payment] orden ${orderId} liquidada`)
+    // 4. Avisar por correo (TASK-017). Dos steps separados a propósito: si uno
+    //    se reintentara, no debe reenviar el otro. Van al final porque un
+    //    correo nunca puede bloquear la liquidación, y las funciones de
+    //    order-emails no lanzan — así el step no reintenta ni duplica envíos.
+    await step.do('notify-buyer', async () => {
+      await sendOrderConfirmation(this.env, db, orderId)
     })
+
+    await step.do('notify-seller', async () => {
+      await sendSellerNewOrderNotice(this.env, db, orderId)
+    })
+
+    console.log(`[post-payment] orden ${orderId} liquidada`)
   }
 }
