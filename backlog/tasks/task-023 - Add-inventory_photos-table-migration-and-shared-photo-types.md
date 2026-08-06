@@ -1,9 +1,11 @@
 ---
 id: TASK-023
 title: 'Add inventory_photos table, migration, and shared photo types'
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - '@claude'
 created_date: '2026-08-06 00:12'
+updated_date: '2026-08-06 00:39'
 labels:
   - 'epic:inventory-photos'
   - db
