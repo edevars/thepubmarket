@@ -28,6 +28,10 @@ wrangler.local.jsonc
 *.log
 npm-debug.log*
 pnpm-debug.log*
+logs/
+
+# Dispatch loop transient state (scripts/dispatch-loop.sh)
+CHECKPOINT.md
 
 # OS / editor
 .DS_Store
