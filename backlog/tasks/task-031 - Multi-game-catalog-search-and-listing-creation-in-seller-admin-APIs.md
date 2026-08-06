@@ -45,3 +45,24 @@ Riftbound variant note: alternate-art/signature printings are distinct catalog e
 - [ ] #6 Invalid or unsupported game input is rejected with a clear error
 - [ ] #7 Tests cover both games and invalid-game input
 <!-- AC:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+## Approach
+
+Extract the per-game provider registry into its own module (lookup + search side by side), then expose one game-aware search route per surface and retire the Scryfall-specific paths.
+
+## Steps
+
+1. **`apps/api/src/lib/catalog-providers.ts`** (new): `CATALOG_PROVIDERS: Partial<Record<Tcg, { getCardById, searchCards }>>` wiring Scryfall (mtg) and RiftCodex (riftbound), plus `isSupportedTcg()` / `supportedTcgs()`. Lives in its own module because `lib/catalog.ts` is imported *by* the clients (circular otherwise). `lib/inventory.ts` consumes the registry instead of defining its own.
+2. **Routes — rename, no dual-serving**: `GET /seller/scryfall/search` → `GET /seller/catalog/search?game=&q=`; same for `/admin/scryfall/search` → `/admin/catalog/search`. `game` defaults to `'mtg'` (zod enum over TCGS → 400 for garbage); a valid game with no integrated provider returns 400 `tcg_not_supported`. Upstream failures return 502 `catalog_error` (was `scryfall_error`). The web app is the only consumer and ships in the same deploy, so no alias is kept — the old path is gone.
+3. **Retire the legacy `scryfallId` wire alias in `seller-panel.ts` only.** The panel already sends `catalogId` since TASK-029. `admin.ts` keeps the alias until TASK-035 migrates `scripts/load-inventory.mjs`, which still posts `scryfallId`.
+4. **`apps/web/src/lib/client-api.ts`**: `searchPrintings(token, q, game = 'mtg')` hits the new path with the game param. `AddCardFlow.tsx` keeps passing MTG — the selector is TASK-032.
+5. **Tests**: extend `apps/api/src/lib/inventory.test.ts` and add coverage for the registry (`supported games`, unsupported game, unknown game). Route-level behavior verified by live smoke since the repo has no HTTP-level test harness.
+6. **Validate**: `pnpm --filter @thepubmarket/api test`, `pnpm typecheck`, `pnpm lint`, live smoke of both search routes (mtg + riftbound + invalid game) and a Riftbound seller-side create.
+
+## Notes / risks
+- Finish validation needs no per-game branch: RiftCodex reports no finishes so `finishes: []` lets any finish through, while Scryfall keeps constraining MTG. The D1 `finish` CHECK ('nonfoil'|'foil') stays untouched — Riftbound variants (Signature / Alternate Art / Overnumbered) are distinct catalog entries, not finishes.
+- Renaming the search path is a breaking API change for any out-of-tree client; grep confirmed only `client-api.ts` calls it, and API + web deploy together.
+<!-- SECTION:PLAN:END -->
