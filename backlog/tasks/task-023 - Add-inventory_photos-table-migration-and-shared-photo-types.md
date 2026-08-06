@@ -5,7 +5,7 @@ status: In Progress
 assignee:
   - '@claude'
 created_date: '2026-08-06 00:12'
-updated_date: '2026-08-06 00:39'
+updated_date: '2026-08-06 00:40'
 labels:
   - 'epic:inventory-photos'
   - db
@@ -56,3 +56,54 @@ This feature touches no payment, payout or Stripe code path — no fund-custody 
 - [ ] #6 Typecheck and lint pass across apps/api, apps/web and packages
 - [ ] #7 Schema doc-comment on the new table states the R2 orphan policy (DB-first delete, best-effort R2 delete) in the same style as surrounding schema comments
 <!-- AC:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+## Approach
+
+Pure additive data foundation: one `CREATE TABLE` (no ALTER on existing tables, so
+D1 never has to recreate anything), plus an additive field on the public
+`InventoryItem` contract with an empty default so no existing consumer changes
+behavior. No R2 binding, no routes, no upload logic — that is TASK-024.
+
+## Steps
+
+1. **`packages/db/src/schema.ts`** — new `inventoryPhotos` table after `inventory`:
+   `id` TEXT PK (UUID from the app), `inventory_id` FK → `inventory` ON DELETE
+   CASCADE, `seller_id` FK → `sellers` ON DELETE CASCADE (denormalized on purpose:
+   ownership checks in seller-panel.ts are a direct WHERE, no join), `r2_key` TEXT
+   NOT NULL unique, `content_type` TEXT NOT NULL, `size_bytes` INTEGER NOT NULL with
+   `> 0` check, `sort_order` INTEGER NOT NULL default 0 with `>= 0` check, shared
+   `timestamps` helper. `index('idx_inventory_photos_inventory_id')`.
+   Doc-comment states the R2 orphan policy (DB-first delete, R2 best-effort) and why
+   this is a table and not a JSON column.
+   Register it in the exported `schema` object.
+2. **`packages/db/src/index.ts`** — export `InventoryPhotoRow` / `NewInventoryPhoto`
+   inferred types, matching the existing per-table pattern.
+3. **`packages/shared/src/index.ts`** — `InventoryPhoto { id, url, sortOrder }`
+   (`url` is the API-served URL, never the raw R2 key — the key stays server-side),
+   `photos: InventoryPhoto[]` on `InventoryItem` (required, not optional: an empty
+   array is the honest "no photos", and optionality would let a consumer forget to
+   render), and `MAX_PHOTOS_PER_ITEM = 6`.
+4. **`apps/api/src/lib/inventory.ts`** — `rowToInventoryItem(row, seller, photos = [])`.
+   Optional third param with an empty default, so the 6 existing call sites in
+   catalog.ts / seller-panel.ts / admin.ts compile untouched and keep returning
+   `photos: []` until TASK-025 wires the real read.
+5. **Migration** — `pnpm --filter @thepubmarket/api db:generate` → `0010_*.sql`, then
+   `db:migrate:local` against a fresh local D1 to prove it applies clean.
+6. **`apps/web/src/lib/catalog/mock-data.ts`** — `photos: []` in `listing()`, the only
+   place in the web app that builds an `InventoryItem` literal (verified by grep).
+7. **Verify** — `pnpm typecheck` and `pnpm lint` at the root, plus
+   `pnpm --filter @thepubmarket/api test` (the 71 lib tests) to confirm nothing regressed.
+
+## Conventions
+
+Comments in Spanish inside `schema.ts` / `shared/index.ts`: those files are wholly
+Spanish and even TASK-022 (which mandated English) kept its `webhook_events` comment
+Spanish. File-local consistency wins over the global English preference here.
+
+## Non-custodial check
+
+Touches no payment, payout, Stripe or fund-flow code path. Photo metadata only.
+<!-- SECTION:PLAN:END -->
