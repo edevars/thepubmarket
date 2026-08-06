@@ -81,20 +81,49 @@ write_checkpoint() {
   echo "==> Checkpoint written to CHECKPOINT.md (${reason})"
 }
 
-# Render stream-json events as readable progress lines.
+# Render stream-json events as readable progress lines, tracking which
+# subagents (and background bash tasks) are in flight. `foreach inputs` carries
+# the open set across events, so it needs `jq -n`.
+#   ▶ start / ■ done   open and close, with the running count and the types
+#   [agent-type] ...   a tool call made by that subagent, not the orchestrator
 RENDER_FILTER='
-  if .type == "assistant" then
-    ((.message.content // [])[] |
-      if .type == "tool_use" then
-        "· " + .name + "  " +
-        ((.input.description // .input.command // .input.file_path // .input.prompt // "")
-          | tostring | .[0:100] | gsub("\n"; " "))
-      elif .type == "text" and (.text | length) > 0 then
-        "\n" + .text + "\n"
-      else empty end)
-  elif .type == "result" then
-    "\n==> " + ((.result // "") | tostring | .[0:2000])
-  else empty end
+foreach inputs as $e (
+  {active: {}, out: []};
+  .out = []
+  | if $e.type == "system" and $e.subtype == "task_started" then
+      ($e.subagent_type // (($e.task_type // "agent") | sub("^local_"; ""))) as $kind
+      | .active[$e.tool_use_id] = $kind
+      | .out += ["▶ start " + $kind + "  " + (($e.description // "") | tostring | .[0:60])]
+    elif $e.type == "user" and ($e.parent_tool_use_id == null) then
+      reduce (($e.message.content // []) | if type == "array" then .[] | select(.type == "tool_result") | .tool_use_id else empty end) as $id (
+        .;
+        if (.active | has($id)) then
+          .out += ["■ done  " + .active[$id]] | del(.active[$id])
+        else . end
+      )
+    elif $e.type == "assistant" then
+      (if $e.parent_tool_use_id == null then "" else (.active[$e.parent_tool_use_id] // "sub") end) as $who
+      | .out += [
+          ($e.message.content // [])[]
+          | if .type == "tool_use" then
+              (if $who == "" then "· " else "    [" + $who + "] " end)
+              + .name + "  "
+              + ((.input.description // .input.command // .input.file_path // .input.prompt // "") | tostring | .[0:80] | gsub("\n"; " "))
+            elif .type == "text" and ((.text | length) > 0) then
+              (if $who == "" then "\n" + .text + "\n" else empty end)
+            else empty end
+        ]
+    elif $e.type == "result" then
+      .out += ["\n==> " + (($e.result // "") | tostring | .[0:2000])]
+    else . end
+  | if ((.out | length) > 0)
+       and (($e.type == "system" and $e.subtype == "task_started")
+            or ($e.type == "user" and ($e.parent_tool_use_id == null))) then
+      .out += ["   activos: " + ((.active | length) | tostring)
+               + (if (.active | length) > 0 then " → " + ([.active[]] | join(", ")) else "" end)]
+    else . end;
+  .out[]
+)
 '
 
 echo "==> orchestrator model: ${MODEL} (${MODEL_ID}) · usage limit: ${USAGE_LIMIT}%"
@@ -119,7 +148,7 @@ for ((i = 1; i <= MAX_ITERATIONS; i++)); do
   claude -p "/dispatch-task" --model "$MODEL_ID" --dangerously-skip-permissions \
     --output-format stream-json --verbose 2>"$LOG_DIR/$STAMP.err" |
     tee "$LOG_FILE" |
-    jq -r --unbuffered "$RENDER_FILTER" 2>/dev/null || true
+    jq -n -r --unbuffered "$RENDER_FILTER" 2>/dev/null || true
 
   RESULT="$(jq -r 'select(.type=="result") | .result // empty' "$LOG_FILE" 2>/dev/null |
     grep -Eo 'DISPATCH_RESULT: [A-Z_]+[^"]*' | tail -1 || true)"

@@ -33,10 +33,16 @@ fi
 
 echo "==> watching $(basename "$TRANSCRIPT") (ctrl-c to stop; does not affect the run)"
 
+# Session transcripts carry no task_started/task_result events, so unlike
+# dispatch-loop.sh this can only show when a subagent is spawned, not when it
+# finishes or how many are in flight. Run the loop itself for live agent counts.
 tail -n +1 -f "$TRANSCRIPT" | jq -r --unbuffered '
   if .type == "assistant" then
     ((.message.content // [])[] |
-      if .type == "tool_use" then
+      if .type == "tool_use" and .name == "Agent" then
+        "▶ start " + (.input.subagent_type // "agent") + "  " +
+        ((.input.description // "") | tostring | .[0:60] | gsub("\n"; " "))
+      elif .type == "tool_use" then
         "· " + .name + "  " +
         ((.input.description // .input.command // .input.file_path // .input.prompt // "")
           | tostring | .[0:100] | gsub("\n"; " "))
