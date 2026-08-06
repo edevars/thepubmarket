@@ -3,11 +3,11 @@ id: TASK-017
 title: >-
   Order lifecycle emails: buyer confirmation, seller new-order notice, shipping
   notification
-status: In Progress
+status: To Do
 assignee:
   - Claude
 created_date: '2026-07-29 01:59'
-updated_date: '2026-08-06 06:45'
+updated_date: '2026-08-06 07:14'
 labels:
   - 'epic:transactional-email'
   - api
@@ -29,7 +29,7 @@ documentation:
   - docs/ingenieria/validacion-e2e-task-005.md
 priority: medium
 type: feature
-ordinal: 10500
+ordinal: 45000
 ---
 
 ## Description
