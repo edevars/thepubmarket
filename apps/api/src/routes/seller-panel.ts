@@ -12,13 +12,20 @@
  * vía application fee) es informativa; el dinero fluye directo en Stripe.
  */
 import type { Db, SellerRow } from '@thepubmarket/db'
-import { inventory, orderItems, orders, sellers, users } from '@thepubmarket/db'
-import { CONDITIONS, FINISHES, type SellerPanelMe } from '@thepubmarket/shared'
+import { inventory, inventoryPhotos, orderItems, orders, sellers, users } from '@thepubmarket/db'
+import { CONDITIONS, FINISHES, MAX_PHOTOS_PER_ITEM, type SellerPanelMe } from '@thepubmarket/shared'
 import { and, count, desc, eq, gt, inArray, isNull, or, sql } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { z } from 'zod'
 import { createListing, type ListingInput, rowToInventoryItem } from '../lib/inventory'
 import { orderToSellerOrder } from '../lib/orders'
+import {
+  buildPhotoKey,
+  contentTypeFor,
+  detectImageKind,
+  MAX_PHOTO_BYTES,
+  rowToInventoryPhoto,
+} from '../lib/photos'
 import { ScryfallError, searchCards } from '../lib/scryfall'
 import { rowToSeller } from '../lib/sellers'
 import type { AppEnv } from '../types'
@@ -40,6 +47,11 @@ const updateSchema = z
     status: z.enum(['active', 'inactive']).optional(),
   })
   .refine((v) => Object.keys(v).length > 0, { message: 'no_fields_to_update' })
+
+/** Full ordering of a listing's photo ids (TASK-024). */
+const reorderPhotosSchema = z.object({
+  order: z.array(z.string().uuid()).min(1).max(MAX_PHOTOS_PER_ITEM),
+})
 
 const shipSchema = z.object({
   trackingNumber: z.string().trim().min(3).max(64),
@@ -174,6 +186,198 @@ sellerPanel.patch('/inventory/:id', async (c) => {
 
   if (!row) return c.json({ error: 'not_found' }, 404)
   return c.json(rowToInventoryItem(row, { name: seller.name, verified: seller.verified }))
+})
+
+/**
+ * Fotos del listing (TASK-024). Binarios en R2 (`ASSETS`), metadata en
+ * `inventory_photos`. Subida PROXIADA por el Worker (no presigned): el mismo
+ * código valida dueño, tipo, tamaño y tope antes de que el objeto exista.
+ *
+ * El servidor nunca confía en el Content-Type declarado ni en el nombre del
+ * archivo del cliente — `detectImageKind` decide por los magic bytes, y la
+ * llave de R2 la genera el servidor con UUIDs (`buildPhotoKey`).
+ */
+
+/** POST /seller/inventory/:id/photos — sube una foto real del ejemplar. */
+sellerPanel.post('/inventory/:id/photos', async (c) => {
+  const seller = c.get('seller')
+  if (!seller) return c.json({ error: 'not_a_seller' }, 403)
+  const inventoryId = c.req.param('id')
+  const db = c.get('db')
+
+  // Dueño: el listing debe ser de la sesión. Ajeno o inexistente → 404 opaco,
+  // igual que el resto del panel (nunca se distingue uno de otro).
+  const item = await db
+    .select({ id: inventory.id })
+    .from(inventory)
+    .where(and(eq(inventory.id, inventoryId), eq(inventory.sellerId, seller.id)))
+    .get()
+  if (!item) return c.json({ error: 'not_found' }, 404)
+
+  // Rechazo temprano si Content-Length ya declara un tamaño excesivo (evita
+  // leer el body completo); el byteLength real de abajo atrapa un header
+  // ausente o mentiroso.
+  const declaredLength = Number(c.req.header('content-length') ?? '')
+  if (Number.isFinite(declaredLength) && declaredLength > MAX_PHOTO_BYTES) {
+    return c.json({ error: 'photo_too_large' }, 400)
+  }
+
+  const buf = await c.req.arrayBuffer()
+  if (buf.byteLength === 0) return c.json({ error: 'empty_body' }, 400)
+  if (buf.byteLength > MAX_PHOTO_BYTES) {
+    return c.json({ error: 'photo_too_large' }, 400)
+  }
+
+  const kind = detectImageKind(new Uint8Array(buf))
+  if (!kind) return c.json({ error: 'invalid_image' }, 400)
+
+  const before = await db
+    .select({ n: count(inventoryPhotos.id) })
+    .from(inventoryPhotos)
+    .where(eq(inventoryPhotos.inventoryId, inventoryId))
+    .get()
+  if ((before?.n ?? 0) >= MAX_PHOTOS_PER_ITEM) {
+    return c.json({ error: 'photo_limit_reached', limit: MAX_PHOTOS_PER_ITEM }, 409)
+  }
+
+  const photoId = crypto.randomUUID()
+  const r2Key = buildPhotoKey({ sellerId: seller.id, inventoryId, photoId, kind })
+  const contentType = contentTypeFor(kind)
+
+  await c.env.ASSETS.put(r2Key, buf, { httpMetadata: { contentType } })
+
+  const [row] = await db
+    .insert(inventoryPhotos)
+    .values({
+      id: photoId,
+      inventoryId,
+      sellerId: seller.id,
+      r2Key,
+      contentType,
+      sizeBytes: buf.byteLength,
+      sortOrder: before?.n ?? 0,
+    })
+    .returning()
+
+  if (!row) {
+    // El objeto ya existe en R2 pero la fila no se pudo escribir: limpieza
+    // best-effort para no dejar un objeto huérfano bajo el prefijo del seller.
+    await c.env.ASSETS.delete(r2Key).catch(() => {})
+    return c.json({ error: 'insert_failed' }, 500)
+  }
+
+  // Recuento POST-insert: cierra la carrera de dos subidas concurrentes que
+  // leyeron el mismo conteo antes del tope (no hay transacción real entre el
+  // SELECT y el INSERT en D1/Drizzle aquí). La que empuja el total por encima
+  // del tope se revierte, la otra queda.
+  const after = await db
+    .select({ n: count(inventoryPhotos.id) })
+    .from(inventoryPhotos)
+    .where(eq(inventoryPhotos.inventoryId, inventoryId))
+    .get()
+  if ((after?.n ?? 0) > MAX_PHOTOS_PER_ITEM) {
+    await db.delete(inventoryPhotos).where(eq(inventoryPhotos.id, row.id))
+    await c.env.ASSETS.delete(r2Key).catch(() => {})
+    return c.json({ error: 'photo_limit_reached', limit: MAX_PHOTOS_PER_ITEM }, 409)
+  }
+
+  return c.json(rowToInventoryPhoto(row, new URL(c.req.url).origin), 201)
+})
+
+/**
+ * DELETE /seller/inventory/:id/photos/:photoId — borra una foto propia.
+ *
+ * Política de huérfanos: se borra primero la fila y después, best-effort, el
+ * objeto de R2. Un objeto suelto en R2 es inalcanzable (servir se resuelve por
+ * la fila) y cuesta centavos; el orden inverso mostraría imágenes rotas.
+ */
+sellerPanel.delete('/inventory/:id/photos/:photoId', async (c) => {
+  const seller = c.get('seller')
+  if (!seller) return c.json({ error: 'not_a_seller' }, 403)
+  const inventoryId = c.req.param('id')
+  const photoId = c.req.param('photoId')
+  const db = c.get('db')
+
+  const [row] = await db
+    .delete(inventoryPhotos)
+    .where(
+      and(
+        eq(inventoryPhotos.id, photoId),
+        eq(inventoryPhotos.inventoryId, inventoryId),
+        eq(inventoryPhotos.sellerId, seller.id),
+      ),
+    )
+    .returning()
+
+  // Ajeno, de otro listing, o ya borrada: las tres se ven igual desde afuera.
+  if (!row) return c.json({ error: 'not_found' }, 404)
+
+  await c.env.ASSETS.delete(row.r2Key).catch((err) => {
+    console.error('seller-panel: R2 delete falló (huérfano tolerado)', row.r2Key, err)
+  })
+
+  return c.json({ ok: true })
+})
+
+/**
+ * POST /seller/inventory/:id/photos/reorder — persiste un orden completo.
+ *
+ * El set de ids enviado debe coincidir EXACTO con las fotos actuales del
+ * listing (mismo tamaño, mismos ids) — un set parcial o con ids ajenos se
+ * rechaza en vez de aplicarse a medias. Cada UPDATE va filtrado por
+ * `inventoryId` de forma independiente, así que aunque no hay una transacción
+ * multi-fila, un id no puede reasignarse al orden de otro listing.
+ */
+sellerPanel.post('/inventory/:id/photos/reorder', async (c) => {
+  const seller = c.get('seller')
+  if (!seller) return c.json({ error: 'not_a_seller' }, 403)
+  const inventoryId = c.req.param('id')
+  const db = c.get('db')
+
+  const parsed = reorderPhotosSchema.safeParse(await c.req.json().catch(() => null))
+  if (!parsed.success) {
+    return c.json({ error: 'invalid_body', issues: parsed.error.issues }, 400)
+  }
+
+  const item = await db
+    .select({ id: inventory.id })
+    .from(inventory)
+    .where(and(eq(inventory.id, inventoryId), eq(inventory.sellerId, seller.id)))
+    .get()
+  if (!item) return c.json({ error: 'not_found' }, 404)
+
+  const existing = await db
+    .select({ id: inventoryPhotos.id })
+    .from(inventoryPhotos)
+    .where(eq(inventoryPhotos.inventoryId, inventoryId))
+    .all()
+
+  const existingIds = new Set(existing.map((p) => p.id))
+  const submittedIds = new Set(parsed.data.order)
+  const isExactMatch =
+    existingIds.size === submittedIds.size && [...existingIds].every((id) => submittedIds.has(id))
+  if (!isExactMatch) {
+    return c.json({ error: 'photo_set_mismatch' }, 400)
+  }
+
+  await Promise.all(
+    parsed.data.order.map((photoId, index) =>
+      db
+        .update(inventoryPhotos)
+        .set({ sortOrder: index, updatedAt: sql`(unixepoch())` })
+        .where(and(eq(inventoryPhotos.id, photoId), eq(inventoryPhotos.inventoryId, inventoryId))),
+    ),
+  )
+
+  const rows = await db
+    .select()
+    .from(inventoryPhotos)
+    .where(eq(inventoryPhotos.inventoryId, inventoryId))
+    .orderBy(inventoryPhotos.sortOrder)
+    .all()
+
+  const origin = new URL(c.req.url).origin
+  return c.json({ photos: rows.map((r) => rowToInventoryPhoto(r, origin)) })
 })
 
 /** GET /seller/orders — órdenes de la tienda con líneas y comprador enmascarado. */

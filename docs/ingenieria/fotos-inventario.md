@@ -1,0 +1,174 @@
+# Fotos de inventario
+
+Fotos reales del ejemplar físico que sube el vendedor, complementarias a la
+imagen canónica de Scryfall. En singles la condición manda sobre el precio,
+así que esto es confianza, no decoración: el comprador juzga rayones,
+whitening, centrado y curvatura del foil antes de pagar.
+
+Epic `inventory-photos`. **TASK-023** puso la base de datos y el contrato
+compartido. **TASK-024** (este documento) agrega los endpoints de escritura del
+panel del vendedor. **TASK-025** expone las fotos en el catálogo público y
+sirve los binarios — sin esa tarea, `InventoryPhoto.url` no resuelve todavía.
+
+No toca ningún flujo de fondos: es metadata y objetos en R2, nada de pagos,
+payouts ni Stripe.
+
+---
+
+## 1. Modelo de datos
+
+Tabla propia `inventory_photos` (no una columna JSON en `inventory`):
+integridad referencial vía `ON DELETE CASCADE`, reordenar/borrar sin
+read-modify-write, y es puro `CREATE TABLE` (D1-friendly). Ver el
+doc-comment en `packages/db/src/schema.ts`.
+
+- `seller_id` está desnormalizado: la verificación de dueño en el panel es un
+  `WHERE` directo, sin join contra `inventory`.
+- `r2_key` es único — dos filas nunca apuntan al mismo binario.
+- El tope de **6 fotos por listing** (`MAX_PHOTOS_PER_ITEM` en
+  `packages/shared`) se aplica en la app, no en el esquema.
+- Fotos permitidas sin importar la cantidad en stock, y nunca obligatorias —
+  no hay requisito por condición (HP/DMG) en v1.
+
+## 2. Subida: proxiada por el Worker
+
+El binario entra por `POST /seller/inventory/:id/photos` y el Worker lo sube a
+R2 él mismo — no hay URLs presigned directo-a-R2.
+
+**Por qué proxiar y no presignar:** presigned URLs necesitarían credenciales
+S3 de la cuenta, una dependencia más, y reconciliación post-subida para
+validar tipo/tamaño/tope después de que el objeto ya existe. Proxiar mantiene
+auth, dueño, tope y validación en un solo código, y el límite de body de
+Workers está muy por arriba del tope de 5 MB por archivo. Menos piezas móviles
+para un equipo de una persona.
+
+### El servidor nunca confía en lo que declara el cliente
+
+- **Content-Type declarado:** ignorado. El tipo real se decide inspeccionando
+  los *magic bytes* del body (`detectImageKind` en
+  `apps/api/src/lib/photos.ts`): JPEG (`FF D8 FF`), PNG (firma de 8 bytes) o
+  WebP (contenedor `RIFF` + fourcc `WEBP`). Un `.txt` renombrado a `.jpg` o un
+  archivo truncado no pasa la detección sin importar la cabecera HTTP.
+- **Nombre de archivo:** nunca llega a la llave de R2. La llave la genera el
+  servidor con UUIDs.
+
+### Llaves de R2
+
+```
+inventory-photos/{sellerId}/{inventoryId}/{photoId}.{ext}
+```
+
+No adivinables, generadas por el servidor, bajo un prefijo fijo. Las llaves
+son **inmutables** — una foto nunca se sobrescribe — que es lo que hace segura
+la caché de larga duración que TASK-025 va a poner encima.
+
+### Límites
+
+| Regla | Código de error | Status |
+|---|---|---|
+| Body no es JPEG/PNG/WebP por magic bytes | `invalid_image` | 400 |
+| Body vacío | `empty_body` | 400 |
+| Body mayor a 5 MB (`MAX_PHOTO_BYTES`) | `photo_too_large` | 400 |
+| Listing ya tiene 6 fotos | `photo_limit_reached` | 409 |
+
+El tope se revisa dos veces: antes de insertar (evita el trabajo obvio) y
+**después** de insertar, releyendo el conteo. D1/Drizzle no da una transacción
+real entre el `SELECT` del conteo y el `INSERT` aquí, así que dos subidas
+concurrentes pueden leer el mismo conteo por debajo del tope y las dos
+insertar. La relectura post-insert cierra esa carrera: la subida que empuja el
+total por encima de 6 se revierte (borra su fila y su objeto de R2), la otra
+queda.
+
+## 3. Endpoints
+
+Todos bajo `sellerAuth` (sesión + fila activa en `sellers`), mismo patrón de
+dueño que el resto del panel: cada query filtra por `sellerId` de la sesión,
+nunca se acepta un `sellerId` del cliente. Un listing ajeno responde **404
+opaco** — indistinguible de "no existe".
+
+| Método | Ruta | Qué hace |
+|---|---|---|
+| `POST` | `/seller/inventory/:id/photos` | Sube una foto (body = bytes crudos de la imagen) |
+| `DELETE` | `/seller/inventory/:id/photos/:photoId` | Borra una foto propia |
+| `POST` | `/seller/inventory/:id/photos/reorder` | Persiste un orden completo: `{ order: string[] }` |
+| `DELETE` | `/admin/inventory/photos/:photoId` | Borrado forzoso de CUALQUIER foto (moderación) |
+
+### Reorder: todo o nada
+
+El `order` enviado debe coincidir **exacto** con el conjunto de ids actuales
+del listing (mismo tamaño, mismos ids) o se rechaza con `photo_set_mismatch` /
+400 — un set parcial o con ids ajenos nunca se aplica a medias. Cada `UPDATE`
+va filtrado por `inventoryId` de forma independiente, así que aunque no hay
+una transacción multi-fila, un id no puede reasignarse al orden de otro
+listing.
+
+### Borrado: DB primero, R2 best-effort
+
+```
+DELETE FROM inventory_photos WHERE ...   -- fuente de verdad
+R2.delete(r2Key)                          -- best-effort, error solo se loguea
+```
+
+Un objeto suelto en R2 es inalcanzable (servir se resuelve por la fila de la
+DB, nunca por listar el bucket) y cuesta centavos; el orden inverso mostraría
+imágenes rotas al comprador. Sin cron de reconciliación en v1 — el costo de un
+huérfano ocasional es menor que el de construir y mantener un reconciliador.
+
+### Moderación
+
+Palanca de v1 es el borrado forzoso de admin, no un flujo de reporte de
+compradores: los sellers son vetted por invitación, así que el operador
+quitando una foto directamente es proporcional. `DELETE
+/admin/inventory/photos/:photoId` no filtra por dueño — a diferencia del
+panel, el admin puede tocar la foto de cualquier seller — y usa el mismo
+mecanismo de auth que el resto de `/admin/*` (`x-admin-key`).
+
+## 4. El campo `url` del DTO — decisión que consume TASK-025
+
+`InventoryPhoto.url` (contrato en `packages/shared`) se construye como:
+
+```
+{origin}/photos/{photoId}
+```
+
+usando `new URL(c.req.url).origin` — sin variable de entorno nueva, correcto
+en cualquier ambiente (wrangler dev local, prod). Está keyed por **id de la
+foto**, no por la llave cruda de R2: la ruta pública que TASK-025 monta debe
+resolver la llave desde la fila de la DB, nunca aceptarla directo del cliente
+(su propio AC#6).
+
+**Esta tarea NO monta `/photos/*`.** El campo `url` existe desde ya en la
+respuesta de subida/reorder, pero no resuelve (404 o conexión rechazada) hasta
+que TASK-025 agregue la ruta de streaming.
+
+## 5. Módulo puro y tests
+
+`apps/api/src/lib/photos.ts` — sin I/O, testeable sin runtime de Workers
+(misma convención que `lib/delivery.ts`, `lib/stripe.ts`):
+
+- `detectImageKind(bytes)` — JPEG/PNG/WebP por magic bytes, `null` si no.
+- `contentTypeFor(kind)`, `buildPhotoKey(...)`, `rowToInventoryPhoto(row, origin)`.
+
+Cobertura en `photos.test.ts`: cabecera JPEG/PNG/WebP válida, archivo
+truncado, body vacío, texto plano renombrado, contenedor RIFF que no es WebP,
+formato de la llave.
+
+Los handlers de ruta **no** llevan tests unitarios — misma convención que el
+resto de `apps/api` (vitest solo cubre módulos puros bajo `src/lib/`); se
+validan con un pase manual/E2E documentado abajo.
+
+## 6. Verificación manual (TASK-024)
+
+Contra `wrangler dev` (emula R2 localmente) con curl, usando una sesión de
+seller real y un listing propio:
+
+| Caso | Resultado esperado |
+|---|---|
+| Subir un JPEG real | 201 + DTO `{ id, url, sortOrder }` |
+| Subir un `.txt` renombrado a `.jpg` | 400 `invalid_image` |
+| Subir un archivo > 5 MB | 400 `photo_too_large` |
+| Subir una 7ª foto al mismo listing | 409 `photo_limit_reached` |
+| Subir/borrar/reordenar en un listing de otro seller | 404 opaco |
+| Borrar una foto propia | 200 `{ ok: true }`, fila y objeto desaparecen |
+| Reordenar con un set parcial o con un id ajeno | 400 `photo_set_mismatch` |
+| Reordenar con el set exacto | 200, `sortOrder` persistido en el orden enviado |

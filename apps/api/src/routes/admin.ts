@@ -15,7 +15,7 @@
  * (centavos MXN). Sin pagos ni reservas aquí.
  */
 
-import { inventory, sellerInvitations, sellers, users } from '@thepubmarket/db'
+import { inventory, inventoryPhotos, sellerInvitations, sellers, users } from '@thepubmarket/db'
 import { ANCHOR_SELLER_ID, CONDITIONS, FINISHES } from '@thepubmarket/shared'
 import { desc, eq, sql } from 'drizzle-orm'
 import { Hono } from 'hono'
@@ -217,5 +217,29 @@ admin.post('/inventory/:id/deactivate', async (c) => {
     .returning({ id: inventory.id })
 
   if (!row) return c.json({ error: 'not_found' }, 404)
+  return c.json({ ok: true })
+})
+
+/**
+ * DELETE /admin/inventory/photos/:photoId — borrado forzoso de una foto de
+ * CUALQUIER seller (TASK-024). Es la palanca de moderación de v1: sellers
+ * vetted por invitación, así que el operador quitando la foto directamente es
+ * proporcional; no hay flujo de reporte de compradores.
+ *
+ * Sin filtro de dueño a propósito — a diferencia del panel, el admin puede
+ * tocar cualquier fila. Misma política de huérfanos: fila primero, R2
+ * best-effort después.
+ */
+admin.delete('/inventory/photos/:photoId', async (c) => {
+  const photoId = c.req.param('photoId')
+  const db = c.get('db')
+
+  const [row] = await db.delete(inventoryPhotos).where(eq(inventoryPhotos.id, photoId)).returning()
+  if (!row) return c.json({ error: 'not_found' }, 404)
+
+  await c.env.ASSETS.delete(row.r2Key).catch((err) => {
+    console.error('admin: R2 delete falló (huérfano tolerado)', row.r2Key, err)
+  })
+
   return c.json({ ok: true })
 })

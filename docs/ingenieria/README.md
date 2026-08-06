@@ -40,6 +40,7 @@ ponerse al día sin recargar todo el contexto.
 | ¿Cómo llega una orden al comprador (envío / recolección)? | [`entrega.md`](./entrega.md) |
 | ¿Cómo voy de una orden a su pago en Stripe (o al revés, en una disputa)? | [`pagos.md`](./pagos.md) |
 | ¿Cómo doy de alta un vendedor vetted nuevo? | [`invitacion-sellers.md`](./invitacion-sellers.md) |
+| ¿Cómo sube el vendedor fotos reales del ejemplar y cómo se sirven? | [`fotos-inventario.md`](./fotos-inventario.md) |
 
 ---
 
