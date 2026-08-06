@@ -43,3 +43,23 @@ This consumes the multi-game API contract from the sibling task "Multi-game cata
 - [ ] #5 The photo manager works for Riftbound listings
 - [ ] #6 Typecheck and lint pass; flow verified per repo practice (no browser automation)
 <!-- AC:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+## Approach
+
+Add a game selector as the first control of the search step, driven by the list of publishable games the API already knows — not a hardcoded frontend list.
+
+## Steps
+
+1. **Source of truth for publishable games**: extend `SellerPanelMe` (`packages/shared/src/index.ts`) with `catalogGames: Tcg[]` and have `GET /seller/me` (`apps/api/src/routes/seller-panel.ts`) fill it from `supportedTcgs()` (the provider registry from TASK-031). The panel already loads `SellerPanelMe` through `PanelProvider`/`usePanel`, so no new endpoint and no drift when a game is added — one registry entry lights it up in the UI.
+2. **`AddCardFlow.tsx`**: `game` state defaulting to `'mtg'`; a segmented selector above the search box rendered from `me.catalogGames` with labels from `TCG_META` (hidden when only one game is publishable). Switching game clears query, results and selection. `searchPrintings(token, q, game)` and `createListing({ tcg: game, ... })`. Search-result keying already uses `catalogId` (TASK-029).
+3. **i18n** (`apps/web/messages/{es,en}.json`): replace `scryfallLabel` with `catalogLabel` interpolating the game name (`Catálogo {game}` / `{game} catalog`) and add `offerGame` for the selector heading. No provider name hardcoded in copy.
+4. **Photo manager**: verify it needs no change — `PhotoManagerModal` keys off the created listing's id, not the game.
+5. **Validate**: `pnpm typecheck`, `pnpm lint`, `pnpm --filter @thepubmarket/api test`, plus a live smoke of `GET /seller/me` returning `catalogGames` and a Riftbound publish through the same client path the panel uses (no browser automation, per project practice).
+
+## Notes
+- Finish stays a two-button nonfoil/foil control for every game: RiftCodex reports no finishes, so `finishes: []` accepts either, and Riftbound variants (Signature / Alternate Art / Overnumbered) are distinct catalog entries already disambiguated in the card name.
+- Offer languages stay `es/en/ja` — that is the language of the physical copy the seller owns, independent of the catalog's language.
+<!-- SECTION:PLAN:END -->
