@@ -216,14 +216,14 @@ checkout.post('/', turnstileGuard, buyerAuth, async (c) => {
       webBaseUrl: c.env.WEB_BASE_URL,
     })
 
-    const paymentIntentId =
-      typeof session.payment_intent === 'string'
-        ? session.payment_intent
-        : (session.payment_intent?.id ?? null)
-
+    // Solo la sesión. NO leas `session.payment_intent` aquí: en `mode: payment`
+    // el PaymentIntent no existe hasta que el comprador empieza a pagar, así que
+    // ese campo es SIEMPRE null en este punto (TASK-021 — durante meses dejó la
+    // columna NULL en todas las órdenes). El id se persiste desde el Workflow
+    // post-pago con el que trae `checkout.session.completed`.
     await db
       .update(orders)
-      .set({ stripeCheckoutSessionId: session.id, stripePaymentIntentId: paymentIntentId })
+      .set({ stripeCheckoutSessionId: session.id })
       .where(eq(orders.id, orderId))
 
     if (!session.url) throw new Error('stripe no devolvió url de checkout')

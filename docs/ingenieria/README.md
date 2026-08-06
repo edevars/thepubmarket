@@ -37,6 +37,8 @@ ponerse al día sin recargar todo el contexto.
 | ¿Cómo funcionan sesiones, hashing, reset y rate limiting de auth? | [`auth-hardening.md`](./auth-hardening.md) |
 | ¿Cómo está wireado Turnstile y qué llaves lleva cada ambiente? | [`turnstile.md`](./turnstile.md) |
 | ¿Cómo sale el correo y por qué no llegó uno? | [`email.md`](./email.md) |
+| ¿Cómo llega una orden al comprador (envío / recolección)? | [`entrega.md`](./entrega.md) |
+| ¿Cómo voy de una orden a su pago en Stripe (o al revés, en una disputa)? | [`pagos.md`](./pagos.md) |
 | ¿Cómo doy de alta un vendedor vetted nuevo? | [`invitacion-sellers.md`](./invitacion-sellers.md) |
 
 ---

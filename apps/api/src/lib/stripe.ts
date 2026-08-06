@@ -15,6 +15,22 @@ export function createStripe(secretKey: string): Stripe {
   })
 }
 
+/**
+ * Normalizes the `payment_intent` of a Checkout Session to a plain id.
+ *
+ * Stripe types it as `string | PaymentIntent | null`: a plain id unless the
+ * caller expanded it. Beware: **at session-creation time it is always null** in
+ * `mode: payment` — the PaymentIntent does not exist until the buyer starts
+ * paying. The only moment it is populated is `checkout.session.completed`.
+ */
+export function paymentIntentIdFrom(session: {
+  payment_intent?: string | { id: string } | null
+}): string | null {
+  const pi = session.payment_intent
+  if (!pi) return null
+  return typeof pi === 'string' ? pi : pi.id
+}
+
 export interface CheckoutLine {
   name: string
   unitPriceCents: number

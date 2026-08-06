@@ -6,7 +6,8 @@
  * - Idempotencia: inserta el `event.id` en `webhook_events`; si ya existe, el
  *   evento es un reintento y se ignora (no re-ejecuta efectos).
  * - `checkout.session.completed` → arranca el Workflow post-pago (instancia con
- *   id = orderId, idempotente). `checkout.session.expired` → libera reservas y
+ *   id = orderId, idempotente) y le pasa el PaymentIntent id, que solo existe a
+ *   partir de este evento. `checkout.session.expired` → libera reservas y
  *   cancela la orden (ÚNICO evento que cancela de verdad: es cuando Stripe
  *   confirma que ya no se puede completar esa sesión).
  * - `payment_intent.payment_failed` → NO cancela ni libera el hold. Stripe deja
@@ -22,7 +23,7 @@ import { orderItems, orders, sellers, webhookEvents } from '@thepubmarket/db'
 import { and, eq } from 'drizzle-orm'
 import { type Context, Hono } from 'hono'
 import Stripe from 'stripe'
-import { createStripe } from '../lib/stripe'
+import { createStripe, paymentIntentIdFrom } from '../lib/stripe'
 import type { AppEnv } from '../types'
 
 export const webhooks = new Hono<AppEnv>()
@@ -83,8 +84,19 @@ webhooks.post('/stripe', async (c) => {
       const session = event.data.object
       const orderId = session.client_reference_id ?? session.metadata?.orderId
       if (orderId) {
+        // Único momento en que el PaymentIntent id existe y llega solo: se lo
+        // pasamos al Workflow, que lo persiste con reintentos (TASK-021).
+        const paymentIntentId = paymentIntentIdFrom(session)
+        if (!paymentIntentId) {
+          console.warn(
+            `[webhooks] checkout.session.completed order=${orderId} sin payment_intent — la orden queda sin id de pago`,
+          )
+        }
         // Instancia idempotente por orden; si ya existe, ignora el error.
-        await c.env.POST_PAYMENT.create({ id: orderId, params: { orderId } }).catch(() => {})
+        await c.env.POST_PAYMENT.create({
+          id: orderId,
+          params: { orderId, paymentIntentId },
+        }).catch(() => {})
       }
       break
     }
