@@ -46,3 +46,17 @@ Depends on TASK-038, which makes rules text, flavor text, rarity, and set metada
 - [ ] #5 Labels localized in es and en; typecheck, biome, and tests green including game-attributes tests
 - [ ] #6 New metadata sections are visually first-class: deliberate typographic hierarchy and entrance/expand transitions from the shared motion foundation (TASK-045), respecting prefers-reduced-motion; a web-design-guidelines skill audit of the detail page reports no violations
 <!-- AC:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+1. Research the TASK-038 detail payload: confirm which fields the catalog detail API returns (rarity, setName/setCode, collectorNumber, rulesText, flavorText) and their shared types, plus how `CardDetailView` currently consumes them.
+2. Add a token renderer for `:rb_x:` icon tokens (pure module next to `game-attributes.ts`, unit-tested): parse text into segments and render each token as an icon/badge with an accessible label, never as a raw token. Unknown tokens fall back to a readable label.
+3. Extend `game-attributes.ts` (or a sibling `printing-metadata.ts`) with a rows builder for rarity / set name+code / collector number, following the same "omit missing fields" contract. Unit tests mirror `game-attributes.test.ts`.
+4. Render in `CardDetailView`: keep the existing attribute rows, add a rules-text block and a flavor-text block with deliberate typographic hierarchy (flavor italic/secondary, rules body), plus the printing metadata rows. Sections absent when data is missing.
+5. Motion: entrance/expand transitions from the TASK-045 shared motion foundation, honoring `prefers-reduced-motion`.
+6. i18n: new labels in `apps/web/messages/es.json` and `en.json`.
+7. Verify: typecheck, biome, vitest; `web-design-guidelines` audit of the detail page.
+
+Non-Riftbound listings must render exactly as before (no game attributes ⇒ no new sections).
+<!-- SECTION:PLAN:END -->
