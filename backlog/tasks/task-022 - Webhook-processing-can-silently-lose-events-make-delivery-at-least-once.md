@@ -5,13 +5,14 @@ status: In Progress
 assignee:
   - claude
 created_date: '2026-08-03 04:03'
-updated_date: '2026-08-06 00:32'
+updated_date: '2026-08-06 06:45'
 labels:
   - api
   - stripe
   - payments
   - webhooks
   - needs-verification
+  - blocked
 milestone: m-2
 dependencies: []
 references:
@@ -100,6 +101,8 @@ Still open: AC#4, which needs the prod test payment to exercise the rewritten `c
 To close it: the next test-mode payment exercises the rewritten `checkout.session.completed` happy path. Check `SELECT id, type, status, attempts, last_error FROM webhook_events ORDER BY created_at DESC LIMIT 3` — the event must land `processed` with `attempts=1` and no `last_error`.
 
 Worth noting: if this branch is ever wrong, the symptom is loud rather than silent (a 500 and a stuck `received` row in the dead-letter query), which is the opposite of the failure mode this task fixed. That asymmetry is why Low is honest here.
+
+**Labeled `blocked` by dispatch-loop (2026-08-06).** Only AC#4 remains; it is exercised by the same human test-mode payment that closes TASK-021 AC#7. After that payment, verify the webhook_events row lands processed/attempts=1 with no last_error and mark Done.
 <!-- SECTION:NOTES:END -->
 
 ## Comments
