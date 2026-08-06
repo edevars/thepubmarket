@@ -5,12 +5,13 @@ status: In Progress
 assignee:
   - claude
 created_date: '2026-08-03 04:03'
-updated_date: '2026-08-06 00:26'
+updated_date: '2026-08-06 00:32'
 labels:
   - api
   - stripe
   - payments
   - webhooks
+  - needs-verification
 milestone: m-2
 dependencies: []
 references:
@@ -21,7 +22,7 @@ references:
 documentation:
   - docs/ingenieria/pagos.md
   - docs/ingenieria/validacion-e2e-task-005.md
-priority: high
+priority: low
 type: bug
 ordinal: 22000
 ---
@@ -93,6 +94,12 @@ Still pending, unchanged: `wrangler d1 migrations apply thepubmarket-db --remote
 Post-deploy checks against the deployed API: `/health` 200; webhook with no signature still answers `400 missing_signature` (AC#1's unchanged-400 half). D1: all 21 pre-existing `webhook_events` rows are `processed` with a non-NULL `processed_at` (AC#7 confirmed in prod, not just locally), and the dead-letter query `WHERE status='received'` returns empty.
 
 Still open: AC#4, which needs the prod test payment to exercise the rewritten `checkout.session.completed` happy path end to end.
+
+**Downgraded from High to Low + `needs-verification` (2026-08-05).** The High priority was about the defect — events being lost silently — and that is fixed, merged to `main` and live in prod. AC#1–#3 and #5–#8 are verified, including AC#7 against the remote DB. What remains is AC#4 alone: the rethrow branch on a real Workflows `create()` failure, which cannot be forced on demand and is code-level only.
+
+To close it: the next test-mode payment exercises the rewritten `checkout.session.completed` happy path. Check `SELECT id, type, status, attempts, last_error FROM webhook_events ORDER BY created_at DESC LIMIT 3` — the event must land `processed` with `attempts=1` and no `last_error`.
+
+Worth noting: if this branch is ever wrong, the symptom is loud rather than silent (a 500 and a stuck `received` row in the dead-letter query), which is the opposite of the failure mode this task fixed. That asymmetry is why Low is honest here.
 <!-- SECTION:NOTES:END -->
 
 ## Comments
