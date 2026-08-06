@@ -4,11 +4,13 @@ title: 'Navbar: per-TCG navigation with a Riftbound entry'
 status: To Do
 assignee: []
 created_date: '2026-08-06 05:44'
+updated_date: '2026-08-06 05:49'
 labels:
   - 'epic:riftbound-ux'
   - web
 milestone: m-3
-dependencies: []
+dependencies:
+  - TASK-045
 references:
   - apps/web/src/components/layout/SiteHeader.tsx
   - apps/web/src/components/home/BrowseByGame.tsx
@@ -35,4 +37,5 @@ Outcome: the main navigation exposes the supported TCGs — including Riftbound 
 - [ ] #3 Games without available stock are handled deliberately (hidden or marked as coming soon, consistent with the home Browse-by-game tiles)
 - [ ] #4 Mobile navigation exposes the same game entries
 - [ ] #5 Labels localized in es and en; typecheck, biome, and web tests green
+- [ ] #6 Menu reveal, hover, and focus states use the shared motion foundation (TASK-045) with clear transitions, full keyboard operability, and prefers-reduced-motion respected; a web-design-guidelines skill audit of the header reports no violations
 <!-- AC:END -->
