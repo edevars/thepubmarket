@@ -1,9 +1,11 @@
 ---
 id: TASK-029
 title: Make listing contracts and write path game-agnostic
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - Claude
 created_date: '2026-08-06 02:19'
+updated_date: '2026-08-06 02:24'
 labels:
   - 'epic:riftbound'
   - api
