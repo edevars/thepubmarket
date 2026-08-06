@@ -3,7 +3,7 @@ id: TASK-038
 title: >-
   Expose full card metadata (rarity, set, rules/flavor text, game attributes) in
   catalog API responses
-status: In Progress
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-08-06 05:43'
