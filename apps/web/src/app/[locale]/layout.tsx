@@ -1,3 +1,4 @@
+import type { CatalogGameCount } from '@thepubmarket/shared'
 import type { Metadata } from 'next'
 import { IBM_Plex_Mono, Inter, Rajdhani } from 'next/font/google'
 import { notFound } from 'next/navigation'
@@ -11,6 +12,7 @@ import { SiteFooter } from '@/components/layout/SiteFooter'
 import { SiteHeader } from '@/components/layout/SiteHeader'
 import { routing } from '@/i18n/routing'
 import { CartProvider } from '@/lib/cart'
+import { getGameCounts } from '@/lib/catalog/data'
 import '../globals.css'
 
 const rajdhani = Rajdhani({
@@ -54,6 +56,16 @@ export default async function LocaleLayout({
   }
   setRequestLocale(locale)
 
+  // El header (TASK-041) deriva su navegación por juego de estos conteos. Si
+  // la API no responde, el header debe seguir renderizando — cae a "sin
+  // inventario" (todo se pinta como "Pronto") en vez de tumbar cada página.
+  let gameCounts: CatalogGameCount[] = []
+  try {
+    gameCounts = await getGameCounts()
+  } catch {
+    gameCounts = []
+  }
+
   return (
     <html lang={locale} className={`${rajdhani.variable} ${inter.variable} ${plexMono.variable}`}>
       <body className="min-h-screen bg-bg text-ink antialiased">
@@ -62,7 +74,7 @@ export default async function LocaleLayout({
             <CartProvider>
               <div className="flex min-h-screen flex-col">
                 <MarketplaceChrome>
-                  <SiteHeader />
+                  <SiteHeader gameCounts={gameCounts} />
                 </MarketplaceChrome>
                 <div className="flex-1">{children}</div>
                 <MarketplaceChrome>

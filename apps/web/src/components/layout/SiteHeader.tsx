@@ -1,18 +1,15 @@
 'use client'
 
+import type { CatalogGameCount } from '@thepubmarket/shared'
 import { useTranslations } from 'next-intl'
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useAuth } from '@/components/auth/AuthProvider'
 import { Link, usePathname, useRouter } from '@/i18n/navigation'
 import { useCart } from '@/lib/cart'
-
-/**
- * Hover/press feedback compartido por los enlaces y botones del header: color
- * de hover suave con los tokens de movimiento (en vez de un salto instantáneo)
- * y foco visible para navegación por teclado.
- */
-const navLinkClass =
-  'px-2.5 py-1.5 font-display text-sm font-semibold uppercase tracking-[0.06em] text-ink-2 transition duration-fast ease-standard hover:text-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/70'
+import { getGameNavItems } from '@/lib/catalog/game-nav'
+import { GamesMenu } from './GamesMenu'
+import { MobileNav } from './MobileNav'
+import { navLinkClass } from './nav-styles'
 
 /** Logo angular con glow, fiel al diseño. */
 function Logo() {
@@ -58,7 +55,7 @@ function LangSwitch() {
   )
 }
 
-export function SiteHeader() {
+export function SiteHeader({ gameCounts }: { gameCounts: CatalogGameCount[] }) {
   const t = useTranslations('common')
   const pathname = usePathname()
   const router = useRouter()
@@ -66,6 +63,7 @@ export function SiteHeader() {
   const { count, openDrawer } = useCart()
   const [search, setSearch] = useState('')
   const isHome = pathname === '/'
+  const games = useMemo(() => getGameNavItems(gameCounts), [gameCounts])
 
   function submitSearch(e: React.FormEvent) {
     e.preventDefault()
@@ -81,12 +79,7 @@ export function SiteHeader() {
         <Link href="/catalog" className={navLinkClass}>
           {t('navCatalog')}
         </Link>
-        <Link href="/catalog" className={navLinkClass}>
-          {t('navMagic')}
-        </Link>
-        <span className="cursor-default px-2.5 py-1.5 font-display text-sm font-semibold uppercase tracking-[0.06em] text-faint">
-          {t('navMore')}
-        </span>
+        <GamesMenu games={games} />
         <Link href="/tiendas" className={navLinkClass}>
           {t('navStores')}
         </Link>
@@ -143,15 +136,7 @@ export function SiteHeader() {
         )}
 
         <LangSwitch />
-        <Link
-          href="/catalog"
-          aria-label={t('navCatalog')}
-          className="flex cursor-pointer flex-col gap-[3px] p-1 transition-transform duration-fast ease-standard active:scale-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/70 md:hidden"
-        >
-          <span className="h-0.5 w-[18px] bg-ink-2" />
-          <span className="h-0.5 w-[18px] bg-ink-2" />
-          <span className="h-0.5 w-[18px] bg-ink-2" />
-        </Link>
+        <MobileNav games={games} />
       </div>
     </header>
   )
