@@ -42,3 +42,26 @@ The project skills `frontend-design` and `web-design-guidelines` (in .claude/ski
 - [ ] #4 Animations never block interaction: controls remain responsive during transitions and focus states stay visible for keyboard users
 - [ ] #5 Typecheck, biome, and web tests green; a UI audit pass with the web-design-guidelines skill reports no animation/a11y violations on touched surfaces
 <!-- AC:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+## Context found
+
+- Tailwind 4 CSS-first: all theme tokens live in `@theme` in `apps/web/src/app/globals.css` (dark navy palette, angular clip-path aesthetic, Rajdhani/Inter/Plex Mono). No motion tokens, no `prefers-reduced-motion` handling, no animation library — and none should be added (CSS-only keeps it maintainable by one person).
+- Target surfaces already exist: `CatalogView.tsx` (game switch), `FilterSidebar.tsx` + `ActiveChips.tsx` (chips), `CardGrid.tsx`/`ProductCard.tsx` (grid + hover), `SiteHeader.tsx` (menus).
+
+## Steps
+
+1. **Motion tokens in `@theme`** (`globals.css`): `--duration-*` (fast ~120ms, base ~200ms, slow ~320ms) and `--ease-*` (standard out, emphasized/overshoot for reveals) so Tailwind generates `duration-*`/`ease-*` utilities. Keep the token set minimal.
+2. **Reusable patterns** as documented CSS in `globals.css` (keyframes + small utility classes): hover/press feedback (incl. active-scale press), chip add/remove, card-grid content change (fade/rise on data swap, no layout shift), menu/dropdown reveal. A short doc comment block maps pattern → intended use (AC#1's documentation).
+3. **Global reduced-motion**: one `@media (prefers-reduced-motion: reduce)` block that collapses non-essential animation/transition to near-zero while keeping state changes instant and visible (AC#2).
+4. **Adopt on real surfaces** (AC#3): catalog game switch + filter chip add/remove + grid update in CatalogView/FilterSidebar/ActiveChips/CardGrid/ProductCard; menu reveal in SiteHeader. Transitions on transform/opacity only — never animate layout properties — and never intercept pointer events (AC#4). Focus-visible styles must persist through transitions.
+5. **Checks + audit** (AC#5): `pnpm typecheck`, `pnpm lint`, `pnpm turbo run test`; then a `web-design-guidelines` audit pass over the touched components.
+
+## Notes
+
+- Frontend-only task; no API, no regulatory surface.
+- Delegated to the `nextjs-frontend` subagent with the `frontend-design` quality bar; audited before closing.
+- Branch `task/task-045`; the pre-existing uncommitted files (.gitignore, dispatch-loop infra) belong to the user and stay out of the commit.
+<!-- SECTION:PLAN:END -->
