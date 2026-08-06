@@ -16,11 +16,19 @@
  * (centavos MXN). Sin pagos ni reservas aquí.
  */
 
-import { inventory, inventoryPhotos, sellerInvitations, sellers, users } from '@thepubmarket/db'
+import {
+  catalogCards,
+  inventory,
+  inventoryPhotos,
+  sellerInvitations,
+  sellers,
+  users,
+} from '@thepubmarket/db'
 import { ANCHOR_SELLER_ID, CONDITIONS, FINISHES, TCGS, type Tcg } from '@thepubmarket/shared'
-import { desc, eq, sql } from 'drizzle-orm'
+import { and, desc, eq, sql } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { z } from 'zod'
+import { buildCardImageKey, ensureCardImage, isValidCatalogId } from '../lib/card-images'
 import { CatalogError } from '../lib/catalog'
 import { catalogProviderFor, supportedTcgs } from '../lib/catalog-providers'
 import { createListing, type ListingInput, rowToInventoryItem } from '../lib/inventory'
@@ -82,7 +90,8 @@ admin.get('/catalog/search', async (c) => {
   }
 
   try {
-    return c.json({ results: await provider.searchCards(parsed.data.q, c.env.SESSIONS) })
+    const ctx = { db: c.get('db'), kv: c.env.SESSIONS, origin: new URL(c.req.url).origin }
+    return c.json({ results: await provider.searchCards(parsed.data.q, ctx) })
   } catch (err) {
     if (err instanceof CatalogError) {
       return c.json({ error: 'catalog_error', tcg: parsed.data.game, status: err.status }, 502)
@@ -91,7 +100,7 @@ admin.get('/catalog/search', async (c) => {
   }
 })
 
-/** POST /admin/inventory — publica un single ligado a una impresión de Scryfall. */
+/** POST /admin/inventory — publica un single ligado a una impresión de su catálogo. */
 admin.post('/inventory', async (c) => {
   const parsed = createSchema.safeParse(await c.req.json().catch(() => null))
   if (!parsed.success) {
@@ -104,7 +113,8 @@ admin.post('/inventory', async (c) => {
   if (!seller) return c.json({ error: 'seller_not_found' }, 404)
 
   // Lógica de alta compartida con el panel del seller (lib/inventory).
-  const result = await createListing(db, c.env.SESSIONS, offer as ListingInput, sellerId)
+  const ctx = { db, kv: c.env.SESSIONS, origin: new URL(c.req.url).origin }
+  const result = await createListing(ctx, offer as ListingInput, sellerId)
   if (!result.ok) {
     return c.json({ error: result.error, ...result.extra }, result.status)
   }
@@ -279,4 +289,175 @@ admin.delete('/inventory/photos/:photoId', async (c) => {
   })
 
   return c.json({ ok: true })
+})
+
+/**
+ * POST /admin/catalog/cards — ingesta del catálogo canónico (TASK-036).
+ *
+ * Recibe un batch de cartas YA mapeadas y limpias (el importer hace el parseo
+ * del formato de la fuente; el Worker no interpreta HTML), hace upsert en
+ * `catalog_cards` y espeja las imágenes desde su CDN de origen hacia R2.
+ *
+ * Idempotente por diseño: el upsert converge sobre la PK (tcg, catalog_id) y
+ * una imagen ya presente en R2 se detecta con head() y no se re-descarga. Las
+ * llaves de imagen solo se escriben en la fila cuando el objeto existe de
+ * verdad, así `image_r2_key IS NULL` significa "imagen faltante" de forma
+ * confiable y el importer puede re-intentar exactamente eso.
+ *
+ * El tope de 25 cartas por request existe por el límite de subrequests del
+ * Worker (head+fetch+put por imagen); el importer manda batches de 10.
+ */
+const ingestCardSchema = z.object({
+  catalogId: z.string().min(1).max(64).refine(isValidCatalogId, 'invalid catalog id'),
+  name: z.string().min(1).max(200),
+  setCode: z.string().min(1).max(16),
+  setName: z.string().min(1).max(100),
+  collectorNumber: z.string().min(1).max(16),
+  lang: z.string().min(2).max(8).default('en'),
+  rarity: z.string().max(40).default(''),
+  artist: z.string().max(200).nullish(),
+  finishes: z.array(z.enum(FINISHES as [string, ...string[]])).default([]),
+  rulesText: z.string().max(4000).nullish(),
+  flavorText: z.string().max(2000).nullish(),
+  /** Blob de presentación por juego (RiftboundAttributes); se guarda como JSON. */
+  gameAttributes: z.record(z.unknown()).nullish(),
+  /** Snapshot de precios de mercado de la fuente; referencia, nunca precio de venta. */
+  priceData: z.record(z.unknown()).nullish(),
+  priceFetchedAt: z.number().int().positive().nullish(),
+  sourceImageUrl: z.string().url().max(500).nullish(),
+  sourceImageBackUrl: z.string().url().max(500).nullish(),
+})
+
+const ingestSchema = z.object({
+  // Allowlist de juegos con importer, no TCGS completo: un tcg sin catálogo
+  // local no debe aceptar escrituras aunque el enum global lo conozca.
+  tcg: z.enum(['riftbound']),
+  cards: z.array(ingestCardSchema).min(1).max(25),
+})
+
+/** Espeja las imágenes de una carta con concurrencia acotada por chunk. */
+const IMAGE_CONCURRENCY = 5
+
+admin.post('/catalog/cards', async (c) => {
+  const parsed = ingestSchema.safeParse(await c.req.json().catch(() => null))
+  if (!parsed.success) {
+    return c.json({ error: 'invalid_body', issues: parsed.error.issues }, 400)
+  }
+  const { tcg, cards } = parsed.data
+  const db = c.get('db')
+
+  // 1. Upsert de todo el batch en UNA llamada a D1. Los campos de imagen NO se
+  // tocan aquí: los escribe el paso 3 solo cuando el objeto existe en R2.
+  const upserts = cards.map((card) =>
+    db
+      .insert(catalogCards)
+      .values({
+        tcg,
+        catalogId: card.catalogId,
+        name: card.name,
+        setCode: card.setCode,
+        setName: card.setName,
+        collectorNumber: card.collectorNumber,
+        lang: card.lang,
+        rarity: card.rarity,
+        artist: card.artist ?? null,
+        finishes: card.finishes,
+        rulesText: card.rulesText ?? null,
+        flavorText: card.flavorText ?? null,
+        gameAttributes: card.gameAttributes ? JSON.stringify(card.gameAttributes) : null,
+        priceData: card.priceData ? JSON.stringify(card.priceData) : null,
+        priceFetchedAt: card.priceFetchedAt ?? null,
+        sourceImageUrl: card.sourceImageUrl ?? null,
+        sourceImageBackUrl: card.sourceImageBackUrl ?? null,
+      })
+      .onConflictDoUpdate({
+        target: [catalogCards.tcg, catalogCards.catalogId],
+        set: {
+          name: card.name,
+          setCode: card.setCode,
+          setName: card.setName,
+          collectorNumber: card.collectorNumber,
+          lang: card.lang,
+          rarity: card.rarity,
+          artist: card.artist ?? null,
+          finishes: card.finishes,
+          rulesText: card.rulesText ?? null,
+          flavorText: card.flavorText ?? null,
+          gameAttributes: card.gameAttributes ? JSON.stringify(card.gameAttributes) : null,
+          priceData: card.priceData ? JSON.stringify(card.priceData) : null,
+          priceFetchedAt: card.priceFetchedAt ?? null,
+          sourceImageUrl: card.sourceImageUrl ?? null,
+          sourceImageBackUrl: card.sourceImageBackUrl ?? null,
+          updatedAt: sql`(unixepoch())`,
+        },
+      }),
+  )
+  // db.batch exige tupla no vacía; zod ya garantiza cards.min(1).
+  const [firstUpsert, ...restUpserts] = upserts
+  if (firstUpsert) await db.batch([firstUpsert, ...restUpserts])
+
+  // 2. Espejado de imágenes con concurrencia acotada.
+  type ImageOutcome = {
+    catalogId: string
+    image: 'uploaded' | 'exists' | 'failed' | 'none'
+    imageBack: 'uploaded' | 'exists' | 'failed' | 'none'
+    imageKey: string | null
+    imageBackKey: string | null
+  }
+  const outcomes: ImageOutcome[] = []
+  for (let i = 0; i < cards.length; i += IMAGE_CONCURRENCY) {
+    const chunk = cards.slice(i, i + IMAGE_CONCURRENCY)
+    const results = await Promise.all(
+      chunk.map(async (card): Promise<ImageOutcome> => {
+        const frontKey = buildCardImageKey(tcg, card.catalogId, 'front')
+        const backKey = buildCardImageKey(tcg, card.catalogId, 'back')
+        const image = card.sourceImageUrl
+          ? await ensureCardImage(c.env.ASSETS, frontKey, card.sourceImageUrl)
+          : 'none'
+        const imageBack = card.sourceImageBackUrl
+          ? await ensureCardImage(c.env.ASSETS, backKey, card.sourceImageBackUrl)
+          : 'none'
+        return {
+          catalogId: card.catalogId,
+          image,
+          imageBack,
+          imageKey: image === 'uploaded' || image === 'exists' ? frontKey : null,
+          imageBackKey: imageBack === 'uploaded' || imageBack === 'exists' ? backKey : null,
+        }
+      }),
+    )
+    outcomes.push(...results)
+  }
+
+  // 3. Fija las llaves de las imágenes que sí existen en R2 (una llamada D1).
+  const keyWrites = outcomes.filter((o) => o.imageKey || o.imageBackKey)
+  if (keyWrites.length > 0) {
+    const [first, ...rest] = keyWrites.map((o) =>
+      db
+        .update(catalogCards)
+        .set({
+          ...(o.imageKey ? { imageR2Key: o.imageKey } : {}),
+          ...(o.imageBackKey ? { imageBackR2Key: o.imageBackKey } : {}),
+        })
+        .where(and(eq(catalogCards.tcg, tcg), eq(catalogCards.catalogId, o.catalogId))),
+    )
+    if (first) await db.batch([first, ...rest])
+  }
+
+  const summary = {
+    upserted: cards.length,
+    imagesUploaded: outcomes.filter((o) => o.image === 'uploaded' || o.imageBack === 'uploaded')
+      .length,
+    imagesExisting: outcomes.filter((o) => o.image === 'exists').length,
+    imagesFailed: outcomes.filter((o) => o.image === 'failed' || o.imageBack === 'failed').length,
+  }
+  return c.json({
+    results: outcomes.map(({ catalogId, image, imageBack }) => ({
+      catalogId,
+      row: 'upserted',
+      image,
+      imageBack,
+    })),
+    summary,
+  })
 })

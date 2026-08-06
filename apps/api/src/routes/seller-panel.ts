@@ -174,8 +174,7 @@ sellerPanel.post('/inventory', async (c) => {
   }
 
   const result = await createListing(
-    c.get('db'),
-    c.env.SESSIONS,
+    { db: c.get('db'), kv: c.env.SESSIONS, origin: new URL(c.req.url).origin },
     parsed.data as ListingInput,
     seller.id,
   )
@@ -643,7 +642,8 @@ sellerPanel.get('/catalog/search', async (c) => {
   }
 
   try {
-    return c.json({ results: await provider.searchCards(parsed.data.q, c.env.SESSIONS) })
+    const ctx = { db: c.get('db'), kv: c.env.SESSIONS, origin: new URL(c.req.url).origin }
+    return c.json({ results: await provider.searchCards(parsed.data.q, ctx) })
   } catch (err) {
     if (err instanceof CatalogError) {
       return c.json({ error: 'catalog_error', tcg: parsed.data.game, status: err.status }, 502)

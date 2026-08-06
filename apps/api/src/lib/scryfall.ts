@@ -12,6 +12,7 @@
 
 import type { CardSnapshot } from '@thepubmarket/shared'
 import { CARD_CACHE_TTL_SECONDS, CatalogError, SEARCH_CACHE_TTL_SECONDS } from './catalog'
+import type { CatalogContext } from './catalog-providers'
 
 const SCRYFALL_BASE = 'https://api.scryfall.com'
 
@@ -82,7 +83,10 @@ export function normalizeCard(raw: ScryfallCard): CardSnapshot {
  * Trae una impresión por scryfall_id, con cache en KV. Devuelve el snapshot
  * normalizado. Lanza ScryfallError si la carta no existe o la API falla.
  */
-export async function getCardById(scryfallId: string, kv: KVNamespace): Promise<CardSnapshot> {
+export async function getCardById(scryfallId: string, ctx: CatalogContext): Promise<CardSnapshot> {
+  // Scryfall solo necesita el KV de cache del contexto; db/origin son del
+  // provider local (catalog-db).
+  const kv = ctx.kv
   const cached = await kv.get<CardSnapshot>(cardKey(scryfallId), 'json')
   if (cached) return cached
 
@@ -105,7 +109,8 @@ export async function getCardById(scryfallId: string, kv: KVNamespace): Promise<
  * impresión por separado. Cachea el resultado brevemente en KV. Una búsqueda
  * sin resultados (404 de Scryfall) devuelve lista vacía, no error.
  */
-export async function searchCards(query: string, kv: KVNamespace): Promise<CardSnapshot[]> {
+export async function searchCards(query: string, ctx: CatalogContext): Promise<CardSnapshot[]> {
+  const kv = ctx.kv
   const trimmed = query.trim()
   if (!trimmed) return []
 

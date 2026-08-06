@@ -1,24 +1,29 @@
 import type { Db, InventoryRow } from '@thepubmarket/db'
 import type { CardSnapshot } from '@thepubmarket/shared'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { CatalogContext } from './catalog-providers'
 import { createListing, type ListingInput, rowToInventoryItem } from './inventory'
-import { getCardById as getRiftboundCard } from './riftcodex'
 import { getCardById, ScryfallError } from './scryfall'
+
+// El provider local de Riftbound (catalog-db) leería D1; aquí se mockea la
+// fábrica completa para que el registro de catalog-providers use este stub.
+const { mockedGetRiftboundCard } = vi.hoisted(() => ({ mockedGetRiftboundCard: vi.fn() }))
 
 vi.mock('./scryfall', async (importOriginal) => ({
   ...(await importOriginal<typeof import('./scryfall')>()),
   getCardById: vi.fn(),
 }))
 
-vi.mock('./riftcodex', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('./riftcodex')>()),
-  getCardById: vi.fn(),
+vi.mock('./catalog-db', () => ({
+  localCatalogProvider: () => ({ getCardById: mockedGetRiftboundCard, searchCards: vi.fn() }),
 }))
 
 const mockedGetCardById = vi.mocked(getCardById)
-const mockedGetRiftboundCard = vi.mocked(getRiftboundCard)
 
 const KV = {} as KVNamespace
+const ORIGIN = 'http://localhost:8787'
+/** Contexto de catálogo con un Db dado (los tests de alta capturan el insert). */
+const ctxWith = (db: Db): CatalogContext => ({ db, kv: KV, origin: ORIGIN })
 
 const MTG_SNAPSHOT: CardSnapshot = {
   tcg: 'mtg',
@@ -91,14 +96,16 @@ describe('createListing', () => {
     const captured: Record<string, unknown>[] = []
 
     const result = await createListing(
-      fakeDb(captured),
-      KV,
+      ctxWith(fakeDb(captured)),
       { tcg: 'mtg', catalogId: MTG_SNAPSHOT.catalogId, ...OFFER },
       'seller-1',
     )
 
     expect(result.ok).toBe(true)
-    expect(mockedGetCardById).toHaveBeenCalledWith(MTG_SNAPSHOT.catalogId, KV)
+    expect(mockedGetCardById).toHaveBeenCalledWith(
+      MTG_SNAPSHOT.catalogId,
+      expect.objectContaining({ kv: KV, origin: ORIGIN }),
+    )
     const row = captured[0]
     expect(row).toMatchObject({
       sellerId: 'seller-1',
@@ -127,8 +134,7 @@ describe('createListing', () => {
     const captured: Record<string, unknown>[] = []
 
     const result = await createListing(
-      fakeDb(captured),
-      KV,
+      ctxWith(fakeDb(captured)),
       { tcg: 'riftbound', catalogId: RIFTBOUND_SNAPSHOT.catalogId, ...OFFER, language: 'en' },
       'seller-1',
     )
@@ -155,8 +161,7 @@ describe('createListing', () => {
     const captured: Record<string, unknown>[] = []
 
     await createListing(
-      fakeDb(captured),
-      KV,
+      ctxWith(fakeDb(captured)),
       { tcg: 'mtg', catalogId: MTG_SNAPSHOT.catalogId, ...OFFER },
       'seller-1',
     )
@@ -168,8 +173,7 @@ describe('createListing', () => {
     mockedGetCardById.mockResolvedValue({ ...MTG_SNAPSHOT, finishes: ['nonfoil'] })
 
     const result = await createListing(
-      fakeDb([]),
-      KV,
+      ctxWith(fakeDb([])),
       { tcg: 'mtg', catalogId: MTG_SNAPSHOT.catalogId, ...OFFER, finish: 'foil' },
       'seller-1',
     )
@@ -187,8 +191,7 @@ describe('createListing', () => {
     const captured: Record<string, unknown>[] = []
 
     const result = await createListing(
-      fakeDb(captured),
-      KV,
+      ctxWith(fakeDb(captured)),
       { tcg: 'mtg', catalogId: MTG_SNAPSHOT.catalogId, ...OFFER, finish: 'foil' },
       'seller-1',
     )
@@ -200,8 +203,7 @@ describe('createListing', () => {
   it('rejects a game without an integrated catalog before touching any provider', async () => {
     // Pokémon aún no tiene catálogo; MTG y Riftbound sí.
     const result = await createListing(
-      fakeDb([]),
-      KV,
+      ctxWith(fakeDb([])),
       { tcg: 'pokemon', catalogId: 'pkm-001', ...OFFER },
       'seller-1',
     )
@@ -218,8 +220,7 @@ describe('createListing', () => {
   it('maps a provider 404 to card_not_found and other failures to 502', async () => {
     mockedGetCardById.mockRejectedValueOnce(new ScryfallError('missing', 404))
     const notFound = await createListing(
-      fakeDb([]),
-      KV,
+      ctxWith(fakeDb([])),
       { tcg: 'mtg', catalogId: MTG_SNAPSHOT.catalogId, ...OFFER },
       'seller-1',
     )
@@ -227,8 +228,7 @@ describe('createListing', () => {
 
     mockedGetCardById.mockRejectedValueOnce(new ScryfallError('boom', 500))
     const upstream = await createListing(
-      fakeDb([]),
-      KV,
+      ctxWith(fakeDb([])),
       { tcg: 'mtg', catalogId: MTG_SNAPSHOT.catalogId, ...OFFER },
       'seller-1',
     )

@@ -8,6 +8,7 @@ import { sellerAuth } from './middleware/seller-auth'
 import { sellerConnectAuth } from './middleware/seller-connect-auth'
 import { admin } from './routes/admin'
 import { auth } from './routes/auth'
+import { cardImagesRoutes } from './routes/card-images'
 import { catalog } from './routes/catalog'
 import { checkout } from './routes/checkout'
 import { ordersRoutes } from './routes/orders'
@@ -75,6 +76,10 @@ app.route('/sellers', sellersRoutes)
 // Sin auth — misma exposición que las URLs de Scryfall ya embebidas en cada
 // listing. Nunca acepta una llave de R2 del cliente, solo un id de foto.
 app.route('/photos', photosRoutes)
+
+// Imágenes canónicas del catálogo espejadas en R2 (TASK-036). Sin auth; las
+// llaves son deterministas y la ruta valida los params antes de construirlas.
+app.route('/card-images', cardImagesRoutes)
 
 // Onboarding de Stripe Connect (autoservicio; sesión + fila 'invited' o
 // 'active' en sellers — MÁS permisivo que sellerAuth). Se monta ANTES del

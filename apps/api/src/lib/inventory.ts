@@ -8,7 +8,7 @@
  * `CardSnapshot`. Un juego sin proveedor se rechaza con `tcg_not_supported`.
  */
 
-import { type Db, type InventoryRow, inventory } from '@thepubmarket/db'
+import { type InventoryRow, inventory } from '@thepubmarket/db'
 import type {
   CardGameAttributes,
   CardSnapshot,
@@ -19,7 +19,7 @@ import type {
   Tcg,
 } from '@thepubmarket/shared'
 import { CatalogError } from './catalog'
-import { catalogProviderFor, supportedTcgs } from './catalog-providers'
+import { type CatalogContext, catalogProviderFor, supportedTcgs } from './catalog-providers'
 
 /**
  * Lee los atributos de juego guardados como JSON. Defensivo a propósito: un
@@ -97,16 +97,16 @@ export type CreateListingResult =
   | { ok: false; error: string; status: 400 | 404 | 500 | 502; extra?: Record<string, unknown> }
 
 /**
- * Publica un single: trae el snapshot canónico del catálogo del juego (cache
- * KV → proveedor), valida que el acabado exista para esa impresión e inserta
- * la fila con status activo.
+ * Publica un single: trae el snapshot canónico del catálogo del juego (local
+ * en D1 o proveedor HTTP con cache KV, según el juego), valida que el acabado
+ * exista para esa impresión e inserta la fila con status activo.
  */
 export async function createListing(
-  db: Db,
-  kv: KVNamespace,
+  ctx: CatalogContext,
   input: ListingInput,
   sellerId: string,
 ): Promise<CreateListingResult> {
+  const { db } = ctx
   const provider = catalogProviderFor(input.tcg)
   if (!provider) {
     return {
@@ -119,11 +119,9 @@ export async function createListing(
 
   let card: CardSnapshot
   try {
-    card = await provider.getCardById(input.catalogId, kv)
+    card = await provider.getCardById(input.catalogId, ctx)
   } catch (err) {
     if (err instanceof CatalogError) {
-      // Solo Scryfall distingue el 404; RiftCodex responde 500 a un id
-      // inexistente, así que ahí un id malo se ve como falla del upstream.
       return {
         ok: false,
         error: err.status === 404 ? 'card_not_found' : 'catalog_error',

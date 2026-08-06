@@ -16,7 +16,15 @@
 
 import type { SellerHours, Tcg } from '@thepubmarket/shared'
 import { sql } from 'drizzle-orm'
-import { check, index, integer, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core'
+import {
+  check,
+  index,
+  integer,
+  primaryKey,
+  sqliteTable,
+  text,
+  uniqueIndex,
+} from 'drizzle-orm/sqlite-core'
 
 /** Columnas de timestamp comunes (created_at / updated_at, unix segundos). */
 const timestamps = {
@@ -370,6 +378,67 @@ export const webhookEvents = sqliteTable('webhook_events', {
   createdAt: integer('created_at').notNull().default(sql`(unixepoch())`),
 })
 
+// =====================================================================
+// catalog_cards — catálogo canónico de cartas por juego, importado en bloque
+// (TASK-036: Riftbound desde la API de dotgg). Es la contraparte LOCAL de los
+// providers externos (Scryfall): una fila por impresión, espejo de
+// `CardSnapshot` más textos de reglas y las llaves de imagen en R2.
+//
+// PK natural compuesta (tcg, catalog_id): es el target del upsert del importer
+// y no hay un id propio que generar — deviación deliberada de la convención
+// UUID. Sin check(): D1 rechaza recrear tablas, así que la evolución del
+// esquema queda en puro ALTER TABLE ADD COLUMN y cualquier columna nueva se
+// rellena gratis re-corriendo el importer (idempotente).
+// =====================================================================
+export const catalogCards = sqliteTable(
+  'catalog_cards',
+  {
+    tcg: text('tcg').notNull(),
+    /** Id de la impresión en su catálogo de origen ("UNL-131" en Riftbound). */
+    catalogId: text('catalog_id').notNull(),
+    // Concepto de Scryfall (la carta lógica de MTG); null en otros juegos.
+    oracleId: text('oracle_id'),
+    name: text('name').notNull(),
+    setCode: text('set_code').notNull(),
+    setName: text('set_name').notNull(),
+    collectorNumber: text('collector_number').notNull(),
+    lang: text('lang').notNull().default('en'),
+    // En minúsculas, convención de los snapshots de Scryfall ('rare').
+    rarity: text('rarity').notNull().default(''),
+    artist: text('artist'),
+    finishes: text('finishes', { mode: 'json' }).$type<string[]>(),
+    // Texto de reglas ya limpio (sin HTML). Los tokens de icono estilo
+    // `:rb_might:` se conservan verbatim: son data estructurada que el
+    // frontend puede renderizar; quitarlos sería irreversible.
+    rulesText: text('rules_text'),
+    flavorText: text('flavor_text'),
+    // Mismo criterio que inventory.cardAttributes: JSON de presentación.
+    gameAttributes: text('game_attributes'),
+    // Snapshot de precios de mercado (TCGplayer USD / Cardmarket EUR) tal cual
+    // los reporta la fuente. Es REFERENCIA, nunca precio de venta: los sellers
+    // fijan sus precios en MXN. Se refresca en cada corrida del importer;
+    // `price_fetched_at` dice qué tan viejo es.
+    priceData: text('price_data'),
+    priceFetchedAt: integer('price_fetched_at'),
+    // Procedencia de la imagen (static.dotgg.gg). Se conserva como fallback y
+    // para re-descargar si el objeto de R2 faltara.
+    sourceImageUrl: text('source_image_url'),
+    sourceImageBackUrl: text('source_image_back_url'),
+    // NULL = imagen aún no espejada en R2 (pendiente o fallida). El importer
+    // re-intenta exactamente las filas con NULL en la siguiente corrida.
+    imageR2Key: text('image_r2_key'),
+    imageBackR2Key: text('image_back_r2_key'),
+    ...timestamps,
+  },
+  (t) => [
+    primaryKey({ columns: [t.tcg, t.catalogId] }),
+    // Búsqueda por nombre del provider local (LIKE, mismo patrón que
+    // idx_inventory_title_nocase).
+    index('idx_catalog_cards_name_nocase').on(sql`${t.name} COLLATE NOCASE`),
+    index('idx_catalog_cards_set_code').on(t.setCode),
+  ],
+)
+
 /** Todas las tablas, para pasarle el schema al cliente Drizzle. */
 export const schema = {
   users,
@@ -380,4 +449,5 @@ export const schema = {
   orders,
   orderItems,
   webhookEvents,
+  catalogCards,
 }

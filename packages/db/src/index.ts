@@ -7,6 +7,7 @@ export { createDb, type Db } from './client'
 export * from './schema'
 
 import type {
+  catalogCards,
   inventory,
   inventoryPhotos,
   orderItems,
@@ -34,3 +35,5 @@ export type OrderItemRow = typeof orderItems.$inferSelect
 export type NewOrderItem = typeof orderItems.$inferInsert
 export type WebhookEventRow = typeof webhookEvents.$inferSelect
 export type NewWebhookEvent = typeof webhookEvents.$inferInsert
+export type CatalogCardRow = typeof catalogCards.$inferSelect
+export type NewCatalogCard = typeof catalogCards.$inferInsert
