@@ -1,11 +1,11 @@
 ---
 id: TASK-028
 title: Add webcam/camera capture to the seller photo manager
-status: In Progress
+status: Done
 assignee:
   - claude
 created_date: '2026-08-06 01:52'
-updated_date: '2026-08-06 01:57'
+updated_date: '2026-08-06 01:58'
 labels:
   - 'epic:inventory-photos'
   - frontend
@@ -97,3 +97,22 @@ Same convention as TASK-026/027: per this repo's apps/web testing convention and
 
 AC#5 (stream release) rests on a single mechanism covering all three release points: a mount-only useEffect cleanup stops every track on unmount, which is what firing 'close camera' (via stopCamera, called directly) and 'close the whole modal' (which unmounts PhotoManagerModal through the parent's conditional render) both ultimately hit — verified by reading the effect and confirming there's no code path that could unmount the component without React running its cleanup.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+## Webcam/camera capture in the seller photo manager
+
+Adds a second photo source to `PhotoManagerModal` (TASK-026): a "Use camera" control that opens a live `getUserMedia` preview inside the same modal and lets the seller (or store staff at the counter) capture a still frame directly, instead of only picking existing files.
+
+### What it does
+- **One pipeline, two sources**: extracted the file-picker loop's per-file logic into `enqueueFile(file)`. The camera's capture handler calls the exact same function — a captured frame becomes a `File` via canvas → `toBlob`, then goes through the identical `resizeImageForUpload` (1600px/JPEG) → serial upload queue → retry/error-state UI that file uploads already use. There is no second upload code path to keep in sync.
+- **Lifecycle, one mechanism for all three release points**: a mount-only `useEffect` cleanup stops every `MediaStreamTrack` on unmount. Explicitly closing the camera view (`stopCamera()`) and closing the whole modal (which unmounts `PhotoManagerModal` via the parent's conditional render) both route through this — no special-casing needed per close path, so there's no way to accidentally leave the camera running.
+- **Degrades gracefully**: the control is hidden entirely when `getUserMedia` isn't available (no button guaranteed to fail); permission denial or no camera shows one bilingual message and leaves the rest of the modal — file picker, existing photos — fully usable.
+- **Cap enforcement**: "Use camera" and "Capture" both respect the same `atCap` flag the file input already uses, no new cap logic.
+
+### Verification
+`pnpm --filter @thepubmarket/web typecheck`, `pnpm lint` (fixed two real findings: a stale biome-ignore comment for a rule that wasn't firing, and `useIterableCallbackReturn` on a `forEach` callback), and `pnpm --filter @thepubmarket/web build` all green. `es.json`/`en.json` parity verified (201 `panel` keys each). Per this repo's convention and this session's standing instruction against driving browser automation — and because `getUserMedia` has no meaningful headless-test story anyway — the actual camera walkthrough (grant/deny permission, multi-capture, cap, both close paths) is left to the checklist appended at `docs/ingenieria/fotos-inventario.md` §11 for a human with a real camera to run.
+
+No payment, payout, or Stripe code touched.
+<!-- SECTION:FINAL_SUMMARY:END -->
