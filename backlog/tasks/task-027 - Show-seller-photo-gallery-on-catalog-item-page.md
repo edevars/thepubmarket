@@ -1,7 +1,7 @@
 ---
 id: TASK-027
 title: Show seller photo gallery on catalog item page
-status: In Progress
+status: Done
 assignee:
   - claude
 created_date: '2026-08-06 00:13'
@@ -95,3 +95,29 @@ Same convention as TASK-026: per this repo's stated apps/web testing convention 
 
 AC5 (zero-photos regression) is verified by construction, not by inspection: the `item.photos.length > 0 ? <PhotoGallery/> : (...)` branch in CardDetailView.tsx has the exact original JSX (CardArt + ConditionBadge + FoilTag, no thumbnail strip) untouched in the else-branch — diffing the file shows only an added wrapper, not a rewrite of that markup. AC6 (no layout jump on broken image) rests on `ImageWithFallback` always applying the identical className to both the <img> and its error-fallback <div>, so the box never resizes, only its contents swap.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+## Seller photo gallery on the catalog item page
+
+This is the payoff of the `inventory-photos` epic: the item detail page's fake 3-thumbnail placeholder strip is now a real gallery, live only when the listing actually has seller photos.
+
+### What it does
+- **`PhotoGallery.tsx`** (new): the Scryfall reference image and the seller's real photos share one swappable array — the reference is just another thumbnail slot, not a special case in the render logic — but the active main image always carries a visible tag ("Imagen de referencia" / "Foto real de este ejemplar") so a buyer can never mistake canonical art for the actual card, which is the whole point: a pristine stock image next to an HP card is exactly the expectation gap that causes disputes.
+- **Thumbnails** are plain `<button>`s (keyboard-accessible for free via Tab + Enter/Space, no extra wiring needed), highlighted via `border-primary` + `aria-current` on the active one.
+- **Lightbox**: click the main image to zoom full-size; closes on backdrop click, a visible ✕ button, or Escape (a `keydown` listener attached only while open). Same backdrop-click/stopPropagation pattern as TASK-026's `PhotoManagerModal`/`ConfirmDialog`.
+- **No thumbnail pipeline**: reuses the already-compressed upload from TASK-026 (1600px JPEG) scaled with CSS — not worth a server-side resizing pipeline at a 6-photo cap.
+- **Broken-image resilience**: `ImageWithFallback` swaps a failed `<img>` for a `<div>` with the *identical* className/aspect-ratio, so a dead URL never shifts the layout.
+- **Zero-photos path**: `CardDetailView.tsx`'s image column is `item.photos.length > 0 ? <PhotoGallery/> : (...)`, where the else-branch is the untouched original markup — verified by construction, not inspection, that nothing regresses for the ~all listings that still have no photos.
+- **Catalog grid**: a subtle ◈ badge in `ProductCard.tsx`'s otherwise-unused bottom-left image corner signals "has real photos" without disturbing layout.
+- **Quantity>1 copy**: distinct buyer-facing framing from the seller panel's — "these are representative of the copy you'll receive, more than one is available at this condition" rather than "this is the exact copy."
+
+### Verification
+`pnpm --filter @thepubmarket/web typecheck`, `pnpm lint` (fixed one real a11y finding — `aria-label` needs `role="img"` on a bare `<span>`), and `pnpm --filter @thepubmarket/web build` all green; `/catalog/[id]` builds cleanly with the expected size bump. `es.json`/`en.json` parity verified programmatically (32 `detail` keys each). Per this repo's apps/web convention and this session's standing instruction against driving browser automation, the interactive walkthrough (photo listing, no-photo listing, both locales, mobile viewport) is left to the checklist appended at `docs/ingenieria/fotos-inventario.md` §10 rather than run by this agent.
+
+No payment, payout, or Stripe code touched.
+
+### Epic status
+With TASK-023 through TASK-027 all Done, the `inventory-photos` epic is complete end to end: schema → upload/delete/reorder API → catalog/read wiring + R2 streaming → seller panel UI → buyer-facing gallery.
+<!-- SECTION:FINAL_SUMMARY:END -->
