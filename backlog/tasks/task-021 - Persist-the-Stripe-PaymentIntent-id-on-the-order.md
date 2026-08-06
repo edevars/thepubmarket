@@ -5,12 +5,13 @@ status: In Progress
 assignee:
   - claude
 created_date: '2026-08-03 01:12'
-updated_date: '2026-08-06 00:26'
+updated_date: '2026-08-06 00:32'
 labels:
   - api
   - stripe
   - orders
   - payments
+  - needs-verification
 milestone: m-2
 dependencies: []
 references:
@@ -20,7 +21,7 @@ references:
   - packages/db/src/schema.ts
 documentation:
   - docs/ingenieria/entrega.md
-priority: medium
+priority: low
 type: bug
 ordinal: 21000
 ---
@@ -126,4 +127,8 @@ Applied to `--remote` with four `UPDATE ... WHERE id = ? AND stripe_payment_inte
 **Committed** on branch `fix/task-021-022-payments-reliability` as `c73e599` (TASK-021 only; TASK-022 is a separate commit on the same branch). The commit carries the pre-TASK-022 shape of `webhooks.ts` — the PaymentIntent extraction on top of the old dedupe handler — so each commit stands on its own: typecheck, biome and the 71 tests pass at `c73e599`. AC#1–#6 checked; AC#7 still needs the prod deploy plus one test payment.
 
 **Deployed 2026-08-05** as part of the shared rollout (version `1a8dacbe-ece7-4d5b-86dc-3be3325ad7a7`, see TASK-022 for the migration/deploy record). AC#7 is the only thing left and it needs a human: a hosted Checkout Session can only be completed by entering a test card on Stripe's page, so it cannot be driven from here.
+
+**Downgraded to Low + `needs-verification` (2026-08-05).** The code is merged to `main` and deployed; nothing is left to build. The only open item is AC#7, a verification that happens on its own the next time anyone pays a test order — no separate work needed, just someone to check the row afterwards.
+
+To close it: after any test-mode payment, `SELECT id, status, stripe_payment_intent_id FROM orders WHERE id='<orderId>'` against `--remote` must return the same `pi_…` Stripe reports for that session (retrieve it with `--stripe-account`, the charge lives in the seller's account).
 <!-- SECTION:NOTES:END -->
