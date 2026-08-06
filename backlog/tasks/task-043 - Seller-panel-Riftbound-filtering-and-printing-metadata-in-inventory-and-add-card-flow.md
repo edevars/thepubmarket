@@ -6,12 +6,14 @@ title: >-
 status: To Do
 assignee: []
 created_date: '2026-08-06 05:45'
+updated_date: '2026-08-06 05:50'
 labels:
   - 'epic:riftbound-ux'
   - web
 milestone: m-3
 dependencies:
   - TASK-038
+  - TASK-045
 references:
   - apps/web/src/components/panel/InventoryView.tsx
   - apps/web/src/components/panel/AddCardFlow.tsx
@@ -41,4 +43,5 @@ Depends on TASK-038, which adds this metadata to the seller catalog search respo
 - [ ] #3 Finish availability is respected in the add-card UI: foil-only printings do not offer nonfoil, matching the API finish_not_available rule
 - [ ] #4 Inventory rows surface game and set context for Riftbound listings
 - [ ] #5 Labels localized in es and en; typecheck, biome, and tests green
+- [ ] #6 Panel filter and search interactions use the shared motion foundation (TASK-045) for state transitions (chip toggles, result list updates), respecting prefers-reduced-motion; a web-design-guidelines skill audit of touched panel surfaces reports no violations
 <!-- AC:END -->
