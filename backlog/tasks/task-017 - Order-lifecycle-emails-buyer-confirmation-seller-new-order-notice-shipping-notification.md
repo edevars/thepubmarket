@@ -7,7 +7,7 @@ status: In Progress
 assignee:
   - Claude
 created_date: '2026-07-29 01:59'
-updated_date: '2026-08-06 03:40'
+updated_date: '2026-08-06 03:41'
 labels:
   - 'epic:transactional-email'
   - api
@@ -62,6 +62,31 @@ Constraints:
 - [ ] #9 Verified end to end in Stripe test mode against the deployed API: pay a shipping order and a pickup order, confirm both confirmation and seller-notice emails arrive, then drive each to shipped / ready from /panel and confirm the buyer email arrives
 - [ ] #10 docs/ingenieria/ documents which events send which email, to whom, and where to look when one does not arrive
 <!-- AC:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+## Approach
+
+Four Spanish templates as pure functions, one loader that assembles an order's email data, and two trigger points that already give idempotency for free.
+
+**Idempotency without new machinery.** Confirmation + seller notice run as two separate `step.do` calls in the post-payment Workflow: Workflows checkpoint completed steps, the instance id is the orderId, and the webhook layer is at-least-once with its own ledger (TASK-022). Shipped / ready ride the existing guarded UPDATEs in the panel (`isNull(shippedAt)`, `readyAt IS NULL`), which already return 409 on a second call — so a second send is impossible without inventing a flag.
+
+**Never fail an order for an email.** `sendEmail` already never throws; the order-email helpers additionally catch their own data-loading errors and log. A notify step that cannot throw cannot retry, which is also what keeps AC#5 true.
+
+## Steps
+
+1. **`apps/api/src/lib/email-templates.ts`** — four templates reusing the existing `layout()`: buyer confirmation, seller new-order notice, shipped, ready-for-pickup. Buyer-facing copy carries subtotal / shipping / total only — never `platformFeeCents`, never anything implying the platform holds funds (AC#7). Seller notice shows what to pull from stock, the delivery destination and a link to `/panel`.
+2. **`apps/api/src/lib/order-emails.ts`** (new) — loads order + items (joined to inventory for set/condition) + buyer email + seller + pickup store, then sends via the single `sendEmail` path. Exposes `sendOrderConfirmation`, `sendSellerNewOrderNotice`, `sendOrderShipped`, `sendOrderReady`. Every one returns void and never throws. A seller with no linked user (`sellers.user_id IS NULL`) logs and skips rather than erroring.
+3. **`apps/api/src/workflows/post-payment.ts`** — replace the `notify` stub with `notify-buyer` and `notify-seller` steps (separate so one failing never resends the other).
+4. **`apps/api/src/routes/seller-panel.ts`** — after a successful `/ship` and `/ready`, fire the buyer email through `executionCtx.waitUntil` so the panel response is not blocked on the provider.
+5. **Tests** — template purity tests: buyer emails contain no fee/commission wording (AC#7), both `html` and `text` are always produced (AC#8's plain-text half), shipping vs pickup render their own delivery block, carrier omitted when absent, and HTML escaping of user-supplied values (recipient name, store address).
+6. **`docs/ingenieria/email.md`** — a section mapping event → email → recipient → trigger point, plus where to look when one does not arrive (`EMAIL_MODE`, the `[email]` log lines, the webhook ledger).
+7. **Validate** — suites, typecheck, lint, and a local run with `EMAIL_MODE` in log mode to read the four rendered messages end to end.
+
+## What I cannot close alone
+- **AC#8** (renders in a real web client) and **AC#9** (emails actually arrive in an inbox, test-mode payment against the deployed API) need the user's own mailbox and eyes. I will prepare everything and hand back exact steps; these two stay unchecked until confirmed.
+<!-- SECTION:PLAN:END -->
 
 ## Comments
 
