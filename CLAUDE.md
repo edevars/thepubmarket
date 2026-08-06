@@ -64,6 +64,7 @@ Cualquier propuesta técnica o de producto debe respetar esto. En concreto:
 - **Marca siempre las implicaciones regulatorias** que toque una decisión: Ley Fintech, custodia de fondos, CNBV, IFPE.
 - **Temas legales o fiscales en México:** da el análisis, pero recuérdame que no es asesoría legal formal.
 - **Idioma:** español por defecto; inglés para términos técnicos cuando sea natural.
+- **Calidad visual de primer nivel.** Todo trabajo de frontend incluye micro-interacciones y transiciones claras (respetando `prefers-reduced-motion`), sin look genérico. Usa el skill `frontend-design` al construir UI y audita con `web-design-guidelines` antes de cerrar una task de UI; pasa esta expectativa a los subagentes de frontend.
 
 ## Reglas de decisión (checklist mental)
 
