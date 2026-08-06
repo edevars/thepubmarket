@@ -3,9 +3,11 @@ id: TASK-038
 title: >-
   Expose full card metadata (rarity, set, rules/flavor text, game attributes) in
   catalog API responses
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - '@claude'
 created_date: '2026-08-06 05:43'
+updated_date: '2026-08-06 07:11'
 labels:
   - 'epic:riftbound-ux'
   - api
