@@ -3,11 +3,11 @@ id: TASK-045
 title: >-
   Motion and interaction foundation: transition tokens, micro-interactions,
   reduced-motion support
-status: In Progress
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-08-06 05:49'
-updated_date: '2026-08-06 06:46'
+updated_date: '2026-08-06 07:10'
 labels:
   - 'epic:riftbound-ux'
   - web
@@ -36,11 +36,11 @@ The project skills `frontend-design` and `web-design-guidelines` (in .claude/ski
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Shared motion tokens (durations, easings) and reusable transition patterns exist and are documented for: hover/press feedback, filter chip add/remove, card grid content changes, and menu/dropdown reveal
-- [ ] #2 prefers-reduced-motion is respected globally — all non-essential animation is disabled or reduced for users who request it
-- [ ] #3 At least the catalog game switch and filter interactions demonstrably use the foundation (no layout jank, no cumulative layout shift regressions)
-- [ ] #4 Animations never block interaction: controls remain responsive during transitions and focus states stay visible for keyboard users
-- [ ] #5 Typecheck, biome, and web tests green; a UI audit pass with the web-design-guidelines skill reports no animation/a11y violations on touched surfaces
+- [x] #1 Shared motion tokens (durations, easings) and reusable transition patterns exist and are documented for: hover/press feedback, filter chip add/remove, card grid content changes, and menu/dropdown reveal
+- [x] #2 prefers-reduced-motion is respected globally — all non-essential animation is disabled or reduced for users who request it
+- [x] #3 At least the catalog game switch and filter interactions demonstrably use the foundation (no layout jank, no cumulative layout shift regressions)
+- [x] #4 Animations never block interaction: controls remain responsive during transitions and focus states stay visible for keyboard users
+- [x] #5 Typecheck, biome, and web tests green; a UI audit pass with the web-design-guidelines skill reports no animation/a11y violations on touched surfaces
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -65,3 +65,27 @@ The project skills `frontend-design` and `web-design-guidelines` (in .claude/ski
 - Delegated to the `nextjs-frontend` subagent with the `frontend-design` quality bar; audited before closing.
 - Branch `task/task-045`; the pre-existing uncommitted files (.gitignore, dispatch-loop infra) belong to the user and stay out of the commit.
 <!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Motion foundation lives entirely in `apps/web/src/app/globals.css` (CSS-only, no animation library):
+
+- Tokens in `@theme`: `--duration-fast/base/slow` (120/200/320ms) and `--ease-standard/emphasized`, which auto-generate Tailwind `duration-*`/`ease-*` utilities.
+- Documented patterns: `.tpm-chip`/`.tpm-chip-exit` (chip add/remove), `.tpm-grid-item` (grid content swap fade+rise), `.tpm-reveal` (dropdown/sheet), `.tpm-scrim` (backdrop fade), `.tpm-drawer-panel` (cart drawer). All transform/opacity only.
+- Global `@media (prefers-reduced-motion: reduce)` collapses animation/transition to 0.01ms (kept instead of `animation: none` so `forwards`-filled end states still apply).
+
+Adopted on: CatalogView (game switch via grid remount + mobile filter reveal), FilterSidebar (control press feedback, foil toggle knob now animates transform not `left`), ActiveChips (exit animation before state removal, double-fire guarded), CardGrid/ProductCard (entrance + hover/press), SiteHeader (nav hover/press, logo), CartDrawer (scrim + panel, overscroll-contain).
+
+web-design-guidelines audit findings fixed: layout-property animation on foil toggle, aria-hidden/disabled on a focused exiting chip button, missing overscroll-behavior in drawer scroll area, missing focus rings on scrim/CTA, non-transitioning press scale on header cart button.
+
+Checks: typecheck, biome, and all tests green. Merged to main (118090f), deployed thepubmarket-web (version 30e2df6a).
+
+Resumed from an interrupted session that had the implementation staged but unverified. Validated the work, ran the web-design-guidelines audit, fixed 4 findings, shipped.
+<!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Shipped a lean, CSS-only motion/interaction foundation for the storefront: shared duration/easing tokens in the Tailwind 4 `@theme`, five documented reusable transition patterns (chips, grid entrance, reveals, scrim, drawer), and a global prefers-reduced-motion override. Adopted across catalog, filters, header, and cart drawer with transform/opacity-only animation, persistent focus-visible states, and no layout shift. Audited with web-design-guidelines (4 findings found and fixed). Merged to main and deployed to Cloudflare.
+<!-- SECTION:FINAL_SUMMARY:END -->
