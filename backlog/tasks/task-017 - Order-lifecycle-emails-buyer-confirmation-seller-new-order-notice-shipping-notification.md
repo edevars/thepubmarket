@@ -7,11 +7,13 @@ status: In Progress
 assignee:
   - Claude
 created_date: '2026-07-29 01:59'
-updated_date: '2026-08-06 03:52'
+updated_date: '2026-08-06 06:45'
 labels:
   - 'epic:transactional-email'
   - api
   - orders
+  - blocked
+  - needs-verification
 milestone: m-2
 dependencies:
   - TASK-016
@@ -100,6 +102,8 @@ AC#6 evidence, being precise about what was and was not proven: the live run con
 AC#8 and AC#9 are intentionally left unchecked: both need a human mailbox and eyes. AC#8 is 'renders in a real web client'; AC#9 is a test-mode payment against the DEPLOYED API with confirmation that mail actually arrives. Everything is in place for them — see the final summary for the exact steps to run.
 
 Copy decisions worth keeping: buyer emails state 'Le compras directo a <tienda>; The Pub Market solo conecta la venta', which is the non-custodial model in the buyer's own words. A regression test fails if any buyer-facing template mentions comisión / fee / saldo, so AC#7 cannot rot silently. Store hours render 'Domingo: cerrado' rather than dropping the row, and the carrier line disappears entirely when the seller left it blank rather than printing an empty label.
+
+**Labeled `blocked` by dispatch-loop (2026-08-06).** Not a failure: AC#8/#9 require a human mailbox and a browser-completed hosted Checkout test payment, which the automated loop cannot perform (no-browser-testing rule). All build work is done, merged and deployed. Unblock by running the 3-step verification in the final summary, then check AC#8/#9 and mark Done.
 <!-- SECTION:NOTES:END -->
 
 ## Comments
