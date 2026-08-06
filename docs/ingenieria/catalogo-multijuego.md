@@ -1,8 +1,9 @@
 # Catálogo multi-juego
 
 Cómo el market resuelve los datos canónicos de una carta cuando hay más de un
-TCG. Epic `riftbound` (**TASK-029** a **TASK-035**), que llevó la plataforma de
-"MTG vía Scryfall" a "un catálogo por juego detrás de una misma interfaz".
+TCG. Epic `riftbound` (**TASK-029** a **TASK-037**), que llevó la plataforma de
+"MTG vía Scryfall" a "un catálogo por juego detrás de una misma interfaz", más
+lo que agregó `riftbound-ux` (**TASK-038** en adelante) sobre esa base.
 
 No toca ningún flujo de fondos: es resolución de datos de carta y snapshots en
 D1. Nada de pagos, payouts ni Stripe.
@@ -11,10 +12,16 @@ D1. Nada de pagos, payouts ni Stripe.
 
 ## 1. La idea en una frase
 
-**No mantenemos catálogo propio.** Cada juego tiene un proveedor externo que
-sabe de sus cartas; al publicar un single guardamos un *snapshot* de esos datos
-en la fila de `inventory`, y el catálogo público se renderiza desde el snapshot
-sin volver a llamar a nadie.
+**Cada juego resuelve sus cartas donde le conviene, y el market solo guarda un
+snapshot.** Al publicar un single copiamos los datos canónicos de la impresión
+en la fila de `inventory`, y el catálogo público se renderiza desde ese snapshot
+sin volver a consultar a nadie.
+
+De dónde salen esos datos canónicos depende del juego:
+
+- **MTG** — proveedor HTTP externo (Scryfall). No mantenemos copia.
+- **Riftbound** — catálogo **local en D1** (`catalog_cards`), importado una vez
+  y actualizado a mano (ver §3 y §4).
 
 Las impresiones son inmutables, así que el snapshot no se degrada.
 
@@ -22,10 +29,10 @@ Las impresiones son inmutables, así que el snapshot no se degrada.
 
 ## 2. Proveedores
 
-| Juego | Proveedor | Base | Auth |
+| Juego | Proveedor | Origen | Auth |
 |---|---|---|---|
-| `mtg` | Scryfall | `https://api.scryfall.com` | no |
-| `riftbound` | RiftCodex | `https://api.riftcodex.com` | no |
+| `mtg` | Scryfall (HTTP, cache en KV) | `https://api.scryfall.com` | no |
+| `riftbound` | Catálogo local en D1 (`catalog_cards`) | tabla propia, importada de `api.dotgg.gg` | — |
 
 Los demás valores de `Tcg` (`pokemon`, `yugioh`, `onepiece`, `lorcana`) existen
 en el type system y en la UI, pero **no tienen catálogo integrado**: publicar en
@@ -38,14 +45,21 @@ ellos responde `400 tcg_not_supported`.
 ```ts
 const PROVIDERS: Partial<Record<Tcg, CatalogProvider>> = {
   mtg: scryfall,
-  riftbound: riftcodex,
+  riftbound: localCatalogProvider('riftbound'),
 }
 ```
 
-Un `CatalogProvider` expone exactamente dos cosas:
+Un `CatalogProvider` expone exactamente dos cosas, ambas recibiendo un
+`CatalogContext`:
 
-- `getCardById(catalogId, kv)` — resuelve una impresión. Lanza `CatalogError`.
-- `searchCards(query, kv)` — busca por nombre. Sin coincidencias = lista vacía.
+- `getCardById(catalogId, ctx)` — resuelve una impresión. Lanza `CatalogError`.
+- `searchCards(query, ctx)` — busca por nombre. Sin coincidencias = lista vacía.
+
+`CatalogContext` es `{ db, kv, origin }` y cada proveedor toma lo que necesita:
+Scryfall solo usa `kv` (cache); el proveedor local lee de `db` y arma URLs
+absolutas de imagen con `origin`. La firma es un objeto justamente para no
+volver a tocar todos los call sites cada vez que un proveedor necesite algo
+distinto.
 
 De ese registro salen, sin duplicar la lista en ningún lado:
 
@@ -59,11 +73,122 @@ De ese registro salen, sin duplicar la lista en ningún lado:
 `apps/api/src/lib/catalog.ts` guarda lo que todos los proveedores comparten:
 `CatalogError`, los TTL de cache (30 días para cartas, 10 minutos para
 búsquedas) y el timeout por request (8 s). Vive aparte del registro porque los
-clientes concretos lo importan: juntarlos haría un ciclo de imports.
+clientes concretos lo importan: juntarlos haría un ciclo de imports. Los TTL y
+el timeout solo aplican a proveedores HTTP; el local no cachea ni tiene timeout.
 
 ---
 
-## 3. Contrato del snapshot
+## 3. El catálogo local en D1 (Riftbound)
+
+`apps/api/src/lib/catalog-db.ts` implementa `localCatalogProvider(tcg)`: la
+misma interfaz de arriba, resuelta contra la tabla `catalog_cards`.
+
+- `getCardById` — lookup por la PK `(tcg, catalog_id)`. Si no está, es un
+  **404 honesto** (`CatalogError`), no una falla de upstream.
+- `searchCards` — `name LIKE '%…%'` sobre el índice `NOCASE`, con `%` y `_` del
+  usuario escapados (`ESCAPE '\'`), ordenado por nombre, `LIMIT 60`.
+- **Sin cache en KV**: una consulta a D1 sale más barata que el round-trip a KV
+  que amortizaba a los proveedores HTTP.
+
+### La tabla `catalog_cards`
+
+Migración `0013`, definida en `packages/db/src/schema.ts`. Es game-agnostic: la
+PK compuesta es `(tcg, catalog_id)`, con índices `NOCASE` sobre `name` y sobre
+`set_code`.
+
+Columnas por grupo:
+
+- **Identidad e impresión** — `tcg`, `catalog_id` (`"UNL-131"` en Riftbound),
+  `oracle_id` (concepto de MTG, null aquí), `name`, `set_code`, `set_name`,
+  `collector_number`, `lang`, `rarity` (en minúsculas, convención Scryfall),
+  `artist`.
+- **Metadatos de impresión** — `finishes` (JSON: los acabados que esa impresión
+  realmente ofrece), `rules_text` y `flavor_text` ya limpios de HTML, y
+  `game_attributes` (JSON, shape `RiftboundAttributes`).
+- **Precios de referencia** — `price_data` (snapshot de TCGplayer USD /
+  Cardmarket EUR tal cual lo reporta la fuente) y `price_fetched_at`. Es
+  **referencia, nunca precio de venta**: los sellers fijan sus precios en MXN.
+- **Imágenes** — `source_image_url` / `source_image_back_url` (procedencia y
+  fallback) e `image_r2_key` / `image_back_r2_key`. Un `image_r2_key` en NULL
+  significa "todavía no espejada"; el importer re-intenta exactamente esas
+  filas.
+
+### Imágenes en R2
+
+Las imágenes se espejan a nuestro bucket bajo `card-images/<tcg>/<id>.webp` y se
+sirven en `GET /card-images/:tcg/:file` (`apps/api/src/routes/card-images.ts`),
+público y sin lookup en D1: la llave es determinista (la construye siempre
+`buildCardImageKey`) y el regex de los params solo acepta alfanuméricos y
+guiones, así que la ruta no puede salirse del prefijo. Las llaves son inmutables
+→ `Cache-Control: immutable` más un write explícito a la Cache API de Workers.
+Los 404 nunca se cachean, para que la ruta se cure sola en cuanto el importer
+suba el objeto.
+
+Por eso `CardSnapshot.imageUrl` apunta a `${origin}/${image_r2_key}` cuando la
+imagen ya está espejada, y cae a `source_image_url` mientras tanto.
+
+### Nota histórica: RiftCodex
+
+Hasta TASK-037 el catálogo de Riftbound se resolvía contra **RiftCodex**, un API
+fan no oficial. **Ya no se usa; `lib/riftcodex.ts` fue eliminado** (queda en el
+historial de git). Se fue por dos razones que conviene recordar antes de volver
+a apoyarse en un API fan: su búsqueda full-text devolvía 0 resultados para
+cualquier término, y un id inexistente respondía 500 en vez de 404, así que el
+proveedor no sabía decir "no existe". El catálogo local arregla ambas.
+
+---
+
+## 4. Importar y actualizar el catálogo
+
+`scripts/import-riftbound.mjs` (Node ESM, sin dependencias) es el importer.
+Lee el dataset completo de la red dotgg —
+`GET https://api.dotgg.gg/cgfw/getcards?game=riftbound&mode=indexed`, el backend
+JSON detrás de riftbound.gg, ~1,400 cartas en una sola respuesta columnar — lo
+mapea al payload de ingesta y lo manda en batches a
+`POST /admin/catalog/cards`. El Worker hace el upsert en `catalog_cards` y
+espeja cada imagen desde `static.dotgg.gg` a R2.
+
+```bash
+# local (API en :8787, clave de .dev.vars)
+node scripts/import-riftbound.mjs --dry-run   # mapea e imprime 3 cartas, no manda nada
+node scripts/import-riftbound.mjs
+
+# producción
+API_URL=https://<api-prod> ADMIN_KEY=<ADMIN_API_KEY> node scripts/import-riftbound.mjs
+```
+
+Variables de entorno:
+
+| Var | Default | Para qué |
+|---|---|---|
+| `API_URL` | `http://localhost:8787` | A qué API mandar los batches. |
+| `ADMIN_KEY` | `dev-admin-key-change-me` | Va en `x-admin-key`; debe coincidir con el secret `ADMIN_API_KEY` del Worker. |
+| `BATCH_SIZE` | `10` (tope 25) | Dimensionado por el límite de subrequests del Worker (head+fetch+put por imagen). |
+
+**Es idempotente, y esa es toda la historia de recuperación.** Las filas
+convergen por el upsert sobre la PK, las imágenes ya presentes en R2 se detectan
+con `head()` y no se re-descargan, y las cartas con `image_r2_key` NULL se
+re-intentan. Si la corrida reporta imágenes o batches fallidos, sale con código
+1 y basta con volver a correrlo.
+
+Cuándo re-correrlo:
+
+- **set nuevo o errata** — Riftbound saca ~3-4 sets al año, por eso el import es
+  manual y no hay cron;
+- **refresco de precios de referencia** — `price_data` se reescribe en cada
+  corrida y `price_fetched_at` dice qué tan viejo es;
+- **imágenes faltantes** — hoy dos tokens de Vendetta (`VEN-T01`, `VEN-T05`) no
+  tienen imagen en el CDN de dotgg y se quedan con `image_r2_key` NULL.
+
+Dos defensas del importer que no hay que desactivar: aborta si dotgg renombra o
+quita alguno de los campos que lee (el formato columnar no da otra señal de
+integridad), y el Worker solo acepta descargar imágenes de un allowlist de hosts
+(`static.dotgg.gg`) — sin eso, el endpoint admin sería un proxy SSRF
+autenticado.
+
+---
+
+## 5. Contrato del snapshot
 
 `CardSnapshot` (`packages/shared/src/index.ts`) es game-agnostic:
 
@@ -76,24 +201,38 @@ interface CardSnapshot {
   finishes: string[]         // vacío = el catálogo no informa acabados
   imageUrl: string | null
   gameAttributes: CardGameAttributes | null
+  rulesText?: string | null  // opcional: Scryfall hoy no los informa
+  flavorText?: string | null
 }
 ```
 
-Dos decisiones que conviene no re-litigar:
+Decisiones que conviene no re-litigar:
 
 - **`catalogId`, no `scryfallId`.** Un solo campo de identidad, con significado
   por juego. Las columnas `scryfall_id` / `oracle_id` siguen existiendo en D1 y
   se escriben solo para MTG; las filas anteriores a `catalog_id` se leen con
   fallback (`catalogId ?? scryfallId`), sin backfill.
 - **`finishes` vacío significa "no sé", no "ninguno".** El alta solo valida el
-  acabado contra la lista cuando el proveedor la informa. Scryfall la informa;
-  RiftCodex no, así que en Riftbound el vendedor elige libremente.
+  acabado contra la lista cuando el proveedor la informa. Hoy la informan los
+  dos: Scryfall siempre, y el catálogo local de Riftbound desde TASK-037 (sale
+  de `hasNormal`/`hasFoil` de dotgg). Consecuencia práctica: publicar `nonfoil`
+  sobre una impresión foil-only ahora falla con `finish_not_available` — antes,
+  con RiftCodex, el vendedor elegía libremente. Cualquier seed o script que
+  asumiera "cualquier acabado sirve en Riftbound" tuvo que corregirse.
+- **`rulesText` / `flavorText` son opcionales, no nullable-obligatorios**
+  (TASK-038). Un proveedor que no los informa simplemente omite las claves;
+  `undefined` y `null` se tratan igual. Tampoco se guardan en el snapshot de
+  `inventory`: `GET /catalog/:id` los enriquece con `getCardText(db, tcg,
+  catalogId)`, un lookup por PK en paralelo con las demás queries del detalle.
+  Si el juego no tiene catálogo local o la impresión ya no está, el detalle
+  muestra menos, nunca falla.
 
 ### Atributos propios del juego
 
 `gameAttributes` es una **unión discriminada por `tcg`**. Hoy solo Riftbound
 aporta datos (`type`, `supertype`, `domains[]`, `energy`, `might`, `power`);
-Scryfall devuelve `null`.
+Scryfall devuelve `null`. (`power` viene en null desde dotgg, que no expone el
+costo de runas; `artist` tampoco lo expone.)
 
 Se persisten como blob JSON en la columna aditiva `inventory.card_attributes`
 (migración `0012`). Se descartaron a propósito:
@@ -104,16 +243,13 @@ Se persisten como blob JSON en la columna aditiva `inventory.card_attributes`
 - **una tabla hija 1:1** — un join en cada render para datos que se escriben
   una vez y nunca se consultan por esos campos.
 
-Son datos de **presentación**: nada filtra ni ordena por ellos. Si algún día
-hace falta filtrar por uno, se promueve ese campo a columna real.
-
 La lectura es defensiva: un blob corrupto, `null`, un string suelto o un objeto
 sin el discriminante `tcg` degradan a "sin atributos" en vez de tumbar el render
 de una publicación válida.
 
 ---
 
-## 4. Filtro por juego en la tienda
+## 6. Filtro por juego en la tienda
 
 `GET /catalog?tcg=` filtra en SQL. Antes el filtrado era en cliente sobre las
 primeras 200 filas, lo que escondía juegos con poco inventario.
@@ -129,57 +265,83 @@ Asimetría deliberada en la validación: la API rechaza un `tcg` desconocido con
 cartas"), mientras que la web ignora un `?game=` desconocido y cae al catálogo
 completo (un enlace viejo no debe romperse).
 
----
-
-## 5. Rarezas de RiftCodex
-
-Es un proyecto **fan no oficial**, sin relación con Riot, y su API está marcada
-como work in progress. Dos comportamientos observados en vivo explican
-decisiones del cliente (`apps/api/src/lib/riftcodex.ts`):
-
-1. **`/cards/search?query=` devuelve 0 resultados para cualquier término.** El
-   índice full-text no funciona. La búsqueda usa `/cards/name?fuzzy=`, que sí
-   responde y trae todas las impresiones.
-2. **Un id inexistente responde 500, no 404.** El proveedor no sabe decir "no
-   existe", así que un `catalogId` inválido sale como `catalog_error` / 502.
-   Solo Scryfall puede señalar not-found.
-
-Además: las variantes (Signature, Alternate Art, Overnumbered) son **entradas de
-catálogo distintas**, ya diferenciadas en el nombre. No son acabados, así que el
-CHECK de `finish` en D1 (`nonfoil` | `foil`) se quedó intacto.
-
-Si el full-text de RiftCodex empieza a funcionar, conviene reconsiderar el
-endpoint de búsqueda.
+Encima de eso, `GET /catalog` acepta filtros específicos del juego
+(`apps/api/src/lib/catalog-filters.ts`, TASK-039), que para Riftbound se validan
+contra los vocabularios `RIFTBOUND_*` de `@thepubmarket/shared` — la lista de
+valores que realmente aparecen en el catálogo importado. Salvo `rarity`, que ya
+es columna, se resuelven contra el JSON de `inventory.card_attributes`.
 
 ---
 
-## 6. Agregar el siguiente TCG
+## 7. Distinguir impresiones en el panel
+
+Riftbound repite la misma carta entre sets (OGN/UNL) y tiene impresiones
+foil-only, así que el panel del vendedor muestra la metadata estricta que trae
+el catálogo local (TASK-043, sobre el contrato de TASK-038): set, número de
+coleccionista, rareza y el bloque Riftbound (tipo/supertipo, dominios,
+energía/might) en cada resultado de búsqueda.
+
+`finishAvailable(finishes, f)` en `apps/web/src/components/panel/AddCardFlow.tsx`
+es un espejo exacto de la regla del servidor (`finishes.length === 0 ||
+finishes.includes(f)`): una impresión foil-only no ofrece la opción Normal. Es
+una guarda de UI; **la API sigue siendo la autoridad**.
+
+Las variantes (Signature, Alternate Art, Overnumbered) son **entradas de
+catálogo distintas**, ya diferenciadas en el nombre y en el `catalogId`. No son
+acabados, así que el CHECK de `finish` en D1 (`nonfoil` | `foil`) se quedó
+intacto.
+
+---
+
+## 8. Agregar el siguiente TCG
+
+Hay dos caminos según de dónde salgan los datos.
+
+**Si el juego tiene un API externo usable:**
 
 1. **Escribir el cliente** en `apps/api/src/lib/<proveedor>.ts` con la forma de
    `CatalogProvider`: `normalizeCard` → `CardSnapshot` (con `tcg`, `catalogId`,
    `oracleId: null`), `getCardById` y `searchCards`, ambos cacheados en KV con
    los TTL de `lib/catalog.ts` y usando `CatalogError` para cualquier falla.
-2. **Registrarlo** en `catalog-providers.ts`. Eso solo enciende: el alta, la
-   búsqueda del panel y del admin, y el selector de juego del panel.
+
+**Si conviene un catálogo local** (dataset descargable completo, API de búsqueda
+poco confiable, o queremos servir las imágenes nosotros):
+
+1. **Escribir el importer** en `scripts/import-<juego>.mjs` a imagen de
+   `import-riftbound.mjs`, mapeando al payload de `POST /admin/catalog/cards`, y
+   agregar el código del juego al enum `tcg` de `ingestSchema` en
+   `routes/admin.ts` (hoy solo `riftbound`, a propósito: un juego sin importer
+   no debe aceptar escrituras). Si las imágenes vienen de otro CDN, sumarlo a
+   `ALLOWED_IMAGE_SOURCE_HOSTS`. No hace falta tabla nueva: `catalog_cards` es
+   game-agnostic.
+
+En ambos casos, después:
+
+2. **Registrarlo** en `catalog-providers.ts` — el cliente propio, o
+   `localCatalogProvider('<código>')`. Eso solo enciende: el alta, la búsqueda
+   del panel y del admin, y el selector de juego del panel.
 3. **Si el juego aporta atributos propios**, agregar su variante a
-   `CardGameAttributes` en `packages/shared` y llenarla en `normalizeCard`. El
-   detalle los muestra solo si vienen (`components/detail/game-attributes.ts`).
-   No hace falta tocar D1: el blob ya existe.
+   `CardGameAttributes` en `packages/shared` y llenarla en el mapeo. El detalle
+   los muestra solo si vienen (`components/detail/game-attributes.ts`). No hace
+   falta tocar D1: el blob ya existe. Si además quiere filtros en la tienda,
+   registrarlos en `GAME_FILTERS` (`lib/catalog-filters.ts`).
 4. **Verificar que el código del juego esté en `Tcg`/`TCGS`** y que tenga
    entrada en `TCG_META` (`apps/web/src/lib/catalog/display.ts`) para su nombre
    visible. Los seis TCG del proyecto ya están.
 5. **Sembrar inventario** agregando entradas con `"game": "<código>"` en
-   `scripts/inventory-seed.json` y corriendo `pnpm inventory:load:local`.
+   `scripts/inventory-seed.json` y corriendo `pnpm inventory:load:local`. Usar
+   acabados que la impresión realmente ofrezca, o el alta los rechazará.
 
-No hay que tocar: el filtro de la tienda, las facetas, la ficha de detalle, el
-pipeline de fotos ni la columna `inventory.tcg` (acepta cualquier valor; la
-validación es a nivel app porque D1 no reconstruye tablas).
+No hay que tocar: el filtro por juego de la tienda, las facetas, la ficha de
+detalle, el pipeline de fotos ni la columna `inventory.tcg` (acepta cualquier
+valor; la validación es a nivel app porque D1 no reconstruye tablas).
 
 ---
 
-## 7. Verificado end-to-end (TASK-035)
+## 9. Verificado end-to-end
 
-Contra el stack local, con RiftCodex real:
+**TASK-035** validó el epic contra el stack local (entonces todavía con
+RiftCodex):
 
 - el seed carga MTG y Riftbound en la misma corrida (`4 creados, 0 fallidos`);
 - `GET /catalog?tcg=riftbound` devuelve solo Riftbound y `/catalog/games`
@@ -189,5 +351,13 @@ Contra el stack local, con RiftCodex real:
 - `POST /checkout` sobre un single Riftbound crea una sesión de Stripe en modo
   test (`cs_test_…`).
 
-**La plataforma sigue fuera del flujo de fondos:** este epic no tocó el modelo
-de direct charges + application fee. Ver [`pagos.md`](./pagos.md).
+**TASK-037** lo re-validó ya con el catálogo local, en local y en producción:
+búsquedas que RiftCodex nunca pudo resolver ahora devuelven resultados con URLs
+de imagen propias, `%` se trata como literal, un `catalogId` inexistente
+responde `404 card_not_found` y una publicación Riftbound completa se crea con
+set/rareza/atributos/imagen correctos.
+
+**La plataforma sigue fuera del flujo de fondos:** nada de esto tocó el modelo
+de direct charges + application fee. Los precios de `catalog_cards` son
+referencia de mercado y no participan en ningún cobro. Ver
+[`pagos.md`](./pagos.md).

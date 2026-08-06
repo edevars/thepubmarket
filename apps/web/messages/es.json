@@ -186,7 +186,7 @@
   "home": {
     "heroEyebrow": "The Pub Game Store · CDMX",
     "heroTitle": "Singles de TCG, curados por jugadores que conocen el hobby.",
-    "heroSub": "Una selección con criterio de cartas individuales y producto sellado. Vendedores conocidos, condición verificada, precios en pesos. Arrancamos con Magic: The Gathering.",
+    "heroSub": "Una selección con criterio de cartas individuales y producto sellado. Vendedores conocidos, condición verificada, precios en pesos. Empezamos con Magic: The Gathering y Riftbound, con más juegos en camino.",
     "popular": "POPULARES:",
     "featuredEyebrow": "Selección de la casa",
     "featuredTitle": "Destacados de la semana",
@@ -215,7 +215,7 @@
   "catalog": {
     "eyebrow": "Catálogo",
     "title": "Catálogo",
-    "subtitle": "Singles de Magic: The Gathering",
+    "subtitle": "Singles de Magic: The Gathering y Riftbound",
     "sort": "ORDEN",
     "sortRelevance": "Relevancia",
     "filters": "Filtros",

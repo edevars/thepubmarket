@@ -29,8 +29,8 @@ export const MOCK_SELLERS: SellerSeed[] = [
     neighborhood: 'Condesa',
     memberSince: 2019,
     blurb:
-      'La tienda ancla de The Pub Market: restaurante casual, mesas llenas de jugadores y el catálogo curado con el que arrancó todo. Singles de Magic con condición verificada.',
-    favoriteGames: ['mtg', 'pokemon', 'lorcana'],
+      'La tienda ancla de The Pub Market: restaurante casual, mesas llenas de jugadores y el catálogo curado con el que arrancó todo. Singles de Magic y Riftbound con condición verificada.',
+    favoriteGames: ['mtg', 'riftbound', 'pokemon', 'lorcana'],
     yearsInHobby: 12,
     funFact:
       'El primer torneo de la casa fue un Friday Night Magic con 8 jugadores; hoy llenan el local cada semana.',
