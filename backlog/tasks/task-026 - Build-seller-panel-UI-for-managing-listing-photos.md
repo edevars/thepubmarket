@@ -1,7 +1,7 @@
 ---
 id: TASK-026
 title: Build seller panel UI for managing listing photos
-status: In Progress
+status: Done
 assignee:
   - claude
 created_date: '2026-08-06 00:13'
@@ -99,3 +99,30 @@ Per this repo's stated convention for apps/web ('UI flows validated by a documen
 
 AC3 (no EXIF) rests on a well-established browser guarantee: drawing a decoded bitmap onto a fresh <canvas> and re-encoding via toBlob() never carries source metadata through — there is no code path in resizeImageForUpload that could reintroduce it. AC7 (reorder persists across reload) rests on TASK-024/025's already-verified server behavior: sortOrder is what GET /seller/inventory orders by, and move() only ever commits the array it gets back from POST .../reorder.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+## Seller panel UI for managing listing photos
+
+Closes the write side of the `inventory-photos` epic's UX gap: TASK-024 built the upload/delete/reorder API, but there was no way for a seller to actually reach it. This adds a `PhotoManagerModal`, reachable from two places:
+
+- **Existing listings** — a "Fotos (n/6)" button in `InventoryView`'s Acciones column, next to pause/resume.
+- **Freshly published listings** — a primary "Agregar fotos ahora" CTA on `AddCardFlow`'s success step, alongside the existing "Agregar otra" / "Ver inventario" exits.
+
+### What it does
+- **Client-side resize before upload**: `image-resize.ts` decodes with `createImageBitmap(file, { imageOrientation: 'from-image' })` (respects EXIF rotation before it's discarded), draws to a canvas capped at 1600px on the long edge, and re-encodes to JPEG. Re-encoding onto a fresh canvas is what strips EXIF (GPS included) — no separate metadata-stripping step exists or is needed.
+- **Serial upload queue**: multiple selected files upload one at a time (not in parallel), specifically to avoid two races — the server's photo-cap check, and stale closures overwriting local `photos` state if two uploads resolved out of order. Each file's state (resizing → uploading → error) is tracked independently; a failed file keeps its original `File` so Retry redoes resize+upload from scratch, not just the network call.
+- **Cap enforcement**: the add control disables at 6/6, and selecting more files than remaining slots silently caps the batch with an inline notice rather than erroring per-file.
+- **Delete**: goes through `ConfirmDialog` — the first modal/dialog primitive in this app (none existed before: no portal, no dialog library, no `window.confirm` anywhere in the codebase). Its backdrop-click-to-cancel stops propagation so it nests safely inside the photo modal's own backdrop-click-to-close.
+- **Reorder**: simple ↑/↓ buttons (no drag-and-drop, per the task's already-made decision) that await the server's response before committing the new order — no optimistic UI, correctness over snappiness.
+- **Copy**: quantity>1 listings show a note that photos represent the specific copy the buyer receives; the empty state explains why photos matter for condition trust; every error path (too-large, invalid image, limit reached, not-found, network) maps to its own bilingual, retryable message.
+
+### Verification
+`pnpm --filter @thepubmarket/web typecheck`, `pnpm lint`, and `pnpm --filter @thepubmarket/web build` all green — the production build confirms the new client components compile and `/panel/inventario` + `/panel/agregar` still generate correctly. `es.json`/`en.json` parity verified programmatically (197 keys each under `panel`, same names). Per this repo's convention for apps/web ("documented manual E2E pass, not an automated browser suite") and this session's standing instruction against driving browser automation, the actual interactive walkthrough is left to the appended checklist — §9 of `docs/ingenieria/fotos-inventario.md` — rather than run by this agent.
+
+No payment, payout, or Stripe code touched.
+
+### Follow-up
+TASK-027 (show the seller's photo gallery on the public catalog item page) remains the last piece of this epic — buyers still see no evidence these photos exist.
+<!-- SECTION:FINAL_SUMMARY:END -->
