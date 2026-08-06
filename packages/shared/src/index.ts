@@ -61,6 +61,33 @@ export interface RiftboundAttributes {
 }
 
 /**
+ * Vocabulario de filtros de Riftbound (TASK-039): los valores distintos que
+ * aparecen hoy en el catálogo importado de dotgg (TASK-036), verificados
+ * contra el D1 local (1409 filas). `GET /catalog` los usa para validar los
+ * filtros game-specific y devolver 400 con la lista soportada ante un valor
+ * inválido — ver `apps/api/src/lib/catalog-filters.ts`.
+ */
+export const RIFTBOUND_DOMAINS = [
+  'Body',
+  'Calm',
+  'Chaos',
+  'Colorless',
+  'Fury',
+  'Mind',
+  'Order',
+] as const
+export const RIFTBOUND_CARD_TYPES = [
+  'Battlefield',
+  'Gear',
+  'Legend',
+  'Rune',
+  'Spell',
+  'Unit',
+] as const
+export const RIFTBOUND_SUPERTYPES = ['Basic', 'Champion', 'Signature', 'Token'] as const
+export const RIFTBOUND_RARITIES = ['common', 'uncommon', 'rare', 'epic', 'showcase'] as const
+
+/**
  * Atributos específicos del juego de una impresión. Unión discriminada por
  * `tcg`: cada juego que aporte datos propios suma su variante aquí, en vez de
  * ensanchar `CardSnapshot` con campos nulos de todos los juegos.

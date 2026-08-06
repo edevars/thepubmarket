@@ -172,9 +172,12 @@ export const inventory = sqliteTable(
     rarity: text('rarity'),
     artist: text('artist'),
     // Atributos propios del juego (dominios, tipo, costes…) como blob JSON
-    // pequeño: son de presentación y nada filtra ni ordena por ellos. Una
-    // columna por atributo y por juego convertiría esta tabla en un mega-set
-    // de nulos. Si algún día hay que filtrar por uno, se promueve a columna.
+    // pequeño: nacieron como datos de presentación, pero TASK-039 también
+    // filtra `GET /catalog` sobre ellos vía json_extract/json_each (ver
+    // apps/api/src/lib/catalog-filters.ts) — no hace falta promoverlos a
+    // columna para eso. Una columna por atributo y por juego convertiría esta
+    // tabla en un mega-set de nulos; solo se promueve si el volumen de
+    // filtrado lo justifica (índice sobre columna vs. escaneo de JSON).
     cardAttributes: text('card_attributes'),
     finish: text('finish', { enum: ['nonfoil', 'foil'] })
       .notNull()

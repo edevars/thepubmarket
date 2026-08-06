@@ -12,6 +12,7 @@ import { TCGS } from '@thepubmarket/shared'
 import { and, asc, count, desc, eq, gt, inArray, like, type SQL } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { getCardText } from '../lib/catalog-db'
+import { parseGameFilters } from '../lib/catalog-filters'
 import { catalogIdOf, rowToInventoryItem } from '../lib/inventory'
 import { loadPhotosByInventoryId } from '../lib/photos'
 import type { AppEnv } from '../types'
@@ -49,8 +50,28 @@ export const catalog = new Hono<AppEnv>()
 
 /**
  * GET /catalog — lista paginada de inventario disponible.
- * Query: q (nombre, LIKE), tcg (juego exacto), set (set_code exacto),
- * seller (id exacto), limit, offset. Disponible = status 'active' y quantity > 0.
+ *
+ * Query params:
+ *   - q: nombre, LIKE (case-insensitive).
+ *   - tcg: juego exacto (uno de TCGS). Ausente = todos los juegos.
+ *   - set: set_code exacto. Genérico — aplica a cualquier juego, sin
+ *     validación (los sets nuevos entran constantemente vía import, no hay
+ *     enum estable que mantener).
+ *   - seller: seller id exacto.
+ *   - domain, type, supertype, energy, might, rarity: filtros propios de
+ *     Riftbound (TASK-039), sobre `inventory.card_attributes` (JSON) salvo
+ *     `rarity`, que es columna. Aceptan valor repetido (`domain=Fury&domain=Order`)
+ *     o separado por comas (`domain=Fury,Order`) — OR entre valores del mismo
+ *     param, AND entre params distintos. Matching case-insensitive, valores
+ *     normalizados a la casing canónica antes de tocar SQL.
+ *     REGLA: cualquiera de estos params presente con `tcg` ausente o distinto
+ *     de 'riftbound' es un 400 `filter_requires_tcg` — se rechaza, no se
+ *     ignora silenciosamente (así un typo en `tcg` no produce un catálogo
+ *     filtrado a medias sin que el cliente se entere). Ver
+ *     `../lib/catalog-filters.ts`.
+ *   - limit, offset: paginación.
+ *
+ * Disponible = status 'active' y quantity > 0.
  */
 catalog.get('/', async (c) => {
   const db = c.get('db')
@@ -59,6 +80,13 @@ catalog.get('/', async (c) => {
   const seller = c.req.query('seller')?.trim()
   const { tcg, invalid } = parseTcgParam(c.req.query('tcg'))
   if (invalid) return c.json({ error: 'invalid_tcg', supported: TCGS }, 400)
+
+  const gameFilters = parseGameFilters(tcg, (name) => c.req.queries(name))
+  if (!gameFilters.ok) {
+    const { ok, ...body } = gameFilters
+    return c.json(body, 400)
+  }
+
   const limit = parseIntParam(c.req.query('limit'), DEFAULT_LIMIT, 1, MAX_LIMIT)
   const offset = parseIntParam(c.req.query('offset'), 0, 0, Number.MAX_SAFE_INTEGER)
 
@@ -68,6 +96,7 @@ catalog.get('/', async (c) => {
   if (tcg) filters.push(eq(inventory.tcg, tcg))
   if (set) filters.push(eq(inventory.setCode, set))
   if (seller) filters.push(eq(inventory.sellerId, seller))
+  filters.push(...gameFilters.conditions)
   const where = and(...filters)
 
   const totalRow = await db.select({ total: count() }).from(inventory).where(where).get()
