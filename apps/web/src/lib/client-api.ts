@@ -15,6 +15,7 @@ import type {
   ConnectStatusResponse,
   CreateListingRequest,
   InventoryItem,
+  InventoryPhoto,
   OrderSummary,
   PickupPoint,
   PickupPointsResponse,
@@ -145,6 +146,65 @@ export async function updateListing(
   })
   if (!res.ok) return null
   return (await res.json()) as InventoryItem
+}
+
+/**
+ * Sube una foto de un item propio. `blob` ya viene downscaled/re-encoded a
+ * JPEG por `resizeImageForUpload` — el body es el binario crudo, no
+ * `FormData`, y el `content-type` es el mime real del blob (el server nunca
+ * confía en ese header; solo es cortesía, detecta el tipo por magic bytes).
+ * El try/catch cubre el único caso de los tres nuevos endpoints donde puede
+ * fallar antes de llegar a la API (sin red).
+ */
+export async function uploadPhoto(
+  token: string,
+  inventoryId: string,
+  blob: Blob,
+): Promise<{ ok: true; photo: InventoryPhoto } | { ok: false; error: string }> {
+  let res: Response
+  try {
+    res = await fetch(`${API}/seller/inventory/${encodeURIComponent(inventoryId)}/photos`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'content-type': blob.type },
+      body: blob,
+    })
+  } catch {
+    return { ok: false, error: 'network_error' }
+  }
+  if (res.ok) return { ok: true, photo: (await res.json()) as InventoryPhoto }
+  const err = (await res.json().catch(() => ({ error: 'upload_failed' }))) as { error: string }
+  return { ok: false, error: err.error }
+}
+
+/** Borra una foto propia. `false` cubre tanto "no era tuya" como "ya no existe" (404 opaco). */
+export async function deletePhoto(
+  token: string,
+  inventoryId: string,
+  photoId: string,
+): Promise<boolean> {
+  const res = await fetch(
+    `${API}/seller/inventory/${encodeURIComponent(inventoryId)}/photos/${encodeURIComponent(photoId)}`,
+    { method: 'DELETE', headers: authHeaders(token) },
+  )
+  return res.ok
+}
+
+/** Reordena todas las fotos de un item propio (el server exige el set completo de ids). Null si falló. */
+export async function reorderPhotos(
+  token: string,
+  inventoryId: string,
+  order: string[],
+): Promise<InventoryPhoto[] | null> {
+  const res = await fetch(
+    `${API}/seller/inventory/${encodeURIComponent(inventoryId)}/photos/reorder`,
+    {
+      method: 'POST',
+      headers: authHeaders(token),
+      body: JSON.stringify({ order }),
+    },
+  )
+  if (!res.ok) return null
+  return ((await res.json()) as { photos: InventoryPhoto[] }).photos
 }
 
 /** Busca impresiones en el catálogo canónico (Scryfall) para el alta. */

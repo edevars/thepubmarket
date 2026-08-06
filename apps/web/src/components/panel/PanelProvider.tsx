@@ -2,6 +2,7 @@
 
 import type {
   InventoryItem,
+  InventoryPhoto,
   SellerOrder,
   SellerPanelMe,
   UpdateListingRequest,
@@ -39,6 +40,12 @@ interface PanelContextValue {
   patchItem: (id: string, body: UpdateListingRequest) => Promise<boolean>
   /** Inserta el item recién publicado al inicio (flujo Agregar). */
   addItem: (item: InventoryItem) => void
+  /**
+   * Sincroniza las fotos de un item con el estado compartido. Local-only: el
+   * manager de fotos ya habló con la API por su cuenta (upload/delete/reorder);
+   * esto solo evita que el resto del panel se quede con datos viejos.
+   */
+  setItemPhotos: (id: string, photos: InventoryPhoto[]) => void
   /** Envío a domicilio: marca enviada con guía y paquetería opcional. */
   markShipped: (id: string, trackingNumber: string, carrier?: string | null) => Promise<boolean>
   /** Envío a domicilio: cierra la orden como entregada. */
@@ -87,6 +94,10 @@ export function PanelProvider({ token, me, children }: PanelProviderProps) {
 
   const addItem = useCallback((item: InventoryItem) => {
     setInventory((prev) => [item, ...prev])
+  }, [])
+
+  const setItemPhotos = useCallback((id: string, photos: InventoryPhoto[]) => {
+    setInventory((prev) => prev.map((i) => (i.id === id ? { ...i, photos } : i)))
   }, [])
 
   /**
@@ -155,6 +166,7 @@ export function PanelProvider({ token, me, children }: PanelProviderProps) {
         refresh,
         patchItem,
         addItem,
+        setItemPhotos,
         markShipped,
         markDelivered,
         markReady,

@@ -13,6 +13,7 @@ import { Link } from '@/i18n/navigation'
 import { artTintForId, CONDITION_HEX, conditionKey, formatMoneyCents } from '@/lib/catalog/display'
 import { createListing, searchPrintings } from '@/lib/client-api'
 import { usePanel } from './PanelProvider'
+import { PhotoManagerModal } from './PhotoManagerModal'
 
 type Step = 'search' | 'detail' | 'success'
 
@@ -29,7 +30,7 @@ const segCls = (active: boolean) =>
 export function AddCardFlow() {
   const t = useTranslations('panel')
   const locale = useLocale()
-  const { token, me, addItem } = usePanel()
+  const { token, me, addItem, setItemPhotos } = usePanel()
 
   const [step, setStep] = useState<Step>('search')
   const [query, setQuery] = useState('')
@@ -45,6 +46,7 @@ export function AddCardFlow() {
   const [publishing, setPublishing] = useState(false)
   const [publishErr, setPublishErr] = useState(false)
   const [published, setPublished] = useState<InventoryItem | null>(null)
+  const [managingPhotos, setManagingPhotos] = useState(false)
 
   // Búsqueda con debounce contra /seller/scryfall/search.
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -447,13 +449,23 @@ export function AddCardFlow() {
           <h2 className="mb-2 font-display text-2xl font-bold tracking-[0.02em] text-white">
             {t('successTitle')}
           </h2>
-          <p className="mx-auto mb-7 max-w-[440px] font-mono text-[12px] text-muted">
+          <p className="mx-auto mb-2 max-w-[440px] font-mono text-[12px] text-muted">
             {published.card.name} · {published.condition}
             {published.finish === 'foil' ? ` · ${t('finishFoil')}` : ''} ·{' '}
             {formatMoneyCents(published.priceCents, locale)} MXN ·{' '}
             {t('successUnits', { count: published.quantity })}
           </p>
+          <p className="mx-auto mb-7 max-w-[440px] text-[12.5px] text-muted-2">
+            {t('postPublishPhotosBody')}
+          </p>
           <div className="flex flex-wrap items-center justify-center gap-3">
+            <button
+              type="button"
+              onClick={() => setManagingPhotos(true)}
+              className={angularButtonClasses('primary')}
+            >
+              {t('postPublishPhotosCta')}
+            </button>
             <button
               type="button"
               onClick={() => {
@@ -462,8 +474,9 @@ export function AddCardFlow() {
                 setPublished(null)
                 setQuery('')
                 setResults([])
+                setManagingPhotos(false)
               }}
-              className={angularButtonClasses('primary')}
+              className={angularButtonClasses('outline')}
             >
               {t('addAnother')}
             </button>
@@ -471,6 +484,14 @@ export function AddCardFlow() {
               {t('viewInventory')}
             </Link>
           </div>
+          {managingPhotos && (
+            <PhotoManagerModal
+              item={published}
+              token={token}
+              onClose={() => setManagingPhotos(false)}
+              onPhotosChange={(photos) => setItemPhotos(published.id, photos)}
+            />
+          )}
         </div>
       )}
     </div>

@@ -267,3 +267,56 @@ Misma configuración: subí 2 fotos reales a un listing existente, luego:
 Datos de prueba limpiados al terminar (fotos, usuario, invitación, vínculo de
 seller, precio restaurado a su valor original) — el D1 local queda igual que
 antes de correr la verificación.
+
+## 9. UI del panel: `PhotoManagerModal` (TASK-026)
+
+Sin esta UI la API de subida (§2-3) era inalcanzable en la práctica — no había
+forma de que un vendedor real subiera una foto.
+
+### Componentes nuevos
+
+- `apps/web/src/lib/image-resize.ts` — `resizeImageForUpload(file)`: reduce al
+  lado más largo a 1600px y re-codifica a JPEG en un `<canvas>` antes de subir.
+  Re-codificar es lo que limpia el EXIF (incluye GPS de fotos de celular) — no
+  hay un paso aparte para eso. `imageOrientation: 'from-image'` en
+  `createImageBitmap` respeta la rotación EXIF antes de descartarla, para que
+  una foto vertical de celular no salga de lado.
+- `apps/web/src/components/ui/ConfirmDialog.tsx` — primer modal/diálogo de la
+  app (no existía ninguno: sin portal, sin librería de diálogos,
+  `window.confirm` en ningún lado). Usado para confirmar el borrado.
+- `apps/web/src/components/panel/PhotoManagerModal.tsx` — el manager en sí.
+  Sube en serie (no en paralelo) para no chocar con el tope de 6 en el server
+  ni pisar el arreglo `photos` con closures viejas. El reordenar (↑/↓, no
+  drag-and-drop) espera la respuesta del server antes de aplicar el nuevo
+  orden — no es optimista.
+
+Reachable desde `InventoryView` (botón "Fotos (n/6)" en la columna Acciones de
+cada renglón) y desde el paso de éxito de `AddCardFlow` tras publicar un
+listing nuevo.
+
+### Verificación manual (ambos locales, `es` y `en`)
+
+Contra `wrangler dev` + `next dev` local, con una sesión de seller real:
+
+| Caso | Resultado esperado |
+|---|---|
+| Abrir "Fotos" desde un renglón del inventario | Modal abre con las fotos actuales del listing, contador `n/6` |
+| Publicar un listing nuevo → paso de éxito | CTA "Agregar fotos ahora" visible junto a "Agregar otra" / "Ver inventario" |
+| Subir un JPEG/PNG/WebP real (foto de celular con GPS en EXIF) | Aparece en la lista tras subir; el archivo re-subido a través de la red (inspeccionar el objeto en R2 o el tamaño del request) confirma re-encode a JPEG, tamaño acotado, sin EXIF |
+| Subir un archivo no-imagen renombrado a `.jpg` | Falla el resize/decode client-side → mensaje de error legible, con botón "Reintentar" |
+| Subir con la red desconectada (throttling offline en devtools) | Mensaje de error de red, con "Reintentar" |
+| Subir hasta llegar a 6 fotos | Botón "Agregar fotos" se deshabilita, contador muestra `6/6` |
+| Intentar seleccionar más archivos de los que caben antes del tope | Solo se suben los que caben; aviso de límite alcanzado |
+| Borrar una foto | Pide confirmación (`ConfirmDialog`); al confirmar desaparece de la lista sin recargar la página |
+| Cancelar el borrado | La foto sigue en la lista |
+| Reordenar con ↑/↓ | Refleja el nuevo orden de inmediato |
+| Recargar la página tras reordenar | El orden persiste (viene de `sortOrder` en el server, no de estado local) |
+| Listing con cantidad > 1 | Texto visible aclarando que las fotos son del ejemplar específico que recibe el comprador |
+| Listing sin fotos | Estado vacío explica por qué importan las fotos para la confianza en la condición |
+| Repetir el flujo completo en `/en/panel/...` | Todos los textos en inglés, sin claves sin traducir |
+
+Verificación de build/tipos (sí automatizada, a diferencia del flujo interactivo):
+`pnpm --filter @thepubmarket/web typecheck`, `pnpm lint` y `pnpm --filter
+@thepubmarket/web build` en verde — el build de producción confirma que los
+nuevos componentes cliente (`'use client'`) compilan y las rutas `/panel/*`
+siguen generándose sin errores.

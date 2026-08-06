@@ -4,6 +4,7 @@ import {
   CONDITIONS,
   type Condition,
   type InventoryItem,
+  MAX_PHOTOS_PER_ITEM,
   TCGS,
   type Tcg,
 } from '@thepubmarket/shared'
@@ -20,6 +21,7 @@ import {
   TCG_META,
 } from '@/lib/catalog/display'
 import { usePanel } from './PanelProvider'
+import { PhotoManagerModal } from './PhotoManagerModal'
 import { PanelSkeleton } from './ResumenView'
 
 const chipCls = (active: boolean) =>
@@ -36,11 +38,12 @@ function toggle<T>(arr: T[], v: T): T[] {
 /** Vista Inventario: tabla densa con precio/cantidad editables y pausa. */
 export function InventoryView() {
   const t = useTranslations('panel')
-  const { inventory, loadingData } = usePanel()
+  const { inventory, loadingData, token, setItemPhotos } = usePanel()
 
   const [q, setQ] = useState('')
   const [games, setGames] = useState<Tcg[]>([])
   const [conds, setConds] = useState<Condition[]>([])
+  const [managingPhotosFor, setManagingPhotosFor] = useState<InventoryItem | null>(null)
 
   const filtered = useMemo(() => {
     const query = q.trim().toLowerCase()
@@ -173,17 +176,32 @@ export function InventoryView() {
             </thead>
             <tbody>
               {filtered.map((item) => (
-                <InventoryRow key={item.id} item={item} />
+                <InventoryRow key={item.id} item={item} onManagePhotos={setManagingPhotosFor} />
               ))}
             </tbody>
           </table>
         </div>
       )}
+
+      {managingPhotosFor && (
+        <PhotoManagerModal
+          item={managingPhotosFor}
+          token={token}
+          onClose={() => setManagingPhotosFor(null)}
+          onPhotosChange={(photos) => setItemPhotos(managingPhotosFor.id, photos)}
+        />
+      )}
     </div>
   )
 }
 
-function InventoryRow({ item }: { item: InventoryItem }) {
+function InventoryRow({
+  item,
+  onManagePhotos,
+}: {
+  item: InventoryItem
+  onManagePhotos: (item: InventoryItem) => void
+}) {
   const t = useTranslations('panel')
   const { patchItem } = usePanel()
   const paused = item.status === 'inactive'
@@ -331,17 +349,26 @@ function InventoryRow({ item }: { item: InventoryItem }) {
       </td>
       {/* Acciones */}
       <td className="px-3 py-2.5 last:pr-4">
-        <button
-          type="button"
-          onClick={toggleStatus}
-          disabled={busy}
-          title={paused ? t('resume') : t('pause')}
-          className={`inline-flex h-7 w-7 items-center justify-center border border-line bg-input text-[9px] disabled:opacity-40 ${
-            paused ? 'text-cond-nm' : 'text-cond-mp'
-          }`}
-        >
-          {paused ? '▶' : '❙❙'}
-        </button>
+        <div className="flex items-center gap-1.5">
+          <button
+            type="button"
+            onClick={() => onManagePhotos(item)}
+            className="inline-flex h-7 items-center border border-line bg-input px-2 font-mono text-[9px] text-muted-2 hover:text-ink"
+          >
+            {t('photoManageButton', { count: item.photos.length, max: MAX_PHOTOS_PER_ITEM })}
+          </button>
+          <button
+            type="button"
+            onClick={toggleStatus}
+            disabled={busy}
+            title={paused ? t('resume') : t('pause')}
+            className={`inline-flex h-7 w-7 items-center justify-center border border-line bg-input text-[9px] disabled:opacity-40 ${
+              paused ? 'text-cond-nm' : 'text-cond-mp'
+            }`}
+          >
+            {paused ? '▶' : '❙❙'}
+          </button>
+        </div>
       </td>
     </tr>
   )
