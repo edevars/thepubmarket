@@ -5,7 +5,7 @@ status: In Progress
 assignee:
   - Claude
 created_date: '2026-08-06 02:19'
-updated_date: '2026-08-06 02:39'
+updated_date: '2026-08-06 02:40'
 labels:
   - 'epic:riftbound'
   - api
@@ -42,3 +42,33 @@ Results must normalize into the shared game-agnostic card snapshot (from the tas
 - [ ] #4 API errors and timeouts surface as controlled errors, not unhandled exceptions
 - [ ] #5 Tests cover normalization (including null attributes and alternate-art/signature variants) and cache behavior
 <!-- AC:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+## Live API findings (probed 2026-08-05, differ from docs)
+
+- `GET /cards/search?query=` returns `total: 0` for every term tried (Vi, Jinx, Bewitching) — the full-text index is not working in this WIP API. `GET /cards/name?fuzzy=` works well and returns all printings. **Use `/cards/name?fuzzy=` for seller search.**
+- A non-existent card id returns **HTTP 500**, not 404 (`/cards/deadbeef...` → "Internal Server Error"). The provider cannot signal not-found, so a bad id maps to an upstream error.
+- Card `id` is a 24-char hex ObjectId (not a UUID) — fits the `catalogId` string contract from TASK-029.
+- Variants are already disambiguated in `name` ("Jinx - Loose Cannon (Signature)", "(Alternate Art)", "(Overnumbered)") plus set + collector number, so they behave as distinct catalog entries.
+- No `lang` and no finishes in the payload; embedded `set` is `{set_id, label}`.
+
+## Approach
+
+New `apps/api/src/lib/riftcodex.ts` mirroring the Scryfall client, plus a small shared seam so both providers behave alike.
+
+1. **`apps/api/src/lib/catalog.ts`** (new): `CatalogError` (message + status) and the shared cache TTLs. `ScryfallError` extends `CatalogError` so existing imports/tests keep working.
+2. **`apps/api/src/lib/riftcodex.ts`** (new):
+   - `normalizeCard(raw)` → `CardSnapshot`: `tcg:'riftbound'`, `catalogId: id`, `oracleId: null`, `name`, `setCode: set.set_id`, `setName: set.label`, `collectorNumber: String(collector_number)`, `lang: 'en'` (API has no language field), `rarity` lowercased for cross-game consistency with the Scryfall snapshots, `artist: media.artist ?? null`, `finishes: []` (provider reports none → createListing accepts any), `imageUrl: media.image_url ?? null`.
+   - `getCardById(id, kv)` — `GET /cards/{id}`, KV `riftcodex:card:<id>` 30 days.
+   - `searchCards(query, kv)` — `GET /cards/name?fuzzy=&size=60`, KV `riftcodex:search:<q>` 10 min; empty result caches as `[]`.
+   - Identifiable `User-Agent`, `AbortSignal.timeout` on both calls; aborts and non-OK statuses become `CatalogError` (504 / upstream status → 502 at the caller).
+3. **`apps/api/src/lib/inventory.ts`**: register `riftbound` in `CATALOG_PROVIDERS` and widen the catch from `ScryfallError` to `CatalogError` (TASK-029 left this narrowed on purpose). Route-level game-aware search stays in TASK-031.
+4. **Tests** (`apps/api/src/lib/riftcodex.test.ts`): normalization of a plain card, a signature/alternate-art variant, null attributes and missing artist/image; KV cache hit avoids fetch and miss writes with the right TTL; non-OK status and timeout produce `CatalogError`; empty search caches `[]`.
+5. **Validate**: `pnpm --filter @thepubmarket/api test`, `pnpm typecheck`, `pnpm lint`, plus a live smoke of the client path.
+
+## Risks
+- RiftCodex is an unofficial WIP fan API: no not-found signal and a possibly changing schema. Normalization tolerates missing optional fields rather than trusting the documented shape.
+- If `/cards/search` starts working it may be a better search endpoint than `/cards/name?fuzzy=`; revisit in TASK-031.
+<!-- SECTION:PLAN:END -->
