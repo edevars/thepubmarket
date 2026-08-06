@@ -1,6 +1,6 @@
 'use client'
 
-import type { CardSnapshot, Condition, Finish, InventoryItem } from '@thepubmarket/shared'
+import type { CardSnapshot, Condition, Finish, InventoryItem, Tcg } from '@thepubmarket/shared'
 import { CONDITIONS } from '@thepubmarket/shared'
 import { useLocale, useTranslations } from 'next-intl'
 import { useEffect, useRef, useState } from 'react'
@@ -10,7 +10,13 @@ import { ConditionBadge } from '@/components/ui/ConditionBadge'
 import { FoilTag } from '@/components/ui/FoilTag'
 import { LangTag } from '@/components/ui/LangTag'
 import { Link } from '@/i18n/navigation'
-import { artTintForId, CONDITION_HEX, conditionKey, formatMoneyCents } from '@/lib/catalog/display'
+import {
+  artTintForId,
+  CONDITION_HEX,
+  conditionKey,
+  formatMoneyCents,
+  TCG_META,
+} from '@/lib/catalog/display'
 import { createListing, searchPrintings } from '@/lib/client-api'
 import { usePanel } from './PanelProvider'
 import { PhotoManagerModal } from './PhotoManagerModal'
@@ -33,6 +39,10 @@ export function AddCardFlow() {
   const { token, me, addItem, setItemPhotos } = usePanel()
 
   const [step, setStep] = useState<Step>('search')
+  // Juegos publicables los decide la API (los que tienen catálogo integrado).
+  // Si respondiera vacío, MTG mantiene el flujo usable.
+  const games: Tcg[] = me.catalogGames?.length ? me.catalogGames : ['mtg']
+  const [game, setGame] = useState<Tcg>(games[0] ?? 'mtg')
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<CardSnapshot[]>([])
   const [searching, setSearching] = useState(false)
@@ -60,14 +70,23 @@ export function AddCardFlow() {
     }
     setSearching(true)
     debounceRef.current = setTimeout(() => {
-      searchPrintings(token, q)
+      searchPrintings(token, q, game)
         .then(setResults)
         .finally(() => setSearching(false))
     }, 350)
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current)
     }
-  }, [query, token])
+  }, [query, token, game])
+
+  /** Cambiar de juego invalida lo buscado: otro catálogo, otras impresiones. */
+  function selectGame(next: Tcg) {
+    if (next === game) return
+    setGame(next)
+    setQuery('')
+    setResults([])
+    setSel(null)
+  }
 
   function selectPrinting(card: CardSnapshot) {
     setSel(card)
@@ -89,8 +108,7 @@ export function AddCardFlow() {
     setPublishing(true)
     setPublishErr(false)
     const result = await createListing(token, {
-      // Solo MTG hasta que el selector de juego llegue (TASK-032).
-      tcg: 'mtg',
+      tcg: game,
       catalogId: sel.catalogId,
       condition: cond,
       finish,
@@ -145,8 +163,27 @@ export function AddCardFlow() {
       {step === 'search' && (
         <div className="flex flex-col gap-4">
           <div className="border border-line-soft bg-panel-2 p-4">
+            {games.length > 1 && (
+              <div className="mb-4">
+                <div className="mb-2 font-mono text-[9px] uppercase tracking-[0.16em] text-faint">
+                  {t('offerGame')}
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {games.map((code) => (
+                    <button
+                      key={code}
+                      type="button"
+                      onClick={() => selectGame(code)}
+                      className={segCls(game === code)}
+                    >
+                      {TCG_META[code].name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
             <div className="mb-2 font-mono text-[9px] uppercase tracking-[0.2em] text-cyan">
-              {t('scryfallLabel')}
+              {t('catalogLabel', { game: TCG_META[game].name })}
             </div>
             <div className="flex items-center gap-2 border border-line bg-input px-3.5 py-3">
               <span className="h-3.5 w-3.5 shrink-0 rounded-full border-[1.5px] border-faint-2" />

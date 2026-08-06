@@ -443,6 +443,12 @@ export interface SellerPanelMe {
   seller: Seller
   /** Comisión de la plataforma en basis points (800 = 8%). */
   feeBps: number
+  /**
+   * Juegos en los que hoy se puede publicar: los que tienen catálogo integrado
+   * en la API. Lo decide el servidor para que el panel no mantenga su propia
+   * lista y se desincronice al sumar un TCG.
+   */
+  catalogGames: Tcg[]
 }
 
 /** Cuerpo de `POST /seller/inventory` (el sellerId lo fija la sesión). */

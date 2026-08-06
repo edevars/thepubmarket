@@ -128,6 +128,7 @@ sellerPanel.get('/me', async (c) => {
   const body: SellerPanelMe = {
     seller: rowToSeller({ ...seller, singlesCount: row?.n ?? 0 }),
     feeBps: Number(c.env.PLATFORM_FEE_BPS) || 0,
+    catalogGames: supportedTcgs(),
   }
   return c.json(body)
 })
