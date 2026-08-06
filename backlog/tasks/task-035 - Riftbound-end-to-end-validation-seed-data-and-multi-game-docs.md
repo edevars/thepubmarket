@@ -4,10 +4,13 @@ title: 'Riftbound end-to-end validation, seed data, and multi-game docs'
 status: To Do
 assignee: []
 created_date: '2026-08-06 02:20'
+updated_date: '2026-08-06 02:20'
 labels:
   - 'epic:riftbound'
 milestone: m-3
-dependencies: []
+dependencies:
+  - TASK-032
+  - TASK-033
 references:
   - scripts/load-inventory.mjs
   - scripts/inventory-seed.json
