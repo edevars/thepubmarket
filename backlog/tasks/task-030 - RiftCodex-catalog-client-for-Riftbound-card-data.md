@@ -4,11 +4,13 @@ title: RiftCodex catalog client for Riftbound card data
 status: To Do
 assignee: []
 created_date: '2026-08-06 02:19'
+updated_date: '2026-08-06 02:20'
 labels:
   - 'epic:riftbound'
   - api
 milestone: m-3
-dependencies: []
+dependencies:
+  - TASK-029
 references:
   - apps/api/src/lib/scryfall.ts
   - apps/api/src/lib/inventory.ts
