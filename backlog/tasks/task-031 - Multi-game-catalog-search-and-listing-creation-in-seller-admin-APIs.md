@@ -4,11 +4,14 @@ title: Multi-game catalog search and listing creation in seller/admin APIs
 status: To Do
 assignee: []
 created_date: '2026-08-06 02:19'
+updated_date: '2026-08-06 02:20'
 labels:
   - 'epic:riftbound'
   - api
 milestone: m-3
-dependencies: []
+dependencies:
+  - TASK-029
+  - TASK-030
 references:
   - apps/api/src/routes/seller-panel.ts
   - apps/api/src/routes/admin.ts
