@@ -13,7 +13,10 @@ interface ProductCardProps {
 
 /**
  * Tarjeta de producto: el componente más repetido. La imagen manda; condición y
- * precio legibles de un vistazo. Estados: normal, hover (glow + lift), agotado.
+ * precio legibles de un vistazo. Estados: normal, hover (glow + lift), press
+ * (scale-down táctil), agotado. `.tpm-grid-item` (ver globals.css) hace que la
+ * tarjeta entre con fade + rise cuando el grid cambia de contenido (juego o
+ * filtros), en vez de aparecer con un corte seco.
  */
 export function ProductCard({ item }: ProductCardProps) {
   const locale = useLocale()
@@ -23,7 +26,7 @@ export function ProductCard({ item }: ProductCardProps) {
   return (
     <Link
       href={`/catalog/${item.id}`}
-      className="clip-card group relative flex flex-col border border-line bg-panel transition duration-150 hover:-translate-y-1 hover:border-primary hover:shadow-[0_12px_34px_rgba(0,0,0,0.55),0_0_22px_rgba(59,123,255,0.26)]"
+      className="tpm-grid-item clip-card group relative flex flex-col border border-line bg-panel transition duration-base ease-standard hover:-translate-y-1 hover:border-primary hover:shadow-[0_12px_34px_rgba(0,0,0,0.55),0_0_22px_rgba(59,123,255,0.26)] active:scale-[0.98] active:duration-fast"
     >
       <div className="relative">
         <CardArt name={item.card.name} tint={artTintFor(item)} imageUrl={item.card.imageUrl} />

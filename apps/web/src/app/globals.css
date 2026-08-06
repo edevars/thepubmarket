@@ -43,6 +43,24 @@
   --font-display: var(--font-rajdhani), "Rajdhani", sans-serif;
   --font-sans: var(--font-inter), "Inter", system-ui, sans-serif;
   --font-mono: var(--font-plex-mono), "IBM Plex Mono", monospace;
+
+  /*
+   * Motion tokens — single source of truth for durations/easings. Adding a
+   * key here also generates the matching Tailwind utility (e.g. `--duration-fast`
+   * → `duration-fast`, `--ease-emphasized` → `ease-emphasized`), so components
+   * should reach for these utilities instead of hardcoding ms/cubic-bezier values.
+   */
+  --duration-fast: 120ms; /* hover/press feedback, tap states */
+  --duration-base: 200ms; /* default: color/border/shadow transitions, card hover */
+  --duration-slow: 320ms; /* panel/drawer/menu reveals */
+
+  --ease-standard: cubic-bezier(0.4, 0, 0.2, 1); /* material "standard" ease-out, general purpose */
+  --ease-emphasized: cubic-bezier(
+    0.34,
+    1.56,
+    0.64,
+    1
+  ); /* slight overshoot, used for reveals/entrances */
 }
 
 html {
@@ -122,13 +140,113 @@ input::placeholder {
 /* ----- entrada del drawer del carrito ----- */
 @keyframes tpmDrawerIn {
   from {
-    transform: translateX(40px);
+    transform: translate3d(18px, 18px, 0);
     opacity: 0;
   }
   to {
-    transform: translateX(0);
+    transform: translate3d(0, 0, 0);
     opacity: 1;
   }
+}
+/* Diagonal offset (not a single axis) so this same keyframe reads correctly
+ * both as a right-side drawer (desktop) and a bottom sheet (mobile). */
+.tpm-drawer-panel {
+  animation: tpmDrawerIn var(--duration-slow) var(--ease-emphasized);
+}
+
+/* ============================================================
+ * MOTION FOUNDATION
+ * Reusable transition patterns built on the --duration-* and --ease-*
+ * tokens above. Every pattern animates transform/opacity only (never layout
+ * properties like width/height/margin), so nothing here should trigger
+ * layout shift on its own. All of it is neutralised by the
+ * prefers-reduced-motion block at the end of this file.
+ *
+ * Patterns and where they live:
+ * - Hover/press feedback: no dedicated class — compose Tailwind's own
+ *   `transition duration-fast ease-standard active:scale-[0.97]` (or
+ *   `duration-base` for larger surfaces like cards) directly on the
+ *   interactive element. See ProductCard, FilterSidebar's `controlBase`,
+ *   ActiveChips and SiteHeader for reference usage.
+ * - .tpm-chip / .tpm-chip-exit: filter chip add/remove (ActiveChips). New
+ *   chips scale+fade in on mount; removed chips play a quick shrink+fade
+ *   before the parent actually drops them from state.
+ * - .tpm-grid-item: card grid content swap (CardGrid/ProductCard). Each
+ *   card fades + rises slightly on mount, so switching game/filters reads
+ *   as a content refresh instead of a jump cut.
+ * - .tpm-reveal / .tpm-scrim / .tpm-drawer-panel: menu, dropdown and
+ *   overlay reveal. `.tpm-reveal` is the generic dropdown/sheet entrance
+ *   (mobile filter overlay); `.tpm-scrim` fades a backdrop in;
+ *   `.tpm-drawer-panel` is the cart drawer's own slide-in (see above).
+ * ============================================================ */
+
+@keyframes tpmChipIn {
+  from {
+    opacity: 0;
+    transform: scale(0.85);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+@keyframes tpmChipOut {
+  from {
+    opacity: 1;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.85);
+  }
+}
+.tpm-chip {
+  animation: tpmChipIn var(--duration-base) var(--ease-emphasized);
+}
+/* Debe declararse después de `.tpm-chip`: misma especificidad, gana el orden. */
+.tpm-chip-exit {
+  animation: tpmChipOut var(--duration-fast) var(--ease-standard) forwards;
+  pointer-events: none;
+}
+
+@keyframes tpmGridItemIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.tpm-grid-item {
+  animation: tpmGridItemIn var(--duration-base) var(--ease-standard);
+}
+
+@keyframes tpmRevealIn {
+  from {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.99);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+.tpm-reveal {
+  animation: tpmRevealIn var(--duration-base) var(--ease-emphasized);
+}
+
+@keyframes tpmScrimIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.tpm-scrim {
+  animation: tpmScrimIn var(--duration-base) var(--ease-standard);
 }
 
 /* ----- skeleton shimmer ----- */
@@ -152,4 +270,29 @@ input::placeholder {
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
+}
+
+/*
+ * Respect prefers-reduced-motion globally: collapse every animation and
+ * transition to effectively instant so state changes still happen and are
+ * visible, but nothing moves, spins, slides or fades gradually. This is the
+ * standard "near-zero duration" recipe rather than `animation: none`, since
+ * fully removing animations can also skip `forwards`-filled end states
+ * (e.g. `.tpm-chip-exit`), leaving elements stuck mid-transition.
+ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    /* biome-ignore lint/complexity/noImportantStyles: intentional — this is the
+       one place in the app allowed to override every other transition/animation
+       declaration, by design, for accessibility. */
+    animation-duration: 0.01ms !important;
+    /* biome-ignore lint/complexity/noImportantStyles: see above */
+    animation-iteration-count: 1 !important;
+    /* biome-ignore lint/complexity/noImportantStyles: see above */
+    transition-duration: 0.01ms !important;
+    /* biome-ignore lint/complexity/noImportantStyles: see above */
+    scroll-behavior: auto !important;
+  }
 }

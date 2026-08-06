@@ -1,6 +1,12 @@
 import type { InventoryItem } from '@thepubmarket/shared'
 import { ProductCard } from './ProductCard'
 
+/**
+ * Grid de tarjetas de producto. El fade/rise al cambiar de contenido (juego o
+ * filtros) vive en cada `ProductCard` (`.tpm-grid-item`, ver globals.css), no
+ * aquí: React ya remonta cada tarjeta con `key={item.id}` cuando la lista de
+ * items cambia, así que basta con que la tarjeta anime su propia entrada.
+ */
 interface CardGridProps {
   items: InventoryItem[]
   /** `grid` (catálogo) o `row` (filas de la home, tarjetas algo más anchas). */

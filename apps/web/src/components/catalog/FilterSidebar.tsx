@@ -34,8 +34,14 @@ interface FilterSidebarProps {
 }
 
 const sectionLabel = 'font-mono text-[9px] uppercase tracking-[0.14em] text-faint'
+/**
+ * Feedback de hover/press compartido por los controles de filtro: usa los
+ * tokens de movimiento (`duration-fast`/`ease-standard`, ver globals.css) y
+ * un scale-down en `:active` para que tocar un filtro se sienta táctil, sin
+ * bloquear el foco de teclado.
+ */
 const controlBase =
-  'transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/70'
+  'transition duration-fast ease-standard active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/70'
 
 export function FilterSidebar({
   state,
@@ -200,12 +206,12 @@ export function FilterSidebar({
             aria-checked={state.foilOnly}
             aria-label={t('fFoil')}
             onClick={onToggleFoil}
-            className={`relative h-6 w-11 rounded-full transition-colors ${controlBase} ${
+            className={`relative h-6 w-11 rounded-full ${controlBase} ${
               state.foilOnly ? 'bg-primary' : 'bg-line'
             }`}
           >
             <span
-              className={`absolute top-0.5 h-5 w-5 rounded-full bg-white transition-[left] ${state.foilOnly ? 'left-[22px]' : 'left-0.5'}`}
+              className={`absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white transition-transform duration-base ease-emphasized ${state.foilOnly ? 'translate-x-5' : 'translate-x-0'}`}
             />
           </button>
         </div>
@@ -227,7 +233,7 @@ export function FilterSidebar({
               value={state.minPesos}
               onChange={(e) => onPriceChange('minPesos', e.target.value)}
               placeholder="$0"
-              className="min-h-9 w-full border border-line bg-input px-2.5 py-1.5 font-mono text-[12px] text-ink outline-none transition-colors focus:border-primary"
+              className="min-h-9 w-full border border-line bg-input px-2.5 py-1.5 font-mono text-[12px] text-ink outline-none transition-colors duration-fast ease-standard focus:border-primary"
             />
           </label>
           <span className="text-faint-2">—</span>
@@ -242,7 +248,7 @@ export function FilterSidebar({
               value={state.maxPesos}
               onChange={(e) => onPriceChange('maxPesos', e.target.value)}
               placeholder="$5,000"
-              className="min-h-9 w-full border border-line bg-input px-2.5 py-1.5 font-mono text-[12px] text-ink outline-none transition-colors focus:border-primary"
+              className="min-h-9 w-full border border-line bg-input px-2.5 py-1.5 font-mono text-[12px] text-ink outline-none transition-colors duration-fast ease-standard focus:border-primary"
             />
           </label>
         </div>
@@ -253,7 +259,7 @@ export function FilterSidebar({
           <button
             type="button"
             onClick={onClose}
-            className="clip-btn flex min-h-11 w-full items-center justify-center bg-primary px-4 font-display text-[13px] font-bold uppercase tracking-[0.08em] text-white"
+            className={`clip-btn flex min-h-11 w-full items-center justify-center bg-primary px-4 font-display text-[13px] font-bold uppercase tracking-[0.08em] text-white ${controlBase}`}
           >
             {t('showResults', { count: resultCount })}
           </button>

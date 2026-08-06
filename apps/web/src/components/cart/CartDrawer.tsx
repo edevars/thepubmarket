@@ -20,6 +20,11 @@ function LockIcon() {
  * Carrito deslizable (quick view). Montado una sola vez en el layout; se abre
  * desde el ícono del header. El pago navega a `/cart?pay=1`, donde la página
  * corre el flujo mock de checkout.
+ *
+ * Es la instancia real del patrón "menu/dropdown reveal" de la fundación de
+ * movimiento (ver globals.css): `.tpm-scrim` desvanece el fondo y
+ * `.tpm-drawer-panel` desliza el panel, ambos con los tokens de duración/easing
+ * compartidos en vez de valores sueltos.
  */
 export function CartDrawer() {
   const t = useTranslations('cart')
@@ -59,11 +64,11 @@ export function CartDrawer() {
         type="button"
         aria-label={t('closeCart')}
         onClick={closeDrawer}
-        className="absolute inset-0 bg-[#04060d]/[0.66] backdrop-blur-[2px]"
+        className="tpm-scrim absolute inset-0 bg-[#04060d]/[0.66] backdrop-blur-[2px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary/70"
       />
 
       {/* panel: derecha en desktop, hoja inferior en mobile */}
-      <div className="absolute inset-x-0 bottom-0 flex max-h-[88%] flex-col border-t border-line-strong bg-[#0a1120] shadow-[0_-20px_60px_rgba(0,0,0,0.6)] [animation:tpmDrawerIn_0.3s_ease] sm:inset-y-0 sm:left-auto sm:right-0 sm:max-h-none sm:w-[400px] sm:border-l sm:border-t-0 sm:shadow-[-24px_0_60px_rgba(0,0,0,0.55)]">
+      <div className="tpm-drawer-panel absolute inset-x-0 bottom-0 flex max-h-[88%] flex-col border-t border-line-strong bg-[#0a1120] shadow-[0_-20px_60px_rgba(0,0,0,0.6)] sm:inset-y-0 sm:left-auto sm:right-0 sm:max-h-none sm:w-[400px] sm:border-l sm:border-t-0 sm:shadow-[-24px_0_60px_rgba(0,0,0,0.55)]">
         <div className="flex shrink-0 items-center justify-between border-b border-line-soft px-5 py-[18px]">
           <div className="flex items-baseline gap-2.5">
             <span className="font-display text-lg font-bold uppercase tracking-[0.06em] text-white">
@@ -75,7 +80,7 @@ export function CartDrawer() {
             type="button"
             onClick={closeDrawer}
             aria-label={t('closeCart')}
-            className="flex h-7 w-7 items-center justify-center border border-line text-[13px] text-muted hover:border-primary hover:text-white"
+            className="flex h-7 w-7 items-center justify-center border border-line text-[13px] text-muted transition duration-fast ease-standard hover:border-primary hover:text-white active:scale-[0.94] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/70"
           >
             ✕
           </button>
@@ -90,14 +95,14 @@ export function CartDrawer() {
                 closeDrawer()
                 router.push('/catalog')
               }}
-              className="font-display text-[13px] font-semibold uppercase tracking-[0.08em] text-primary-hover hover:text-cyan"
+              className="font-display text-[13px] font-semibold uppercase tracking-[0.08em] text-primary-hover transition-colors duration-fast ease-standard hover:text-cyan focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/70"
             >
               {t('exploreCta')} ›
             </button>
           </div>
         ) : (
           <>
-            <div className="flex flex-1 flex-col gap-3.5 overflow-y-auto px-5 py-4">
+            <div className="flex flex-1 flex-col gap-3.5 overflow-y-auto overscroll-contain px-5 py-4">
               {items.map((item) => (
                 <CartLine key={item.inventoryId} item={item} variant="drawer" />
               ))}
@@ -116,7 +121,7 @@ export function CartDrawer() {
               <button
                 type="button"
                 onClick={pay}
-                className="clip-btn-lg glow-primary w-full bg-primary px-4 py-3.5 font-display text-[15px] font-bold uppercase tracking-[0.12em] text-[#06121f] transition hover:bg-primary-hover"
+                className="clip-btn-lg glow-primary w-full bg-primary px-4 py-3.5 font-display text-[15px] font-bold uppercase tracking-[0.12em] text-[#06121f] transition duration-base ease-standard hover:bg-primary-hover active:scale-[0.98] active:duration-fast focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/70"
               >
                 {t('pay')}
               </button>

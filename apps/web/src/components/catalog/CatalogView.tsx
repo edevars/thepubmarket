@@ -181,7 +181,7 @@ export function CatalogView({
           <button
             type="button"
             onClick={() => setMobileFiltersOpen((v) => !v)}
-            className="clip-btn border border-line-strong bg-panel px-3.5 py-2 font-display text-[13px] font-semibold uppercase tracking-[0.06em] text-ink md:hidden"
+            className="clip-btn border border-line-strong bg-panel px-3.5 py-2 font-display text-[13px] font-semibold uppercase tracking-[0.06em] text-ink transition duration-fast ease-standard active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/70 md:hidden"
           >
             {t('filters')} ({activeFilterCount})
           </button>
@@ -195,7 +195,9 @@ export function CatalogView({
       <div className="md:grid md:grid-cols-[232px_1fr] md:items-start md:gap-6">
         <aside
           className={`${
-            mobileFiltersOpen ? 'fixed inset-0 z-40 block bg-bg/80 p-4 backdrop-blur-sm' : 'hidden'
+            mobileFiltersOpen
+              ? 'tpm-reveal fixed inset-0 z-40 block bg-bg/80 p-4 backdrop-blur-sm'
+              : 'hidden'
           } md:sticky md:top-[74px] md:z-auto md:block md:bg-transparent md:p-0 md:backdrop-blur-0 md:self-start`}
         >
           <FilterSidebar
