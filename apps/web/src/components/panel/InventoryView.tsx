@@ -20,12 +20,16 @@ import {
   setLine,
   TCG_META,
 } from '@/lib/catalog/display'
+import { filterInventory, presentGames } from '@/lib/panel/inventory-filters'
 import { usePanel } from './PanelProvider'
 import { PhotoManagerModal } from './PhotoManagerModal'
 import { PanelSkeleton } from './ResumenView'
 
+/** Anillo de foco consistente con el resto del panel (teclado, no solo mouse). */
+const focusRing = 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/70'
+
 const chipCls = (active: boolean) =>
-  `border px-2.5 py-1.5 font-mono text-[11px] font-semibold tracking-[0.05em] transition ${
+  `tpm-chip border px-2.5 py-1.5 font-mono text-[11px] font-semibold tracking-[0.05em] transition-colors duration-base ease-standard ${focusRing} ${
     active
       ? 'border-primary bg-primary/14 text-[#cfe0ff]'
       : 'border-line bg-input text-muted-2 hover:border-line-strong'
@@ -45,19 +49,16 @@ export function InventoryView() {
   const [conds, setConds] = useState<Condition[]>([])
   const [managingPhotosFor, setManagingPhotosFor] = useState<InventoryItem | null>(null)
 
-  const filtered = useMemo(() => {
-    const query = q.trim().toLowerCase()
-    return inventory.filter((i) => {
-      if (query && !i.card.name.toLowerCase().includes(query)) return false
-      if (games.length && !games.includes(i.tcg)) return false
-      if (conds.length && !conds.includes(i.condition)) return false
-      return true
-    })
-  }, [inventory, q, games, conds])
+  const filtered = useMemo(
+    () => filterInventory(inventory, { q, games, conds }),
+    [inventory, q, games, conds],
+  )
 
   const locale = useLocale()
   const totalValueCents = filtered.reduce((s, i) => s + i.priceCents * i.quantity, 0)
-  const presentGames = TCGS.filter((g) => inventory.some((i) => i.tcg === g))
+  // Solo juegos con al menos un single publicado — ver `presentGames` para el
+  // razonamiento de por qué un seller sin Riftbound no ve ese chip.
+  const gamesWithStock = useMemo(() => presentGames(inventory, TCGS), [inventory])
 
   if (loadingData) return <PanelSkeleton />
 
@@ -82,8 +83,11 @@ export function InventoryView() {
       {/* Toolbar */}
       <div className="flex flex-col gap-3 border border-line-soft bg-panel-2 p-4">
         <div className="flex flex-wrap items-center gap-3">
-          <div className="flex min-w-[220px] flex-1 items-center gap-2 border border-line bg-input px-3 py-2">
-            <span className="h-3 w-3 shrink-0 rounded-full border-[1.5px] border-faint-2" />
+          <div className="flex min-w-[220px] flex-1 items-center gap-2 border border-line bg-input px-3 py-2 transition-colors duration-base ease-standard focus-within:border-primary">
+            <span
+              aria-hidden="true"
+              className="h-3 w-3 shrink-0 rounded-full border-[1.5px] border-faint-2"
+            />
             <input
               value={q}
               onChange={(e) => setQ(e.target.value)}
@@ -96,7 +100,7 @@ export function InventoryView() {
             <span className="font-mono text-[9px] uppercase tracking-[0.14em] text-faint">
               {t('invGame')}
             </span>
-            {presentGames.map((g) => (
+            {gamesWithStock.map((g) => (
               <button
                 key={g}
                 type="button"
@@ -238,9 +242,11 @@ function InventoryRow({
   const qtyColor =
     item.quantity === 0 ? 'text-cond-dmg' : item.quantity <= 2 ? 'text-cond-mp' : 'text-white'
 
+  const gameLabel = TCG_META[item.tcg]
+
   return (
     <tr
-      className={`border-b border-line-soft transition last:border-0 ${paused ? 'bg-[#080c16]/50' : ''} ${busy ? 'opacity-60' : ''}`}
+      className={`border-b border-line-soft transition duration-base ease-standard last:border-0 ${paused ? 'bg-[#080c16]/50' : ''} ${busy ? 'opacity-60' : ''}`}
     >
       {/* Carta */}
       <td className="px-3 py-2.5 first:pl-4">
@@ -269,8 +275,19 @@ function InventoryRow({
             >
               {item.card.name}
             </div>
-            <div className="font-mono text-[9.5px] tracking-[0.05em] text-faint">
-              {setLine(item)}
+            <div className="flex items-center gap-1.5 font-mono text-[9.5px] tracking-[0.05em] text-faint">
+              {/* Distintivo de juego: solo cuando no es MTG (juego por defecto
+                  histórico del panel) — evita ruido visual en catálogos
+                  mono-juego y da contexto inmediato en catálogos mixtos. */}
+              {item.tcg !== 'mtg' && (
+                <span
+                  title={gameLabel.name}
+                  className="border border-line-soft px-1 py-[1px] text-[8px] uppercase tracking-[0.08em] text-cyan/85"
+                >
+                  {gameLabel.short}
+                </span>
+              )}
+              <span title={item.card.setName}>{setLine(item)}</span>
             </div>
           </div>
         </div>
@@ -281,7 +298,11 @@ function InventoryRow({
           className="inline-flex items-center gap-1.5 font-mono text-[11px] font-semibold"
           style={{ color: CONDITION_HEX[item.condition] }}
         >
-          <span className="h-[7px] w-[7px]" style={{ background: CONDITION_HEX[item.condition] }} />
+          <span
+            aria-hidden="true"
+            className="h-[7px] w-[7px]"
+            style={{ background: CONDITION_HEX[item.condition] }}
+          />
           {item.condition}
         </span>
       </td>
@@ -297,8 +318,10 @@ function InventoryRow({
       <td className="px-3 py-2.5 font-mono text-[11px] uppercase text-muted">{item.language}</td>
       {/* Precio */}
       <td className="px-3 py-2.5">
-        <div className="flex items-center gap-1 border border-line bg-input px-2 py-1">
-          <span className="font-mono text-[11px] text-faint">$</span>
+        <div className="flex items-center gap-1 border border-line bg-input px-2 py-1 transition-colors duration-base ease-standard focus-within:border-primary">
+          <span aria-hidden="true" className="font-mono text-[11px] text-faint">
+            $
+          </span>
           <input
             value={priceInput}
             inputMode="numeric"
@@ -343,7 +366,10 @@ function InventoryRow({
         <span
           className={`inline-flex items-center gap-1.5 text-[11.5px] font-medium ${paused ? 'text-muted-2' : 'text-[#9fe0c0]'}`}
         >
-          <span className={`h-1.5 w-1.5 rounded-full ${paused ? 'bg-muted-2' : 'bg-cond-nm'}`} />
+          <span
+            aria-hidden="true"
+            className={`h-1.5 w-1.5 rounded-full ${paused ? 'bg-muted-2' : 'bg-cond-nm'}`}
+          />
           {paused ? t('statusPaused') : t('statusActive')}
         </span>
       </td>
@@ -362,11 +388,12 @@ function InventoryRow({
             onClick={toggleStatus}
             disabled={busy}
             title={paused ? t('resume') : t('pause')}
-            className={`inline-flex h-7 w-7 items-center justify-center border border-line bg-input text-[9px] disabled:opacity-40 ${
+            aria-label={paused ? t('resume') : t('pause')}
+            className={`inline-flex h-7 w-7 items-center justify-center border border-line bg-input text-[9px] transition-colors duration-base ease-standard disabled:opacity-40 ${focusRing} ${
               paused ? 'text-cond-nm' : 'text-cond-mp'
             }`}
           >
-            {paused ? '▶' : '❙❙'}
+            <span aria-hidden="true">{paused ? '▶' : '❙❙'}</span>
           </button>
         </div>
       </td>
