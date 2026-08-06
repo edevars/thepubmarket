@@ -1,11 +1,11 @@
 ---
 id: TASK-024
 title: 'Implement seller photo upload, delete, and reorder API endpoints'
-status: In Progress
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-08-06 00:13'
-updated_date: '2026-08-06 00:52'
+updated_date: '2026-08-06 00:59'
 labels:
   - 'epic:inventory-photos'
   - api
@@ -47,17 +47,17 @@ This feature touches no payment, payout or Stripe code path — no fund-custody 
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 `POST /seller/inventory/:id/photos` accepts a raw image body, stores the object in R2, persists the metadata row, and returns 201 with the photo DTO
-- [ ] #2 Non-image payloads are rejected with 400 based on magic-byte inspection, not the declared Content-Type; a renamed .txt or a truncated file is rejected
-- [ ] #3 Payloads over 5 MB are rejected with 400 and a distinct error code
-- [ ] #4 Uploading a 7th photo to a listing is rejected with 409 and a distinct error code
-- [ ] #5 Uploading, deleting or reordering photos on another seller's listing returns an opaque 404, matching the existing seller-panel ownership pattern; no query trusts a client-supplied seller id
-- [ ] #6 R2 keys are server-generated with UUIDs under the inventory-photos/ prefix; the client-supplied filename is never used in the key
-- [ ] #7 `DELETE /seller/inventory/:id/photos/:photoId` deletes the DB row first and then best-effort deletes the R2 object; a photo id belonging to another listing returns 404
-- [ ] #8 A reorder endpoint accepts a full ordering of photo ids, validates that the submitted set exactly matches the listing's photos, persists sort order, and rejects mismatched or partial sets with 400
-- [ ] #9 An admin-authenticated endpoint can hard-delete any photo, using the existing admin auth mechanism
-- [ ] #10 Magic-byte detection and R2 key building live in a pure module under apps/api/src/lib/ with vitest coverage for valid JPEG/PNG/WebP headers, truncated files, and renamed non-images
-- [ ] #11 New endpoints, error codes and validation rules are documented in docs/ingenieria/fotos-inventario.md (Spanish), including an explicit note that the feature touches no fund flow
+- [x] #1 `POST /seller/inventory/:id/photos` accepts a raw image body, stores the object in R2, persists the metadata row, and returns 201 with the photo DTO
+- [x] #2 Non-image payloads are rejected with 400 based on magic-byte inspection, not the declared Content-Type; a renamed .txt or a truncated file is rejected
+- [x] #3 Payloads over 5 MB are rejected with 400 and a distinct error code
+- [x] #4 Uploading a 7th photo to a listing is rejected with 409 and a distinct error code
+- [x] #5 Uploading, deleting or reordering photos on another seller's listing returns an opaque 404, matching the existing seller-panel ownership pattern; no query trusts a client-supplied seller id
+- [x] #6 R2 keys are server-generated with UUIDs under the inventory-photos/ prefix; the client-supplied filename is never used in the key
+- [x] #7 `DELETE /seller/inventory/:id/photos/:photoId` deletes the DB row first and then best-effort deletes the R2 object; a photo id belonging to another listing returns 404
+- [x] #8 A reorder endpoint accepts a full ordering of photo ids, validates that the submitted set exactly matches the listing's photos, persists sort order, and rejects mismatched or partial sets with 400
+- [x] #9 An admin-authenticated endpoint can hard-delete any photo, using the existing admin auth mechanism
+- [x] #10 Magic-byte detection and R2 key building live in a pure module under apps/api/src/lib/ with vitest coverage for valid JPEG/PNG/WebP headers, truncated files, and renamed non-images
+- [x] #11 New endpoints, error codes and validation rules are documented in docs/ingenieria/fotos-inventario.md (Spanish), including an explicit note that the feature touches no fund flow
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -133,3 +133,63 @@ per its own AC#6. This task does not mount `/photos/*`; the URL simply won't
 Touches no payment, payout, Stripe or fund-flow code path. R2 object storage
 and D1 metadata only.
 <!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+**Implemented as planned; one addition beyond the plan.** Added a post-insert recount-and-rollback in the upload handler to close the TOCTOU race on the 6-photo cap between two concurrent uploads (documented in the plan before coding, not a deviation from it).
+
+**End-to-end manual verification, not just curl-against-a-mock.** Ran `wrangler dev` (which emulates R2 locally via miniflare) against the real local D1. Registered two real seller sessions (email+password, linked to existing seeded sellers Bahamut Cards / Coliseo TCG via the admin link endpoint), then exercised every acceptance criterion as actual HTTP requests:
+
+| Check | Result |
+|---|---|
+| Upload a real JPEG | 201 + `{id, url, sortOrder}` |
+| Upload a `.txt` renamed `.jpg` | 400 `invalid_image` |
+| Upload a >5MB file | 400 `photo_too_large` |
+| Fill to 6, upload a 7th | 409 `photo_limit_reached` |
+| Seller B uploads on seller A's listing | 404 `not_found` (opaque) |
+| Seller B's own listing unaffected | still `photos: []` |
+| Reorder with a partial set | 400 `photo_set_mismatch` |
+| Reorder with a foreign id swapped in | 400 `photo_set_mismatch` |
+| Reorder with the exact full set, reversed | 200, persisted in the new order |
+| Seller B deletes A's photo (via A's listing id) | 404, row untouched (verified in D1) |
+| Seller A deletes their own photo | 200, row gone from D1 |
+| Delete the same id again | 404 (idempotent) |
+| Admin hard-delete without key | 401 |
+| Admin hard-delete with key | 200 |
+| Admin hard-delete unknown id | 404 |
+
+**R2 verified directly, not inferred from the HTTP response.** Read the local R2 emulation's SQLite object index (`.wrangler/state/v3/r2/miniflare-R2BucketObject/*.sqlite`) after the run: exactly 4 objects remained under `inventory-photos/{sellerId}/{inventoryId}/{photoId}.jpg`, matching the 4 D1 rows left after the 2 deletes — proof that R2 `put`/`delete` actually fired (not silently no-op'd) and that the key format matches AC#6 in a real bucket, not just the unit test.
+
+**Local state cleaned up afterward:** deleted the 6 test photo rows/objects, reset both sellers' `user_id` back to NULL (their pre-test seed value) and removed the two test users + invitation log rows, so local D1 is exactly as found.
+
+**`pnpm typecheck` / `pnpm lint` / `pnpm --filter @thepubmarket/api test`** all green (83 tests, 12 new in `photos.test.ts`).
+
+**Note for TASK-025:** the URL scheme decision (`{origin}/photos/{photoId}`, keyed by photo id not raw R2 key) is recorded in `docs/ingenieria/fotos-inventario.md` §4 so it doesn't have to be re-derived. `GET /seller/inventory` and the public catalog still return `photos: []` for everything — that wiring is explicitly TASK-025's job (`rowToInventoryItem`'s photos param is unused by any route yet).
+<!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+## What changed
+
+Authenticated write API for seller listing photos — upload, delete, reorder, plus an admin moderation lever. First consumer of the `ASSETS` R2 bucket in this codebase.
+
+- **`apps/api/src/lib/photos.ts`** (new, pure) — `detectImageKind()` (JPEG/PNG/WebP by magic bytes only, ignoring declared Content-Type), `MAX_PHOTO_BYTES` (5 MiB), `contentTypeFor()`, `buildPhotoKey()` (server-generated UUID keys under `inventory-photos/{sellerId}/{inventoryId}/{photoId}.{ext}`), `rowToInventoryPhoto()`.
+- **`apps/api/src/lib/photos.test.ts`** — 12 tests: valid JPEG/PNG/WebP headers, truncated file, empty body, renamed non-image, a RIFF container that isn't WebP, key format.
+- **`apps/api/src/routes/seller-panel.ts`** — `POST /inventory/:id/photos` (upload, with a post-insert recount to close a concurrent-upload race on the 6-photo cap), `DELETE /inventory/:id/photos/:photoId` (DB-first, R2 best-effort), `POST /inventory/:id/photos/reorder` (exact-set validation, per-row guarded updates). All behind the existing `sellerAuth` mount, same ownership-via-WHERE pattern as the rest of the panel — no query ever trusts a client-supplied seller id.
+- **`apps/api/src/routes/admin.ts`** — `DELETE /admin/inventory/photos/:photoId`, hard-delete of any seller's photo (the v1 moderation lever), behind existing `adminAuth`.
+- **`docs/ingenieria/fotos-inventario.md`** (new) + README index row — endpoints, error codes, the URL-scheme decision TASK-025 needs, orphan policy, no-fund-flow note.
+
+## Why this shape
+
+Proxy-through-the-Worker upload (not presigned direct-to-R2) keeps auth/ownership/quota/validation in one code path and needs no S3 credentials — right-sized for a one-person team. Magic-byte detection means a renamed `.txt` can't pass as an image regardless of what the client claims. R2 keys are non-guessable and immutable, which is what will make TASK-025's long-lived caching safe.
+
+## Verification
+
+Full HTTP-level pass against `wrangler dev` with real R2 emulation and real seller sessions (not mocked): every acceptance criterion exercised as an actual request — upload/reject/cap/cross-seller-404/reorder/delete/admin-hard-delete — and cross-checked against both D1 and the R2 emulator's own object index directly (4 objects left in R2 matched 4 rows left in D1 after two deletes). Local test data cleaned up afterward. `pnpm typecheck`, `pnpm lint`, and `pnpm --filter @thepubmarket/api test` (83 tests) all green.
+
+## Risks / follow-ups
+
+`GET /seller/inventory` and the public catalog still answer `photos: []` for every item — TASK-025 wires that read plus the public `/photos/:id` streaming route the DTO's `url` already points at. No payment, payout or Stripe code path touched.
+<!-- SECTION:FINAL_SUMMARY:END -->
