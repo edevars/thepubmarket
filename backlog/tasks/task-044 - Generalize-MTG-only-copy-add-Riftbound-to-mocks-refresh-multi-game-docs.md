@@ -1,9 +1,11 @@
 ---
 id: TASK-044
 title: 'Generalize MTG-only copy, add Riftbound to mocks, refresh multi-game docs'
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - '@Claude'
 created_date: '2026-08-06 05:45'
+updated_date: '2026-08-06 09:10'
 labels:
   - 'epic:riftbound-ux'
   - web
@@ -38,3 +40,25 @@ Outcome: copy, mocks, and docs reflect a multi-game marketplace where Riftbound 
 - [ ] #4 docs/ingenieria/catalogo-multijuego.md updated: RiftCodex references replaced with the local D1 catalog provider and current import flow
 - [ ] #5 Typecheck, biome, and web tests green
 <!-- AC:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+## Approach
+
+Two independent tracks on branch `task/TASK-044`, no file overlap.
+
+**Track A — web copy + mocks (nextjs-frontend)**
+1. Audit `apps/web/messages/{es,en}.json` and hardcoded strings for MTG-only assumptions (catalog subtitle "Singles de Magic: The Gathering", home hero "Arrancamos con Magic: The Gathering.", any others found by grep).
+2. Rewrite that copy so it reads as a multi-game marketplace in both locales — natural Spanish and English, not a literal translation of each other.
+3. Move game display names in `TCG_META` (`apps/web/src/lib/catalog/display.ts`) out of untranslated hardcoding where they are user-facing labels (proper nouns like "Magic: The Gathering" stay as-is; generic labels get translated).
+4. Add Riftbound entries to `apps/web/src/lib/catalog/mock-data.ts` so `NEXT_PUBLIC_USE_MOCKS=true` renders Riftbound listings with the same shape real D1 rows have (set, number, rarity, printing metadata from TASK-043).
+
+**Track B — docs (inline/general)**
+5. Refresh `docs/ingenieria/catalogo-multijuego.md`: remove RiftCodex as the Riftbound provider, document the local D1 `catalog_cards` provider added in TASK-037 and the `scripts/import-riftbound.mjs` import flow.
+
+**Verification** — `task-verifier` runs typecheck, biome and web tests, and audits the UI copy work against the design guidelines.
+
+## Risks
+- Copy changes touch shared i18n keys; the grep audit (AC#2) is the part most likely to miss a surface, so the verifier re-runs the audit independently.
+<!-- SECTION:PLAN:END -->
