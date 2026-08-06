@@ -3,9 +3,11 @@ id: TASK-045
 title: >-
   Motion and interaction foundation: transition tokens, micro-interactions,
   reduced-motion support
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - '@claude'
 created_date: '2026-08-06 05:49'
+updated_date: '2026-08-06 06:46'
 labels:
   - 'epic:riftbound-ux'
   - web
