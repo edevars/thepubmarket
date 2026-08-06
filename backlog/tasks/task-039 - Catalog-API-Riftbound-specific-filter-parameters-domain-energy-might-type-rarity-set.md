@@ -3,11 +3,11 @@ id: TASK-039
 title: >-
   Catalog API: Riftbound-specific filter parameters (domain, energy, might,
   type, rarity, set)
-status: In Progress
+status: Done
 assignee:
   - claude
 created_date: '2026-08-06 05:44'
-updated_date: '2026-08-06 07:31'
+updated_date: '2026-08-06 07:32'
 labels:
   - 'epic:riftbound-ux'
   - api
