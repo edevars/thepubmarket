@@ -1,6 +1,7 @@
 import { CONDITIONS, type Condition, type Tcg } from '@thepubmarket/shared'
 import { useTranslations } from 'next-intl'
 import { FILTER_LANGUAGES, TCG_META } from '@/lib/catalog/display'
+import type { GameFacet } from '@/lib/catalog/game-filters'
 
 export interface FilterState {
   conditions: Condition[]
@@ -8,6 +9,8 @@ export interface FilterState {
   foilOnly: boolean
   minPesos: string
   maxPesos: string
+  /** Filtros propios del juego activo (TASK-040): param -> valores seleccionados. */
+  game: Record<string, string[]>
 }
 
 interface FilterSidebarProps {
@@ -31,6 +34,13 @@ interface FilterSidebarProps {
   onPriceChange: (field: 'minPesos' | 'maxPesos', value: string) => void
   onClear: () => void
   onClose?: () => void
+  /** Facetas propias del juego activo (vacío si el juego no tiene, p.ej. MTG hoy). */
+  gameFacets: readonly GameFacet[]
+  gameFilterState: Record<string, string[]>
+  /** Opciones de las facetas de texto libre (hoy solo `set`), derivadas de los items cargados. */
+  freeTextOptions: Record<string, { value: string; label: string }[]>
+  onToggleGameFilterValue: (param: string, value: string) => void
+  onSetGameFilterValue: (param: string, value: string | undefined) => void
 }
 
 const sectionLabel = 'font-mono text-[9px] uppercase tracking-[0.14em] text-faint'
@@ -59,6 +69,11 @@ export function FilterSidebar({
   onPriceChange,
   onClear,
   onClose,
+  gameFacets,
+  gameFilterState,
+  freeTextOptions,
+  onToggleGameFilterValue,
+  onSetGameFilterValue,
 }: FilterSidebarProps) {
   const t = useTranslations('catalog')
   const tCondition = useTranslations('condition')
@@ -94,7 +109,7 @@ export function FilterSidebar({
         </button>
       </div>
 
-      <div className="tpm-scroll flex-1 overflow-y-auto p-4">
+      <div className="tpm-scroll flex-1 overflow-y-auto overscroll-contain p-4">
         {/* Juego */}
         <div className="mb-2.5 flex items-center justify-between">
           <div className={sectionLabel}>{t('fGame')}</div>
@@ -215,6 +230,91 @@ export function FilterSidebar({
             />
           </button>
         </div>
+
+        {/*
+         * Facetas propias del juego activo (TASK-040). Vacío para juegos sin
+         * registro propio (todos salvo Riftbound hoy) — ver `game-filters.ts`.
+         * `multiValue`/`multiInt` son selección múltiple (OR); `freeText`
+         * (hoy solo `set`) es de un solo valor, así que va como `<select>`.
+         */}
+        {gameFacets.map((facet) => (
+          <div key={facet.param}>
+            <div className="mb-2.5 flex items-center justify-between">
+              <div className={sectionLabel}>{t(facet.labelKey)}</div>
+              <span className="font-mono text-[10px] text-faint">
+                {gameFilterState[facet.param]?.length || ''}
+              </span>
+            </div>
+
+            {facet.kind === 'multiValue' && (
+              <div className="mb-5 grid grid-cols-2 gap-1.5">
+                {(facet.values ?? []).map((value) => {
+                  const active = (gameFilterState[facet.param] ?? []).includes(value)
+                  return (
+                    <button
+                      key={value}
+                      type="button"
+                      onClick={() => onToggleGameFilterValue(facet.param, value)}
+                      aria-pressed={active}
+                      className={`min-h-10 border px-2.5 py-1.5 text-left text-[12px] font-medium capitalize ${controlBase} ${
+                        active
+                          ? 'border-primary bg-primary/14 text-[#cfe0ff]'
+                          : 'border-line bg-input text-muted-2 hover:border-line-strong hover:text-ink-2'
+                      }`}
+                    >
+                      {/* Términos propios del juego: no se traducen (ver detalle de carta),
+                       * `translate="no"` evita que un traductor de navegador los mangle. */}
+                      <span className="block truncate" translate="no">
+                        {value}
+                      </span>
+                    </button>
+                  )
+                })}
+              </div>
+            )}
+
+            {facet.kind === 'multiInt' && (
+              <div className="mb-5 grid grid-cols-7 gap-1.5">
+                {Array.from({ length: (facet.max ?? 12) - (facet.min ?? 0) + 1 }, (_, i) =>
+                  String((facet.min ?? 0) + i),
+                ).map((value) => {
+                  const active = (gameFilterState[facet.param] ?? []).includes(value)
+                  return (
+                    <button
+                      key={value}
+                      type="button"
+                      onClick={() => onToggleGameFilterValue(facet.param, value)}
+                      aria-pressed={active}
+                      className={`min-h-10 border font-mono text-[11px] font-semibold ${controlBase} ${
+                        active
+                          ? 'border-primary bg-primary/14 text-[#cfe0ff]'
+                          : 'border-line bg-input text-muted-2 hover:border-line-strong hover:text-ink-2'
+                      }`}
+                    >
+                      {value}
+                    </button>
+                  )
+                })}
+              </div>
+            )}
+
+            {facet.kind === 'freeText' && (
+              <select
+                value={gameFilterState[facet.param]?.[0] ?? ''}
+                onChange={(e) => onSetGameFilterValue(facet.param, e.target.value || undefined)}
+                aria-label={t(facet.labelKey)}
+                className={`mb-5 min-h-9 w-full border border-line bg-input px-2.5 py-1.5 text-[12px] text-ink outline-none ${controlBase} focus:border-primary`}
+              >
+                <option value="">{t('all')}</option>
+                {(freeTextOptions[facet.param] ?? []).map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
+        ))}
 
         {/* Precio */}
         <div className="mb-2.5 flex items-center justify-between">

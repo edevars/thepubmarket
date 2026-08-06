@@ -26,6 +26,14 @@ export interface CatalogQuery {
   page?: number
   /** Tamaño de página explícito. Default `CATALOG_PAGE_SIZE`. La API topa en 200. */
   limit?: number
+  /**
+   * Filtros propios del juego activo (TASK-039/040), p.ej. `domain`/`energy`
+   * para Riftbound: param -> valores. Cada valor se manda repetido
+   * (`?domain=Fury&domain=Order`), que es OR dentro del param en la API —
+   * ver `lib/catalog/game-filters.ts` para el registro que arma este objeto.
+   * Solo válidos junto con `tcg`, o la API responde 400 `filter_requires_tcg`.
+   */
+  gameFilters?: Record<string, string[]>
 }
 
 /** Lista paginada del catálogo. Lanza si la API responde con error. */
@@ -37,6 +45,11 @@ export async function fetchCatalog(query: CatalogQuery): Promise<CatalogListResp
   if (query.tcg) params.set('tcg', query.tcg)
   if (query.set) params.set('set', query.set)
   if (query.seller) params.set('seller', query.seller)
+  if (query.gameFilters) {
+    for (const [param, values] of Object.entries(query.gameFilters)) {
+      for (const value of values) params.append(param, value)
+    }
+  }
   params.set('limit', String(limit))
   params.set('offset', String((page - 1) * limit))
 

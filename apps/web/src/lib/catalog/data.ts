@@ -12,6 +12,7 @@
  */
 import type { CatalogGameCount, Condition, InventoryItem, Tcg } from '@thepubmarket/shared'
 import { fetchCatalog, fetchCatalogGameCounts, fetchCatalogItem } from '@/lib/api'
+import { matchesGameFilters } from './game-filters'
 import { MOCK_LISTINGS } from './mock-data'
 
 /** Trae todo el inventario activo en una sola página (tope alto de la API). */
@@ -34,12 +35,19 @@ export interface CatalogFilters {
   /** Rango de precio en centavos MXN. */
   minCents?: number
   maxCents?: number
+  /**
+   * Filtros propios del juego activo (TASK-039/040): param -> valores
+   * seleccionados, p.ej. `{ domain: ['Fury'], energy: ['3'] }` para
+   * Riftbound. Viaja a la API igual que `tcg` — ver `game-filters.ts`.
+   */
+  game?: Record<string, string[]>
 }
 
 /**
  * Aplica los filtros sobre una lista ya cargada (reutilizable en cliente).
- * `tcg` también se respeta aquí para que los mocks y las listas ya cargadas se
- * comporten igual que la API, pero en producción llega ya filtrado.
+ * `tcg`/`game` también se respetan aquí para que los mocks y las listas ya
+ * cargadas se comporten igual que la API, pero en producción llegan ya
+ * filtrados.
  */
 export function applyFilters(items: InventoryItem[], f: CatalogFilters): InventoryItem[] {
   const q = f.q?.trim().toLowerCase()
@@ -51,23 +59,29 @@ export function applyFilters(items: InventoryItem[], f: CatalogFilters): Invento
     if (f.foilOnly && item.finish !== 'foil') return false
     if (f.minCents != null && item.priceCents < f.minCents) return false
     if (f.maxCents != null && item.priceCents > f.maxCents) return false
+    if (f.game && !matchesGameFilters(item, f.game)) return false
     return true
   })
 }
 
 /** Carga el inventario activo (API real o mocks según el toggle). */
-async function loadActive(tcg?: Tcg): Promise<InventoryItem[]> {
+async function loadActive(filters: Pick<CatalogFilters, 'tcg' | 'game'>): Promise<InventoryItem[]> {
   if (USE_MOCKS) return MOCK_LISTINGS.filter((i) => i.status === 'active')
-  const { items } = await fetchCatalog({ limit: FETCH_LIMIT, tcg })
+  const { items } = await fetchCatalog({
+    limit: FETCH_LIMIT,
+    tcg: filters.tcg,
+    gameFilters: filters.game,
+  })
   return items
 }
 
 /**
- * Lista del catálogo. Sin filtros devuelve todo el inventario activo. El juego
- * viaja a la API; el resto de los filtros se aplican sobre lo ya cargado.
+ * Lista del catálogo. Sin filtros devuelve todo el inventario activo. El
+ * juego y sus filtros propios viajan a la API; el resto se aplica sobre lo ya
+ * cargado.
  */
 export async function getCatalog(filters: CatalogFilters = {}): Promise<InventoryItem[]> {
-  return applyFilters(await loadActive(filters.tcg), filters)
+  return applyFilters(await loadActive(filters), filters)
 }
 
 /** Singles disponibles por juego, para el filtro y los mosaicos de la home. */
