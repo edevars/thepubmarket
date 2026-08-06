@@ -1,11 +1,11 @@
 ---
 id: TASK-021
 title: Persist the Stripe PaymentIntent id on the order
-status: In Progress
+status: To Do
 assignee:
   - claude
 created_date: '2026-08-03 01:12'
-updated_date: '2026-08-06 06:45'
+updated_date: '2026-08-06 07:14'
 labels:
   - api
   - stripe
@@ -24,7 +24,7 @@ documentation:
   - docs/ingenieria/entrega.md
 priority: low
 type: bug
-ordinal: 21000
+ordinal: 46000
 ---
 
 ## Description
