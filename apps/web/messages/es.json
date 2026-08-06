@@ -261,6 +261,7 @@
     "attrMight": "Poderío",
     "attrPower": "Poder",
     "attrArtist": "Artista",
+    "cardText": "Texto de la carta",
     "addCart": "Agregar al carrito",
     "soldOut": "Agotado",
     "inStock": "{count, plural, one {# disponible} other {# disponibles}}",

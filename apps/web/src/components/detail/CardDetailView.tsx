@@ -14,6 +14,7 @@ import {
   TCG_META,
 } from '@/lib/catalog/display'
 import { gameAttributeRows } from './game-attributes'
+import { IconizedText } from './IconizedText'
 import { PhotoGallery } from './PhotoGallery'
 
 /** Punto + código de condición con color, sin borde (para listados compactos). */
@@ -178,6 +179,30 @@ export function CardDetailView({
               </div>
             ))}
           </div>
+
+          {/* texto de reglas / ambientación — solo cuando el catálogo de origen los aporta
+              (hoy Riftbound; Scryfall no alimenta estos campos para MTG, ver CardSnapshot) */}
+          {(item.card.rulesText || item.card.flavorText) && (
+            <div className="mb-7">
+              <div className={sectionTitle}>{t('cardText')}</div>
+              <div className="tpm-reveal border border-line-soft bg-panel-2 p-5">
+                {item.card.rulesText && (
+                  <p className="whitespace-pre-line text-[13.5px] leading-relaxed text-ink-2">
+                    <IconizedText text={item.card.rulesText} />
+                  </p>
+                )}
+                {item.card.flavorText && (
+                  <p
+                    className={`whitespace-pre-line text-[12.5px] italic leading-relaxed text-muted-2 ${
+                      item.card.rulesText ? 'mt-4 border-t border-line-soft pt-4' : ''
+                    }`}
+                  >
+                    <IconizedText text={item.card.flavorText} />
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* otras condiciones */}
           <div className={sectionTitle}>{t('otherListings')}</div>
