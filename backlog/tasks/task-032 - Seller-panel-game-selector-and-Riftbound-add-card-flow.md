@@ -1,10 +1,11 @@
 ---
 id: TASK-032
 title: 'Seller panel: game selector and Riftbound add-card flow'
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - Claude
 created_date: '2026-08-06 02:20'
-updated_date: '2026-08-06 02:20'
+updated_date: '2026-08-06 03:04'
 labels:
   - 'epic:riftbound'
   - web
