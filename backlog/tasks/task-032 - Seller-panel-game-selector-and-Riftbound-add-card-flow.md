@@ -4,11 +4,13 @@ title: 'Seller panel: game selector and Riftbound add-card flow'
 status: To Do
 assignee: []
 created_date: '2026-08-06 02:20'
+updated_date: '2026-08-06 02:20'
 labels:
   - 'epic:riftbound'
   - web
 milestone: m-3
-dependencies: []
+dependencies:
+  - TASK-031
 references:
   - apps/web/src/components/panel/AddCardFlow.tsx
   - apps/web/src/lib/client-api.ts
