@@ -1,6 +1,13 @@
 'use client'
 
-import type { CardSnapshot, Condition, Finish, InventoryItem, Tcg } from '@thepubmarket/shared'
+import type {
+  CardSnapshot,
+  Condition,
+  Finish,
+  InventoryItem,
+  RiftboundAttributes,
+  Tcg,
+} from '@thepubmarket/shared'
 import { CONDITIONS } from '@thepubmarket/shared'
 import { useLocale, useTranslations } from 'next-intl'
 import { useEffect, useRef, useState } from 'react'
@@ -25,12 +32,76 @@ type Step = 'search' | 'detail' | 'success'
 
 const OFFER_LANGS = ['es', 'en', 'ja'] as const
 
+/** Anillo de foco consistente con el resto del panel. */
+const focusRing = 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/70'
+
 const segCls = (active: boolean) =>
-  `border px-3.5 py-2 font-display text-[13px] font-semibold tracking-[0.04em] transition ${
+  `border px-3.5 py-2 font-display text-[13px] font-semibold tracking-[0.04em] transition-colors duration-base ease-standard ${focusRing} ${
     active
       ? 'border-primary bg-primary/14 text-[#cfe0ff]'
       : 'border-line bg-input text-muted hover:border-line-strong'
   }`
+
+/**
+ * ¿La impresión ofrece el acabado `f`? Espejo exacto de la regla del server
+ * (`createListing` en `apps/api/src/lib/inventory.ts`): un array vacío de
+ * `finishes` significa "el catálogo no informa acabados", así que se aceptan
+ * los dos — nunca hay que interpretar vacío como "ninguno disponible".
+ */
+function finishAvailable(finishes: string[], f: Finish): boolean {
+  return finishes.length === 0 || finishes.includes(f)
+}
+
+/**
+ * Metadata compacta de Riftbound (tipo, dominios, energía, poderío) para
+ * desambiguar impresiones que comparten nombre entre sets (TASK-043). `null`
+ * cuando la carta no aporta nada mostrable — el llamador debe omitir la
+ * sección entera en vez de dejar un contenedor vacío.
+ */
+function RiftboundMeta({ attrs }: { attrs: RiftboundAttributes }) {
+  const t = useTranslations('panel')
+  const typeLabel = [attrs.supertype, attrs.type].filter(Boolean).join(' · ')
+  if (!typeLabel && attrs.domains.length === 0 && attrs.energy == null && attrs.might == null) {
+    return null
+  }
+  return (
+    <div className="flex flex-wrap items-center gap-1">
+      {typeLabel && (
+        <span className="truncate font-mono text-[9px] tracking-[0.03em] text-muted-2">
+          {typeLabel}
+        </span>
+      )}
+      {attrs.domains.map((d) => (
+        <span
+          key={d}
+          className="border border-line-soft bg-input px-1.5 py-[1px] font-mono text-[8.5px] uppercase tracking-[0.05em] text-cyan/85"
+        >
+          {d}
+        </span>
+      ))}
+      {attrs.energy != null && (
+        <span className="font-mono text-[9px] text-faint">
+          {t('energyAbbr')} {attrs.energy}
+        </span>
+      )}
+      {attrs.might != null && (
+        <span className="font-mono text-[9px] text-faint">
+          {t('mightAbbr')} {attrs.might}
+        </span>
+      )}
+    </div>
+  )
+}
+
+/** Etiqueta "Solo foil" cuando la impresión no ofrece nonfoil (regla del server). */
+function FoilOnlyTag() {
+  const t = useTranslations('panel')
+  return (
+    <span className="border border-cyan/45 bg-[#060911]/70 px-1.5 py-[1px] font-mono text-[8.5px] font-semibold uppercase tracking-[0.08em] text-cyan/85">
+      {t('foilOnlyTag')}
+    </span>
+  )
+}
 
 /** Flujo de alta: buscar impresión → definir oferta → publicada. */
 export function AddCardFlow() {
@@ -91,7 +162,7 @@ export function AddCardFlow() {
   function selectPrinting(card: CardSnapshot) {
     setSel(card)
     setCond('NM')
-    setFinish(card.finishes.includes('nonfoil') || card.finishes.length === 0 ? 'nonfoil' : 'foil')
+    setFinish(finishAvailable(card.finishes, 'nonfoil') ? 'nonfoil' : 'foil')
     setLang('es')
     setPriceInput('')
     setQty(1)
@@ -102,6 +173,10 @@ export function AddCardFlow() {
   const pricePesos = Number.parseInt(priceInput, 10) || 0
   const canPublish = pricePesos > 0 && !publishing
   const netCents = Math.round(pricePesos * 100 * (1 - me.feeBps / 10000))
+  // Acabados que el catálogo reporta para la impresión elegida — ver
+  // `finishAvailable` para la regla completa (vacío = ambos aceptados).
+  const nonfoilAvailable = finishAvailable(sel?.finishes ?? [], 'nonfoil')
+  const foilAvailable = finishAvailable(sel?.finishes ?? [], 'foil')
 
   async function publish() {
     if (!sel || !canPublish) return
@@ -185,8 +260,11 @@ export function AddCardFlow() {
             <div className="mb-2 font-mono text-[9px] uppercase tracking-[0.2em] text-cyan">
               {t('catalogLabel', { game: TCG_META[game].name })}
             </div>
-            <div className="flex items-center gap-2 border border-line bg-input px-3.5 py-3">
-              <span className="h-3.5 w-3.5 shrink-0 rounded-full border-[1.5px] border-faint-2" />
+            <div className="flex items-center gap-2 border border-line bg-input px-3.5 py-3 transition-colors duration-base ease-standard focus-within:border-primary">
+              <span
+                aria-hidden="true"
+                className="h-3.5 w-3.5 shrink-0 rounded-full border-[1.5px] border-faint-2"
+              />
               <input
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
@@ -195,7 +273,12 @@ export function AddCardFlow() {
                 className="min-w-0 flex-1 bg-transparent text-[14px] text-ink outline-none"
               />
             </div>
-            <div className="mt-2 font-mono text-[10px] tracking-[0.04em] text-faint">
+            {/* aria-live: el conteo de resultados cambia solo (debounce), sin que el
+                seller haga nada más que seguir escribiendo — debe anunciarse. */}
+            <div
+              aria-live="polite"
+              className="mt-2 font-mono text-[10px] tracking-[0.04em] text-faint"
+            >
               {searching
                 ? t('printingsSearching')
                 : query.trim().length >= 3
@@ -211,29 +294,42 @@ export function AddCardFlow() {
           )}
 
           <div className="grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(160px,1fr))]">
-            {results.map((card) => (
-              <button
-                key={card.catalogId}
-                type="button"
-                onClick={() => selectPrinting(card)}
-                className="clip-card group flex flex-col border border-line bg-panel text-left transition hover:-translate-y-0.5 hover:border-primary"
-              >
-                <CardArt
-                  name={card.name}
-                  tint={artTintForId(card.catalogId)}
-                  imageUrl={card.imageUrl}
-                />
-                <div className="flex flex-col gap-1 px-3 pb-3 pt-2">
-                  <span className="truncate font-display text-[13.5px] font-semibold text-ink">
-                    {card.name}
-                  </span>
-                  <span className="truncate text-[11px] text-muted-2">{card.setName}</span>
-                  <span className="font-mono text-[9.5px] tracking-[0.05em] text-faint">
-                    {card.setCode.toUpperCase()} · #{card.collectorNumber} · {card.rarity}
-                  </span>
-                </div>
-              </button>
-            ))}
+            {results.map((card) => {
+              const foilOnly = !finishAvailable(card.finishes, 'nonfoil')
+              return (
+                <button
+                  key={card.catalogId}
+                  type="button"
+                  onClick={() => selectPrinting(card)}
+                  className={`tpm-grid-item clip-card group flex flex-col border border-line bg-panel text-left transition duration-base ease-standard hover:-translate-y-0.5 hover:border-primary ${focusRing}`}
+                >
+                  <div className="relative">
+                    <CardArt
+                      name={card.name}
+                      tint={artTintForId(card.catalogId)}
+                      imageUrl={card.imageUrl}
+                    />
+                    {foilOnly && (
+                      <span className="absolute right-2 top-2">
+                        <FoilOnlyTag />
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex flex-col gap-1 px-3 pb-3 pt-2">
+                    <span className="truncate font-display text-[13.5px] font-semibold text-ink">
+                      {card.name}
+                    </span>
+                    <span className="truncate text-[11px] text-muted-2">{card.setName}</span>
+                    <span className="font-mono text-[9.5px] tracking-[0.05em] text-faint">
+                      {card.setCode.toUpperCase()} · #{card.collectorNumber} · {card.rarity}
+                    </span>
+                    {/* Atributos propios de Riftbound: desambigua impresiones que
+                        comparten nombre entre sets/variantes (TASK-043). */}
+                    {card.gameAttributes && <RiftboundMeta attrs={card.gameAttributes} />}
+                  </div>
+                </button>
+              )
+            })}
           </div>
         </div>
       )}
@@ -258,6 +354,11 @@ export function AddCardFlow() {
                 <div className="mt-1 font-mono text-[10.5px] tracking-[0.04em] text-faint">
                   {sel.setName} · {sel.setCode.toUpperCase()} #{sel.collectorNumber} · {sel.rarity}
                 </div>
+                {sel.gameAttributes && (
+                  <div className="mt-1.5">
+                    <RiftboundMeta attrs={sel.gameAttributes} />
+                  </div>
+                )}
               </div>
 
               {/* Condición */}
@@ -274,7 +375,7 @@ export function AddCardFlow() {
                         key={code}
                         type="button"
                         onClick={() => setCond(code)}
-                        className="flex min-w-[62px] flex-col items-center border px-2.5 py-2 transition"
+                        className={`flex min-w-[62px] flex-col items-center border px-2.5 py-2 transition-colors duration-base ease-standard ${focusRing}`}
                         style={{
                           borderColor: active ? color : '#1e2a44',
                           background: active ? 'rgba(59,123,255,.06)' : '#0a1120',
@@ -293,27 +394,41 @@ export function AddCardFlow() {
               </div>
 
               <div className="flex flex-wrap gap-6">
-                {/* Acabado */}
+                {/* Acabado — solo se ofrecen los acabados que el catálogo reporta
+                    para esta impresión (regla espejo de `finish_not_available`
+                    en el server, TASK-043). Un foil-only nunca deja elegir
+                    "Normal": evita un publish que la API rechazaría. */}
                 <div>
                   <div className="mb-2 font-mono text-[9px] uppercase tracking-[0.16em] text-faint">
                     {t('offerFinish')}
                   </div>
                   <div className="flex gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setFinish('nonfoil')}
-                      className={segCls(finish === 'nonfoil')}
-                    >
-                      {t('finishNormal')}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setFinish('foil')}
-                      className={segCls(finish === 'foil')}
-                    >
-                      {t('finishFoil')}
-                    </button>
+                    {nonfoilAvailable && (
+                      <button
+                        type="button"
+                        onClick={() => setFinish('nonfoil')}
+                        className={segCls(finish === 'nonfoil')}
+                      >
+                        {t('finishNormal')}
+                      </button>
+                    )}
+                    {foilAvailable && (
+                      <button
+                        type="button"
+                        onClick={() => setFinish('foil')}
+                        className={segCls(finish === 'foil')}
+                      >
+                        {t('finishFoil')}
+                      </button>
+                    )}
                   </div>
+                  {(!nonfoilAvailable || !foilAvailable) && (
+                    <p className="mt-1.5 max-w-[220px] text-[10.5px] leading-snug text-muted-2">
+                      {t('offerFinishOnlyHint', {
+                        finish: nonfoilAvailable ? t('finishNormal') : t('finishFoil'),
+                      })}
+                    </p>
+                  )}
                 </div>
                 {/* Idioma */}
                 <div>
@@ -341,8 +456,10 @@ export function AddCardFlow() {
                   <div className="mb-2 font-mono text-[9px] uppercase tracking-[0.16em] text-faint">
                     {t('offerPrice')}
                   </div>
-                  <div className="flex items-center gap-2 border border-line bg-input px-3 py-2.5">
-                    <span className="font-mono text-[14px] text-faint">$</span>
+                  <div className="flex items-center gap-2 border border-line bg-input px-3 py-2.5 transition-colors duration-base ease-standard focus-within:border-primary">
+                    <span aria-hidden="true" className="font-mono text-[14px] text-faint">
+                      $
+                    </span>
                     <input
                       value={priceInput}
                       inputMode="numeric"
@@ -351,7 +468,9 @@ export function AddCardFlow() {
                       aria-label={t('offerPrice')}
                       className="w-28 bg-transparent font-mono text-[18px] font-semibold text-white outline-none"
                     />
-                    <span className="font-mono text-[10px] text-faint">MXN</span>
+                    <span aria-hidden="true" className="font-mono text-[10px] text-faint">
+                      MXN
+                    </span>
                   </div>
                   {pricePesos > 0 && (
                     <div className="mt-1.5 text-[11px] text-muted-2">
