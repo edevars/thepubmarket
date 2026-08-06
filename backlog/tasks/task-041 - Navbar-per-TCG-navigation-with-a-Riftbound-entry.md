@@ -1,10 +1,11 @@
 ---
 id: TASK-041
 title: 'Navbar: per-TCG navigation with a Riftbound entry'
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - '@claude'
 created_date: '2026-08-06 05:44'
-updated_date: '2026-08-06 05:49'
+updated_date: '2026-08-06 08:25'
 labels:
   - 'epic:riftbound-ux'
   - web
