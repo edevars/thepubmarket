@@ -3,7 +3,7 @@ id: TASK-042
 title: >-
   Card detail: render full Riftbound metadata (rules text, flavor text, rarity,
   set)
-status: In Progress
+status: Done
 assignee:
   - claude
 created_date: '2026-08-06 05:44'
