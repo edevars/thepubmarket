@@ -1,11 +1,11 @@
 ---
 id: TASK-034
 title: Display Riftbound-specific attributes on listing detail
-status: In Progress
+status: Done
 assignee:
   - Claude
 created_date: '2026-08-06 02:20'
-updated_date: '2026-08-06 03:22'
+updated_date: '2026-08-06 03:28'
 labels:
   - 'epic:riftbound'
   - web
@@ -33,10 +33,10 @@ The listing detail view (apps/web/src/components/detail/CardDetailView.tsx, attr
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Riftbound listing detail shows domain(s), card type, and energy/might/power when present on the card
-- [ ] #2 Detail views for MTG and other games are unaffected
-- [ ] #3 The chosen storage approach is documented and additive (no D1 table rebuild)
-- [ ] #4 Tests cover rendering with and without game-specific attributes
+- [x] #1 Riftbound listing detail shows domain(s), card type, and energy/might/power when present on the card
+- [x] #2 Detail views for MTG and other games are unaffected
+- [x] #3 The chosen storage approach is documented and additive (no D1 table rebuild)
+- [x] #4 Tests cover rendering with and without game-specific attributes
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -68,3 +68,39 @@ Nothing filters or sorts on these fields; if that ever changes, promote the spec
 ## Note
 Existing Riftbound rows (none in production yet) keep `card_attributes` NULL and simply render without the extra rows — no backfill needed.
 <!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Storage decision (AC #3): one additive nullable TEXT column `inventory.card_attributes` holding a small per-game JSON blob, migration 0012_perfect_gamma_corps.sql — a pure ALTER TABLE ADD COLUMN, no index, no D1 rebuild, and no backfill (rows without it simply render the old table). Rejected: a column per game attribute, which is exactly the sprawling nullable mega-table .claude/agents/d1-schema-guardian.md:85-89 warns against and would widen further with every TCG; and a 1:1 child table, which would add a join to every render for data that is written once and never queried. The blob fits the schema's existing rule that JSON is for small config blobs, not lists of entities (sellers.favorite_games is the precedent). If a field ever needs filtering or sorting, promote that one field to a real column then.
+
+Contract shape: `CardGameAttributes` is a union discriminated by `tcg` with one variant today (`RiftboundAttributes`), so the next game adds a variant instead of widening CardSnapshot with every game's nullable fields. Scryfall returns null (MTG mana/colors are not displayed today and are not stored). `rowToInventoryItem` parses the blob defensively — malformed JSON, `null`, a bare string, or an object missing the `tcg` discriminant all degrade to null rather than throwing, so a corrupt blob can never take down the render of an otherwise valid listing.
+
+The row-building logic lives in a pure helper (`apps/web/src/components/detail/game-attributes.ts`) rather than inline in the component, because apps/web has no React component test harness — only pure modules under src/**/*.test.ts. That keeps the interesting rule testable: WHICH rows appear. Absent attributes are omitted entirely rather than rendered as empty rows or dashes, and a zero cost is kept because 0 is a real value, not 'missing'. Supertype and type render as one row ('Champion · Unit').
+
+Verification: 115 API tests + 28 web tests (5 new for gameAttributeRows), typecheck + biome clean, migration applied locally. Live end-to-end smoke: published a Riftbound Unit, confirmed the JSON blob in the D1 column and in GET /catalog/:id, then rendered both detail pages through the actual Next.js SSR and parsed the attribute-table markup — Riftbound showed 11 rows (Tipo Unit, Dominios Chaos, Energía 3, Poderío 2; Poder correctly absent since it is null on that card) and MTG showed exactly its original 7. Worth noting for future checks: a plain grep for the label strings in the HTML gives a FALSE POSITIVE on the MTG page, because next-intl inlines the whole message namespace into the flight data — the labels must be matched against the rendered row markup, not the raw document. Test row deleted by exact id; local D1 verified back at 20 rows, zero non-MTG, zero rows with attributes.
+<!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+## What changed
+
+Riftbound listings now show the game data buyers actually use to recognise a card, without turning the inventory table into a per-game field dump.
+
+- **packages/db/src/schema.ts** + **migration 0012** — nullable `inventory.card_attributes` TEXT holding a small per-game JSON blob. Additive, no index, no rebuild, no backfill.
+- **packages/shared/src/index.ts** — `RiftboundAttributes` (type, supertype, domains, energy, might, power) and `CardGameAttributes`, a union discriminated by `tcg`; `CardSnapshot.gameAttributes` carries it.
+- **apps/api/src/lib/riftcodex.ts** — fills the attributes from RiftCodex `classification` + `attributes`; **scryfall.ts** returns null.
+- **apps/api/src/lib/inventory.ts** — serialises on insert and parses defensively on read: a corrupt or unknown-shape blob degrades to no attributes instead of breaking the listing.
+- **apps/web/src/components/detail/game-attributes.ts** (new) + **CardDetailView.tsx** — a pure, testable helper builds the extra rows, appended to the existing attribute table. Absent attributes produce no row; a zero cost is kept.
+- **apps/web/messages/{es,en}.json** — labels for type, domains, energy, might, power.
+
+## Tests / verification
+
+5 new web tests for `gameAttributeRows` (full attributes, none at all, sparse, zero costs, untyped) plus API coverage for normalization and the persist→parse round-trip including corrupt blobs; 115 API + 28 web tests green, typecheck + biome clean. End-to-end smoke rendered both detail pages through real SSR and parsed the attribute-table markup: Riftbound showed 11 rows with the four applicable game attributes, MTG showed exactly its original 7.
+
+## Risks / follow-ups
+
+- These fields are display-only; nothing filters or sorts on them. Promoting one to a real column is the migration path if that changes.
+- Only the seed script remains (TASK-035): still MTG-only and still posting the legacy `scryfallId`.
+<!-- SECTION:FINAL_SUMMARY:END -->
