@@ -5,7 +5,7 @@ status: In Progress
 assignee:
   - claude
 created_date: '2026-08-03 01:12'
-updated_date: '2026-08-03 01:27'
+updated_date: '2026-08-06 00:22'
 labels:
   - api
   - stripe
@@ -48,12 +48,12 @@ Code, comments and docs in English.
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 A newly paid order has its PaymentIntent id persisted on the order row by the time the post-payment flow finishes
-- [ ] #2 The dead read of session.payment_intent at Checkout Session creation is removed or documented as always-null, so nobody reintroduces it
-- [ ] #3 Persisting the id is idempotent: a redelivered or duplicate webhook does not fail the request or overwrite the row with a different value
-- [ ] #4 An order that is never paid keeps a NULL PaymentIntent id rather than a placeholder
-- [ ] #5 The five existing production orders with NULL ids are either backfilled from their stored checkout sessions or explicitly left alone with the reason recorded
-- [ ] #6 docs/ingenieria/ states where the id comes from and why it cannot be read at session-creation time
+- [x] #1 A newly paid order has its PaymentIntent id persisted on the order row by the time the post-payment flow finishes
+- [x] #2 The dead read of session.payment_intent at Checkout Session creation is removed or documented as always-null, so nobody reintroduces it
+- [x] #3 Persisting the id is idempotent: a redelivered or duplicate webhook does not fail the request or overwrite the row with a different value
+- [x] #4 An order that is never paid keeps a NULL PaymentIntent id rather than a placeholder
+- [x] #5 The five existing production orders with NULL ids are either backfilled from their stored checkout sessions or explicitly left alone with the reason recorded
+- [x] #6 docs/ingenieria/ states where the id comes from and why it cannot be read at session-creation time
 - [ ] #7 Verified against the deployed API in Stripe test mode with one real payment: the order row carries the same PaymentIntent id Stripe reports
 <!-- AC:END -->
 
@@ -122,4 +122,6 @@ application fee is computed. The platform still never touches the funds.
 Applied to `--remote` with four `UPDATE ... WHERE id = ? AND stripe_payment_intent_id IS NULL`, one row changed each. Re-read confirms the four paid orders carry their id and the three cancelled ones stay NULL.
 
 **Docs (AC#6) — done.** New `docs/ingenieria/pagos.md`: the three Stripe objects and when each exists, why `payment_intent` is always null at session creation, why the write lives in the Workflow rather than the webhook handler, order↔payment lookups (both directions, for disputes), why the unique index was inert and is not anymore, the backfill record, and a diagnosis table. Indexed in `docs/ingenieria/README.md` (added the missing `entrega.md` row while there).
+
+**Committed** on branch `fix/task-021-022-payments-reliability` as `c73e599` (TASK-021 only; TASK-022 is a separate commit on the same branch). The commit carries the pre-TASK-022 shape of `webhooks.ts` — the PaymentIntent extraction on top of the old dedupe handler — so each commit stands on its own: typecheck, biome and the 71 tests pass at `c73e599`. AC#1–#6 checked; AC#7 still needs the prod deploy plus one test payment.
 <!-- SECTION:NOTES:END -->
