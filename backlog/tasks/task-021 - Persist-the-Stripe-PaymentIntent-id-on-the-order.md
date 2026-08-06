@@ -5,13 +5,14 @@ status: In Progress
 assignee:
   - claude
 created_date: '2026-08-03 01:12'
-updated_date: '2026-08-06 00:32'
+updated_date: '2026-08-06 06:45'
 labels:
   - api
   - stripe
   - orders
   - payments
   - needs-verification
+  - blocked
 milestone: m-2
 dependencies: []
 references:
@@ -131,4 +132,6 @@ Applied to `--remote` with four `UPDATE ... WHERE id = ? AND stripe_payment_inte
 **Downgraded to Low + `needs-verification` (2026-08-05).** The code is merged to `main` and deployed; nothing is left to build. The only open item is AC#7, a verification that happens on its own the next time anyone pays a test order — no separate work needed, just someone to check the row afterwards.
 
 To close it: after any test-mode payment, `SELECT id, status, stripe_payment_intent_id FROM orders WHERE id='<orderId>'` against `--remote` must return the same `pi_…` Stripe reports for that session (retrieve it with `--stripe-account`, the charge lives in the seller's account).
+
+**Labeled `blocked` by dispatch-loop (2026-08-06).** Only AC#7 remains and it needs a human test-mode payment through the hosted Checkout page (cannot be driven headless). Code is merged and deployed. After any test payment, compare orders.stripe_payment_intent_id against Stripe's pi_… for that session and mark Done.
 <!-- SECTION:NOTES:END -->
