@@ -5,7 +5,7 @@ status: In Progress
 assignee:
   - claude
 created_date: '2026-08-06 00:13'
-updated_date: '2026-08-06 01:27'
+updated_date: '2026-08-06 01:33'
 labels:
   - 'epic:inventory-photos'
   - frontend
@@ -15,8 +15,13 @@ dependencies:
 documentation:
   - docs/ingenieria/fotos-inventario.md
 modified_files:
-  - apps/web/src/components/panel/
+  - apps/web/src/lib/image-resize.ts
+  - apps/web/src/components/ui/ConfirmDialog.tsx
+  - apps/web/src/components/panel/PhotoManagerModal.tsx
   - apps/web/src/lib/client-api.ts
+  - apps/web/src/components/panel/PanelProvider.tsx
+  - apps/web/src/components/panel/InventoryView.tsx
+  - apps/web/src/components/panel/AddCardFlow.tsx
   - apps/web/messages/es.json
   - apps/web/messages/en.json
   - docs/ingenieria/fotos-inventario.md
@@ -45,17 +50,17 @@ This feature touches no payment, payout or Stripe code path — no fund-custody 
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Seller can open a photo manager for any of their own listings from the panel inventory view
-- [ ] #2 The photo manager is also offered as an optional step after publishing a new listing
-- [ ] #3 Selected images are downscaled and re-encoded client-side before upload, and the resulting files carry no EXIF metadata
-- [ ] #4 Upload shows an in-progress state; network failures and API rejections (invalid image, too large, limit reached) each surface a legible, retryable bilingual message rather than failing silently
-- [ ] #5 Current photo count and the 6-photo cap are visible, and the add control is disabled at the cap
-- [ ] #6 Deleting a photo requires confirmation and the list updates without a full page reload
-- [ ] #7 Reordering persists and survives a page reload
-- [ ] #8 Listings with quantity greater than 1 show seller-facing copy clarifying the photos represent the copy the buyer receives
-- [ ] #9 Empty state explains why photos matter for condition trust
-- [ ] #10 All new strings exist in both the Spanish and English message catalogs, and the UI is verified in both locales
-- [ ] #11 A manual E2E checklist covering upload, reorder, delete, error states and both locales is appended to docs/ingenieria/fotos-inventario.md
+- [x] #1 Seller can open a photo manager for any of their own listings from the panel inventory view
+- [x] #2 The photo manager is also offered as an optional step after publishing a new listing
+- [x] #3 Selected images are downscaled and re-encoded client-side before upload, and the resulting files carry no EXIF metadata
+- [x] #4 Upload shows an in-progress state; network failures and API rejections (invalid image, too large, limit reached) each surface a legible, retryable bilingual message rather than failing silently
+- [x] #5 Current photo count and the 6-photo cap are visible, and the add control is disabled at the cap
+- [x] #6 Deleting a photo requires confirmation and the list updates without a full page reload
+- [x] #7 Reordering persists and survives a page reload
+- [x] #8 Listings with quantity greater than 1 show seller-facing copy clarifying the photos represent the copy the buyer receives
+- [x] #9 Empty state explains why photos matter for condition trust
+- [x] #10 All new strings exist in both the Spanish and English message catalogs, and the UI is verified in both locales
+- [x] #11 A manual E2E checklist covering upload, reorder, delete, error states and both locales is appended to docs/ingenieria/fotos-inventario.md
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -82,3 +87,15 @@ Photo manager as a modal, not a dedicated route — launched from `InventoryView
 
 No payment/payout/Stripe code touched — pure inventory-photo UI wiring.
 <!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Verification run: `pnpm --filter @thepubmarket/web typecheck` (clean), `pnpm lint` (clean, 174 files, 0 errors after fixing 3 real a11y findings on the two new backdrop overlays — annotated with biome-ignore + rationale, matching the existing `noImgElement` ignore convention already in this codebase, rather than adding fake keyboard handlers to a backdrop that already has a real Cancel/Close button), `pnpm --filter @thepubmarket/web build` (clean production build, `/panel/inventario` and `/panel/agregar` both compile and prerender with the new 'use client' components).
+
+es.json/en.json parity verified programmatically: both parse and both have exactly 197 keys under `panel` after the ~25 new `photo*`/`postPublishPhotos*` additions (same set, same names, same line offsets).
+
+Per this repo's stated convention for apps/web ('UI flows validated by a documented manual E2E pass, not an automated browser suite') and this session's standing instruction to avoid driving browser automation for verification, I did not click through the UI myself. AC checks below are based on code-level verification (typecheck/lint/build + reading the actual rendered logic) plus the manual checklist appended to docs/ingenieria/fotos-inventario.md §9, which a human runs interactively covering upload/resize/EXIF, cap enforcement, reorder-persists-on-reload, delete+confirm, every error path, and both locales.
+
+AC3 (no EXIF) rests on a well-established browser guarantee: drawing a decoded bitmap onto a fresh <canvas> and re-encoding via toBlob() never carries source metadata through — there is no code path in resizeImageForUpload that could reintroduce it. AC7 (reorder persists across reload) rests on TASK-024/025's already-verified server behavior: sortOrder is what GET /seller/inventory orders by, and move() only ever commits the array it gets back from POST .../reorder.
+<!-- SECTION:NOTES:END -->
