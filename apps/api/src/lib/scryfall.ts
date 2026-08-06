@@ -65,8 +65,9 @@ export function normalizeCard(raw: ScryfallCard): CardSnapshot {
   const imageUrl = raw.image_uris?.normal ?? raw.card_faces?.[0]?.image_uris?.normal ?? null
 
   return {
-    scryfallId: raw.id,
-    oracleId: raw.oracle_id ?? '',
+    tcg: 'mtg',
+    catalogId: raw.id,
+    oracleId: raw.oracle_id ?? null,
     name: raw.name,
     setCode: raw.set,
     setName: raw.set_name,

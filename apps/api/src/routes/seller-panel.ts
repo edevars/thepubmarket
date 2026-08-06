@@ -13,7 +13,14 @@
  */
 import type { Db, SellerRow } from '@thepubmarket/db'
 import { inventory, inventoryPhotos, orderItems, orders, sellers, users } from '@thepubmarket/db'
-import { CONDITIONS, FINISHES, MAX_PHOTOS_PER_ITEM, type SellerPanelMe } from '@thepubmarket/shared'
+import {
+  CONDITIONS,
+  FINISHES,
+  MAX_PHOTOS_PER_ITEM,
+  type SellerPanelMe,
+  TCGS,
+  type Tcg,
+} from '@thepubmarket/shared'
 import { and, count, desc, eq, gt, inArray, isNull, or, sql } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { z } from 'zod'
@@ -31,14 +38,23 @@ import { ScryfallError, searchCards } from '../lib/scryfall'
 import { rowToSeller } from '../lib/sellers'
 import type { AppEnv } from '../types'
 
-const createSchema = z.object({
-  scryfallId: z.string().uuid(),
-  condition: z.enum(CONDITIONS as [string, ...string[]]),
-  finish: z.enum(FINISHES as [string, ...string[]]),
-  language: z.string().min(2).max(8).default('es'),
-  priceCents: z.number().int().min(1),
-  quantity: z.number().int().min(1),
-})
+const createSchema = z
+  .object({
+    // Un tcg fuera de la lista soportada se rechaza aquí; un tcg válido pero
+    // sin catálogo integrado lo rechaza createListing con `tcg_not_supported`.
+    tcg: z.enum(TCGS as [Tcg, ...Tcg[]]).default('mtg'),
+    /** Id de la impresión en el catálogo de su juego (UUID de Scryfall en MTG). */
+    catalogId: z.string().min(1).max(64).optional(),
+    // Alias legacy: clientes previos al multi-juego mandan scryfallId (MTG).
+    // Se retira cuando el panel migre al contrato nuevo (TASK-031/032).
+    scryfallId: z.string().uuid().optional(),
+    condition: z.enum(CONDITIONS as [string, ...string[]]),
+    finish: z.enum(FINISHES as [string, ...string[]]),
+    language: z.string().min(2).max(8).default('es'),
+    priceCents: z.number().int().min(1),
+    quantity: z.number().int().min(1),
+  })
+  .refine((v) => Boolean(v.catalogId ?? v.scryfallId), { message: 'catalog_id_required' })
 
 const updateSchema = z
   .object({
@@ -153,10 +169,11 @@ sellerPanel.post('/inventory', async (c) => {
     return c.json({ error: 'invalid_body', issues: parsed.error.issues }, 400)
   }
 
+  const { scryfallId, ...offer } = parsed.data
   const result = await createListing(
     c.get('db'),
     c.env.SESSIONS,
-    parsed.data as ListingInput,
+    { ...offer, catalogId: offer.catalogId ?? scryfallId } as ListingInput,
     seller.id,
   )
   if (!result.ok) {

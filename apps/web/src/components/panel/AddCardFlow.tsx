@@ -89,7 +89,9 @@ export function AddCardFlow() {
     setPublishing(true)
     setPublishErr(false)
     const result = await createListing(token, {
-      scryfallId: sel.scryfallId,
+      // Solo MTG hasta que el selector de juego llegue (TASK-032).
+      tcg: 'mtg',
+      catalogId: sel.catalogId,
       condition: cond,
       finish,
       language: lang,
@@ -174,14 +176,14 @@ export function AddCardFlow() {
           <div className="grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(160px,1fr))]">
             {results.map((card) => (
               <button
-                key={card.scryfallId}
+                key={card.catalogId}
                 type="button"
                 onClick={() => selectPrinting(card)}
                 className="clip-card group flex flex-col border border-line bg-panel text-left transition hover:-translate-y-0.5 hover:border-primary"
               >
                 <CardArt
                   name={card.name}
-                  tint={artTintForId(card.scryfallId)}
+                  tint={artTintForId(card.catalogId)}
                   imageUrl={card.imageUrl}
                 />
                 <div className="flex flex-col gap-1 px-3 pb-3 pt-2">
@@ -384,7 +386,7 @@ export function AddCardFlow() {
                 <div className="relative">
                   <CardArt
                     name={sel.name}
-                    tint={artTintForId(sel.scryfallId)}
+                    tint={artTintForId(sel.catalogId)}
                     imageUrl={sel.imageUrl}
                   />
                   <ConditionBadge

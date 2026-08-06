@@ -43,15 +43,24 @@ export const CONDITIONS: readonly Condition[] = ['NM', 'LP', 'MP', 'HP', 'DMG']
 export const FINISHES: readonly Finish[] = ['nonfoil', 'foil']
 
 /**
- * Snapshot de los datos canónicos de una carta tomados de Scryfall (fuente de
- * verdad). Se guardan en la fila de inventory para renderizar sin volver a
- * llamar a Scryfall. Las cartas son inmutables, por eso el snapshot es seguro.
+ * Snapshot de los datos canónicos de una carta tomados de su catálogo de origen
+ * (Scryfall para MTG, RiftCodex para Riftbound, …). Se guardan en la fila de
+ * inventory para renderizar sin volver a llamar al proveedor. Las impresiones
+ * son inmutables, por eso el snapshot es seguro.
  */
 export interface CardSnapshot {
-  /** Identificador único de la impresión en Scryfall. */
-  scryfallId: string
-  /** Identificador del oracle (la carta lógica, compartido entre impresiones). */
-  oracleId: string
+  /** Juego al que pertenece la impresión. */
+  tcg: Tcg
+  /**
+   * Identificador único de la impresión en el catálogo de su juego
+   * (para MTG es el UUID de Scryfall).
+   */
+  catalogId: string
+  /**
+   * Identificador del oracle de Scryfall (la carta lógica, compartido entre
+   * impresiones). Concepto exclusivo de MTG: null en los demás juegos.
+   */
+  oracleId: string | null
   /** Nombre de la carta. */
   name: string
   /** Código del set (p.ej. 'mh3'). */
@@ -64,12 +73,15 @@ export interface CardSnapshot {
   lang: string
   /** Rareza (p.ej. 'common', 'rare', 'mythic'). */
   rarity: string
-  /** Artista de la ilustración según Scryfall. Null si no se conoce. */
+  /** Artista de la ilustración según el catálogo. Null si no se conoce. */
   artist: string | null
-  /** Acabados disponibles para esta impresión según Scryfall. */
+  /**
+   * Acabados disponibles para esta impresión según el catálogo. Vacío cuando el
+   * proveedor no informa acabados (se aceptan todos los de `FINISHES`).
+   */
   finishes: string[]
   /**
-   * URL de imagen de la carta servida por Scryfall.
+   * URL de imagen de la carta servida por el catálogo de origen.
    * TODO: migrar a R2 en fase posterior; por ahora se referencia directo.
    */
   imageUrl: string | null
@@ -95,8 +107,8 @@ export interface InventoryPhoto {
 export const MAX_PHOTOS_PER_ITEM = 6
 
 /**
- * Un item de inventario: un single físico a la venta, ligado a una impresión de
- * Scryfall. Combina el snapshot de la carta con los datos de la oferta.
+ * Un item de inventario: un single físico a la venta, ligado a una impresión
+ * del catálogo de su juego. Combina el snapshot de la carta con la oferta.
  */
 export interface InventoryItem {
   /** UUID del item de inventario. */
@@ -109,7 +121,7 @@ export interface InventoryItem {
   sellerVerified: boolean
   /** Juego al que pertenece la carta. */
   tcg: Tcg
-  /** Carta (snapshot de Scryfall). */
+  /** Carta (snapshot del catálogo de origen). */
   card: CardSnapshot
   /**
    * Fotos reales del ejemplar, ordenadas por `sortOrder`. Arreglo vacío cuando
@@ -435,7 +447,10 @@ export interface SellerPanelMe {
 
 /** Cuerpo de `POST /seller/inventory` (el sellerId lo fija la sesión). */
 export interface CreateListingRequest {
-  scryfallId: string
+  /** Juego de la carta. Omitido = 'mtg' (compat con clientes previos). */
+  tcg?: Tcg
+  /** Id de la impresión en el catálogo de su juego (UUID de Scryfall en MTG). */
+  catalogId: string
   condition: Condition
   finish: Finish
   language: string

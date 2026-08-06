@@ -91,7 +91,8 @@ function listing(s: Spec): InventoryItem {
     sellerVerified: true,
     tcg: s.tcg,
     card: {
-      scryfallId: `mock-${s.id}`,
+      tcg: s.tcg,
+      catalogId: `mock-${s.id}`,
       oracleId: `oracle-${s.id}`,
       name: s.name,
       setCode: s.setCode,

@@ -1,11 +1,22 @@
 /**
  * Inventario: mapeo fila↔DTO y lógica de alta compartida (admin y panel del
- * seller publican con el mismo flujo: snapshot canónico de Scryfall +
- * validación del acabado; solo cambia de dónde sale el sellerId).
+ * seller publican con el mismo flujo: snapshot canónico del catálogo del juego
+ * + validación del acabado; solo cambia de dónde sale el sellerId).
+ *
+ * El catálogo es por juego: cada `Tcg` con soporte de publicación tiene un
+ * proveedor en `CATALOG_PROVIDERS` que resuelve un id de impresión a su
+ * `CardSnapshot`. Un juego sin proveedor se rechaza con `tcg_not_supported`.
  */
 
 import { type Db, type InventoryRow, inventory } from '@thepubmarket/db'
-import type { Condition, Finish, InventoryItem, InventoryPhoto, Tcg } from '@thepubmarket/shared'
+import type {
+  CardSnapshot,
+  Condition,
+  Finish,
+  InventoryItem,
+  InventoryPhoto,
+  Tcg,
+} from '@thepubmarket/shared'
 import { getCardById, ScryfallError } from './scryfall'
 
 /**
@@ -26,8 +37,10 @@ export function rowToInventoryItem(
     sellerVerified: seller.verified,
     tcg: row.tcg as Tcg,
     card: {
-      scryfallId: row.scryfallId ?? '',
-      oracleId: row.oracleId ?? '',
+      tcg: row.tcg as Tcg,
+      // Filas previas a la columna catalog_id solo tienen scryfall_id (MTG).
+      catalogId: row.catalogId ?? row.scryfallId ?? '',
+      oracleId: row.oracleId,
       name: row.title,
       setCode: row.setCode ?? '',
       setName: row.setName ?? '',
@@ -50,7 +63,9 @@ export function rowToInventoryItem(
 
 /** Datos de la oferta para publicar un single (sin sellerId: lo pone el caller). */
 export interface ListingInput {
-  scryfallId: string
+  tcg: Tcg
+  /** Id de la impresión en el catálogo de su juego (UUID de Scryfall en MTG). */
+  catalogId: string
   condition: Condition
   finish: Finish
   language: string
@@ -64,8 +79,20 @@ export type CreateListingResult =
   | { ok: false; error: string; status: 400 | 404 | 500 | 502; extra?: Record<string, unknown> }
 
 /**
- * Publica un single: trae el snapshot canónico (cache KV → Scryfall), valida
- * que el acabado exista para esa impresión e inserta la fila con status activo.
+ * Resolución de impresión por juego. Un juego aparece aquí cuando su catálogo
+ * está integrado; mientras tanto publicar en él devuelve `tcg_not_supported`.
+ * Riftbound se suma cuando exista el cliente de RiftCodex (TASK-030/031).
+ */
+const CATALOG_PROVIDERS: Partial<
+  Record<Tcg, (catalogId: string, kv: KVNamespace) => Promise<CardSnapshot>>
+> = {
+  mtg: getCardById,
+}
+
+/**
+ * Publica un single: trae el snapshot canónico del catálogo del juego (cache
+ * KV → proveedor), valida que el acabado exista para esa impresión e inserta
+ * la fila con status activo.
  */
 export async function createListing(
   db: Db,
@@ -73,9 +100,19 @@ export async function createListing(
   input: ListingInput,
   sellerId: string,
 ): Promise<CreateListingResult> {
-  let card: Awaited<ReturnType<typeof getCardById>>
+  const lookup = CATALOG_PROVIDERS[input.tcg]
+  if (!lookup) {
+    return {
+      ok: false,
+      error: 'tcg_not_supported',
+      status: 400,
+      extra: { tcg: input.tcg, supported: Object.keys(CATALOG_PROVIDERS) },
+    }
+  }
+
+  let card: CardSnapshot
   try {
-    card = await getCardById(input.scryfallId, kv)
+    card = await lookup(input.catalogId, kv)
   } catch (err) {
     if (err instanceof ScryfallError) {
       return {
@@ -88,7 +125,7 @@ export async function createListing(
     throw err
   }
 
-  // El acabado pedido debe existir para esa impresión (cuando Scryfall lo informa).
+  // El acabado pedido debe existir para esa impresión (cuando el catálogo lo informa).
   if (card.finishes.length > 0 && !card.finishes.includes(input.finish)) {
     return {
       ok: false,
@@ -103,9 +140,11 @@ export async function createListing(
     .values({
       id: crypto.randomUUID(),
       sellerId,
-      tcg: 'mtg',
+      tcg: input.tcg,
       title: card.name,
-      scryfallId: card.scryfallId,
+      catalogId: card.catalogId,
+      // Columnas legacy MTG: se siguen escribiendo solo para ese juego.
+      scryfallId: card.tcg === 'mtg' ? card.catalogId : null,
       oracleId: card.oracleId,
       setCode: card.setCode,
       setName: card.setName,
@@ -118,7 +157,7 @@ export async function createListing(
       priceCents: input.priceCents,
       quantity: input.quantity,
       status: 'active',
-      // Snapshot de la URL de Scryfall. TODO: migrar imágenes a R2.
+      // Snapshot de la URL del catálogo. TODO: migrar imágenes a R2.
       imageUrl: card.imageUrl,
     })
     .returning()

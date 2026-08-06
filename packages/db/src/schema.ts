@@ -150,7 +150,11 @@ export const inventory = sqliteTable(
     status: text('status', { enum: ['active', 'inactive'] })
       .notNull()
       .default('active'),
-    // Snapshot de Scryfall.
+    // Snapshot del catálogo de origen. `catalog_id` es el id de la impresión
+    // en el catálogo de su juego (Scryfall para MTG, RiftCodex para Riftbound).
+    // `scryfall_id`/`oracle_id` son legacy MTG: se siguen escribiendo para MTG
+    // y las filas previas a catalog_id solo tienen scryfall_id.
+    catalogId: text('catalog_id'),
     scryfallId: text('scryfall_id'),
     oracleId: text('oracle_id'),
     setCode: text('set_code'),
@@ -168,6 +172,7 @@ export const inventory = sqliteTable(
   },
   (t) => [
     index('idx_inventory_seller_id').on(t.sellerId),
+    index('idx_inventory_catalog_id').on(t.catalogId),
     index('idx_inventory_scryfall_id').on(t.scryfallId),
     index('idx_inventory_status').on(t.status),
     index('idx_inventory_set_code').on(t.setCode),
