@@ -1,10 +1,11 @@
 ---
 id: TASK-030
 title: RiftCodex catalog client for Riftbound card data
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - Claude
 created_date: '2026-08-06 02:19'
-updated_date: '2026-08-06 02:20'
+updated_date: '2026-08-06 02:39'
 labels:
   - 'epic:riftbound'
   - api
