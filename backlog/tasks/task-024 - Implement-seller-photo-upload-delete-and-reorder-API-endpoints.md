@@ -1,9 +1,11 @@
 ---
 id: TASK-024
 title: 'Implement seller photo upload, delete, and reorder API endpoints'
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - '@claude'
 created_date: '2026-08-06 00:13'
+updated_date: '2026-08-06 00:49'
 labels:
   - 'epic:inventory-photos'
   - api
