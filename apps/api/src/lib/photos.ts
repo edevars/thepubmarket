@@ -16,6 +16,7 @@ import type { Db, InventoryPhotoRow } from '@thepubmarket/db'
 import { inventoryPhotos } from '@thepubmarket/db'
 import type { InventoryPhoto } from '@thepubmarket/shared'
 import { asc, inArray } from 'drizzle-orm'
+import { selectByIds } from './d1-batch'
 
 export type ImageKind = 'jpeg' | 'png' | 'webp'
 
@@ -97,10 +98,14 @@ export function rowToInventoryPhoto(row: InventoryPhotoRow, origin: string): Inv
 }
 
 /**
- * Loads every photo for the given inventory ids in ONE query, grouped by
- * listing and ordered by `sort_order`. Mirrors the batched-seller-lookup
- * pattern already used in catalog.ts / seller-panel.ts — no per-item query
- * for a page of results. Skips the query entirely for an empty input.
+ * Loads every photo for the given inventory ids, grouped by listing and
+ * ordered by `sort_order`. Mirrors the batched-seller-lookup pattern already
+ * used in catalog.ts / seller-panel.ts — no per-item query for a page of
+ * results. Skips the query entirely for an empty input.
+ *
+ * Batched through `selectByIds`: a page of listings binds one parameter per
+ * id and D1 caps a statement at 100, so a big page has to be split or the
+ * whole catalog request 500s (TASK-047). A normal page still costs one query.
  */
 export async function loadPhotosByInventoryId(
   db: Db,
@@ -108,14 +113,15 @@ export async function loadPhotosByInventoryId(
   origin: string,
 ): Promise<Map<string, InventoryPhoto[]>> {
   const byInventoryId = new Map<string, InventoryPhoto[]>()
-  if (inventoryIds.length === 0) return byInventoryId
 
-  const rows = await db
-    .select()
-    .from(inventoryPhotos)
-    .where(inArray(inventoryPhotos.inventoryId, inventoryIds))
-    .orderBy(asc(inventoryPhotos.sortOrder))
-    .all()
+  const rows = await selectByIds(inventoryIds, (chunk) =>
+    db
+      .select()
+      .from(inventoryPhotos)
+      .where(inArray(inventoryPhotos.inventoryId, chunk))
+      .orderBy(asc(inventoryPhotos.sortOrder))
+      .all(),
+  )
 
   for (const row of rows) {
     const list = byInventoryId.get(row.inventoryId) ?? []

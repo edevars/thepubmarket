@@ -26,6 +26,7 @@ import { Hono } from 'hono'
 import { z } from 'zod'
 import { CatalogError } from '../lib/catalog'
 import { catalogProviderFor, supportedTcgs } from '../lib/catalog-providers'
+import { selectByIds } from '../lib/d1-batch'
 import { createListing, type ListingInput, rowToInventoryItem } from '../lib/inventory'
 import { sendOrderReady, sendOrderShipped } from '../lib/order-emails'
 import { orderToSellerOrder } from '../lib/orders'
@@ -441,9 +442,14 @@ sellerPanel.get('/orders', async (c) => {
   const pickupIds = [
     ...new Set(orderRows.map((o) => o.pickupSellerId).filter((x): x is string => !!x)),
   ]
+  // orderIds y buyerIds crecen con el historial de la tienda (este listado no
+  // tiene LIMIT), así que van por tramos o la centésima orden tumba el panel
+  // con el tope de parámetros de D1 (TASK-047). pickupIds son tiendas: pocas.
   const [itemRows, buyerRows, pickupRows] = await Promise.all([
-    db.select().from(orderItems).where(inArray(orderItems.orderId, orderIds)).all(),
-    db.select().from(users).where(inArray(users.id, buyerIds)).all(),
+    selectByIds(orderIds, (chunk) =>
+      db.select().from(orderItems).where(inArray(orderItems.orderId, chunk)).all(),
+    ),
+    selectByIds(buyerIds, (chunk) => db.select().from(users).where(inArray(users.id, chunk)).all()),
     pickupIds.length > 0
       ? db.select().from(sellers).where(inArray(sellers.id, pickupIds)).all()
       : Promise.resolve([]),

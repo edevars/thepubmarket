@@ -1,12 +1,20 @@
 import type { InventoryPhotoRow } from '@thepubmarket/db'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
   buildPhotoKey,
   contentTypeFor,
   detectImageKind,
+  loadPhotosByInventoryId,
   MAX_PHOTO_BYTES,
   rowToInventoryPhoto,
 } from './photos'
+
+// `inArray` is stubbed so the fake db can read back exactly which ids each
+// statement bound — that count is the thing under test.
+vi.mock('drizzle-orm', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('drizzle-orm')>()),
+  inArray: (_column: unknown, ids: string[]) => ({ ids }),
+}))
 
 function bytes(...values: number[]): Uint8Array {
   return new Uint8Array(values)
@@ -110,5 +118,85 @@ describe('rowToInventoryPhoto', () => {
 describe('MAX_PHOTO_BYTES', () => {
   it('is 5 MiB', () => {
     expect(MAX_PHOTO_BYTES).toBe(5 * 1024 * 1024)
+  })
+})
+
+/**
+ * Fake query builder that records how many ids each statement binds. D1 caps a
+ * statement at 100 bound parameters, so the loader must never hand it a bigger
+ * `IN (...)` — a 101-item catalog page used to 500 on this (TASK-047).
+ */
+function fakeDb(rowsById: Record<string, InventoryPhotoRow[]>, boundCounts: number[]) {
+  return {
+    select: () => ({
+      from: () => ({
+        where: (condition: { ids: string[] }) => ({
+          orderBy: () => ({
+            all: async () => {
+              boundCounts.push(condition.ids.length)
+              return condition.ids.flatMap((id) => rowsById[id] ?? [])
+            },
+          }),
+        }),
+      }),
+    }),
+  }
+}
+
+describe('loadPhotosByInventoryId', () => {
+  const photo = (inventoryId: string, sortOrder: number): InventoryPhotoRow => ({
+    id: `photo-${inventoryId}-${sortOrder}`,
+    inventoryId,
+    sellerId: 'seller-1',
+    r2Key: `inventory-photos/seller-1/${inventoryId}/p${sortOrder}.jpg`,
+    contentType: 'image/jpeg',
+    sizeBytes: 1024,
+    sortOrder,
+    createdAt: 0,
+    updatedAt: 0,
+  })
+
+  it('skips the query entirely for an empty input', async () => {
+    const boundCounts: number[] = []
+    const result = await loadPhotosByInventoryId(
+      fakeDb({}, boundCounts) as never,
+      [],
+      'https://api.test',
+    )
+    expect(result.size).toBe(0)
+    expect(boundCounts).toEqual([])
+  })
+
+  it('splits ids so no statement exceeds D1 bound-parameter limit', async () => {
+    const ids = Array.from({ length: 250 }, (_, i) => `inv-${i}`)
+    const boundCounts: number[] = []
+    const rowsById = Object.fromEntries(ids.map((id) => [id, [photo(id, 0)]]))
+
+    const result = await loadPhotosByInventoryId(
+      fakeDb(rowsById, boundCounts) as never,
+      ids,
+      'https://api.test',
+    )
+
+    expect(Math.max(...boundCounts)).toBeLessThanOrEqual(100)
+    expect(boundCounts.reduce((a, b) => a + b, 0)).toBe(250)
+    // Every listing still comes back, chunk boundaries included.
+    expect(result.size).toBe(250)
+    expect(result.get('inv-0')).toHaveLength(1)
+    expect(result.get('inv-249')).toHaveLength(1)
+  })
+
+  it('groups multiple photos under their listing', async () => {
+    const boundCounts: number[] = []
+    const rowsById = { 'inv-1': [photo('inv-1', 0), photo('inv-1', 1)], 'inv-2': [] }
+
+    const result = await loadPhotosByInventoryId(
+      fakeDb(rowsById, boundCounts) as never,
+      ['inv-1', 'inv-2'],
+      'https://api.test',
+    )
+
+    expect(result.get('inv-1')?.map((p) => p.sortOrder)).toEqual([0, 1])
+    expect(result.get('inv-2')).toBeUndefined()
   })
 })
