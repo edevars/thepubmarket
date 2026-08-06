@@ -2,6 +2,7 @@ import type { Db, InventoryRow } from '@thepubmarket/db'
 import type { CardSnapshot } from '@thepubmarket/shared'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createListing, type ListingInput, rowToInventoryItem } from './inventory'
+import { getCardById as getRiftboundCard } from './riftcodex'
 import { getCardById, ScryfallError } from './scryfall'
 
 vi.mock('./scryfall', async (importOriginal) => ({
@@ -9,7 +10,13 @@ vi.mock('./scryfall', async (importOriginal) => ({
   getCardById: vi.fn(),
 }))
 
+vi.mock('./riftcodex', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('./riftcodex')>()),
+  getCardById: vi.fn(),
+}))
+
 const mockedGetCardById = vi.mocked(getCardById)
+const mockedGetRiftboundCard = vi.mocked(getRiftboundCard)
 
 const KV = {} as KVNamespace
 
@@ -48,8 +55,24 @@ function fakeDb(captured: Record<string, unknown>[]) {
   } as unknown as Db
 }
 
+const RIFTBOUND_SNAPSHOT: CardSnapshot = {
+  tcg: 'riftbound',
+  catalogId: '69c4407c9288b1e85d94de8a',
+  oracleId: null,
+  name: 'Jinx - Loose Cannon (Signature)',
+  setCode: 'OGN',
+  setName: 'Origins',
+  collectorNumber: '301',
+  lang: 'en',
+  rarity: 'showcase',
+  artist: 'Jonathan Santoro',
+  finishes: [],
+  imageUrl: 'https://cmsassets.rgpub.io/card.png',
+}
+
 beforeEach(() => {
   mockedGetCardById.mockReset()
+  mockedGetRiftboundCard.mockReset()
 })
 
 describe('createListing', () => {
@@ -89,6 +112,32 @@ describe('createListing', () => {
     })
   })
 
+  it('publishes a Riftbound single through its own catalog, without MTG columns', async () => {
+    mockedGetRiftboundCard.mockResolvedValue(RIFTBOUND_SNAPSHOT)
+    const captured: Record<string, unknown>[] = []
+
+    const result = await createListing(
+      fakeDb(captured),
+      KV,
+      { tcg: 'riftbound', catalogId: RIFTBOUND_SNAPSHOT.catalogId, ...OFFER, language: 'en' },
+      'seller-1',
+    )
+
+    expect(result.ok).toBe(true)
+    expect(mockedGetCardById).not.toHaveBeenCalled()
+    expect(captured[0]).toMatchObject({
+      tcg: 'riftbound',
+      title: 'Jinx - Loose Cannon (Signature)',
+      catalogId: RIFTBOUND_SNAPSHOT.catalogId,
+      // Las columnas legacy de MTG quedan vacías fuera de MTG.
+      scryfallId: null,
+      oracleId: null,
+      setCode: 'OGN',
+      collectorNumber: '301',
+      rarity: 'showcase',
+    })
+  })
+
   it('rejects a finish the printing does not offer, listing the available ones', async () => {
     mockedGetCardById.mockResolvedValue({ ...MTG_SNAPSHOT, finishes: ['nonfoil'] })
 
@@ -123,10 +172,11 @@ describe('createListing', () => {
   })
 
   it('rejects a game without an integrated catalog before touching any provider', async () => {
+    // Pokémon aún no tiene catálogo; MTG y Riftbound sí.
     const result = await createListing(
       fakeDb([]),
       KV,
-      { tcg: 'riftbound', catalogId: 'rift-001', ...OFFER },
+      { tcg: 'pokemon', catalogId: 'pkm-001', ...OFFER },
       'seller-1',
     )
 
@@ -134,7 +184,7 @@ describe('createListing', () => {
       ok: false,
       error: 'tcg_not_supported',
       status: 400,
-      extra: { tcg: 'riftbound' },
+      extra: { tcg: 'pokemon', supported: ['mtg', 'riftbound'] },
     })
     expect(mockedGetCardById).not.toHaveBeenCalled()
   })

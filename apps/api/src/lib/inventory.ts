@@ -17,7 +17,9 @@ import type {
   InventoryPhoto,
   Tcg,
 } from '@thepubmarket/shared'
-import { getCardById, ScryfallError } from './scryfall'
+import { CatalogError } from './catalog'
+import { getCardById as getRiftboundCard } from './riftcodex'
+import { getCardById as getMtgCard } from './scryfall'
 
 /**
  * Convierte una fila de Drizzle al contrato público `InventoryItem`.
@@ -81,12 +83,12 @@ export type CreateListingResult =
 /**
  * Resolución de impresión por juego. Un juego aparece aquí cuando su catálogo
  * está integrado; mientras tanto publicar en él devuelve `tcg_not_supported`.
- * Riftbound se suma cuando exista el cliente de RiftCodex (TASK-030/031).
  */
 const CATALOG_PROVIDERS: Partial<
   Record<Tcg, (catalogId: string, kv: KVNamespace) => Promise<CardSnapshot>>
 > = {
-  mtg: getCardById,
+  mtg: getMtgCard,
+  riftbound: getRiftboundCard,
 }
 
 /**
@@ -114,12 +116,14 @@ export async function createListing(
   try {
     card = await lookup(input.catalogId, kv)
   } catch (err) {
-    if (err instanceof ScryfallError) {
+    if (err instanceof CatalogError) {
+      // Solo Scryfall distingue el 404; RiftCodex responde 500 a un id
+      // inexistente, así que ahí un id malo se ve como falla del upstream.
       return {
         ok: false,
-        error: 'card_not_found_or_scryfall_error',
+        error: err.status === 404 ? 'card_not_found' : 'catalog_error',
         status: err.status === 404 ? 404 : 502,
-        extra: { status: err.status },
+        extra: { tcg: input.tcg, status: err.status },
       }
     }
     throw err

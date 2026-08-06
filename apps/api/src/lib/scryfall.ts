@@ -11,6 +11,7 @@
  */
 
 import type { CardSnapshot } from '@thepubmarket/shared'
+import { CARD_CACHE_TTL_SECONDS, CatalogError, SEARCH_CACHE_TTL_SECONDS } from './catalog'
 
 const SCRYFALL_BASE = 'https://api.scryfall.com'
 
@@ -19,11 +20,6 @@ const SCRYFALL_HEADERS: HeadersInit = {
   'User-Agent': 'ThePubMarket/0.1 (+https://thepubmarket.mx; contacto@thepubmarket.mx)',
   Accept: 'application/json',
 }
-
-/** Las cartas son inmutables → cache largo. 30 días en segundos. */
-const CARD_CACHE_TTL_SECONDS = 60 * 60 * 24 * 30
-/** Las búsquedas cambian → cache corto. 10 minutos en segundos. */
-const SEARCH_CACHE_TTL_SECONDS = 60 * 10
 
 const cardKey = (scryfallId: string) => `scryfall:card:${scryfallId}`
 const searchKey = (query: string) => `scryfall:search:${query.trim().toLowerCase()}`
@@ -48,12 +44,11 @@ interface ScryfallList {
   data: ScryfallCard[]
 }
 
-export class ScryfallError extends Error {
-  constructor(
-    message: string,
-    readonly status: number,
-  ) {
-    super(message)
+/** Falla de Scryfall. Es un `CatalogError` para que el alta la trate igual
+ * que la de cualquier otro catálogo. */
+export class ScryfallError extends CatalogError {
+  constructor(message: string, status: number) {
+    super(message, status)
     this.name = 'ScryfallError'
   }
 }
