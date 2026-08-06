@@ -5,7 +5,7 @@ status: In Progress
 assignee:
   - '@Claude'
 created_date: '2026-08-06 05:45'
-updated_date: '2026-08-06 09:10'
+updated_date: '2026-08-06 13:52'
 labels:
   - 'epic:riftbound-ux'
   - web
@@ -19,6 +19,13 @@ references:
   - apps/web/src/lib/catalog/mock-data.ts
   - docs/ingenieria/catalogo-multijuego.md
   - scripts/import-riftbound.mjs
+modified_files:
+  - apps/web/messages/en.json
+  - apps/web/messages/es.json
+  - apps/web/src/lib/catalog/mock-data.ts
+  - apps/web/src/lib/catalog/mock-data.test.ts
+  - apps/web/src/lib/sellers/mock-data.ts
+  - docs/ingenieria/catalogo-multijuego.md
 priority: medium
 type: chore
 ordinal: 44000
@@ -34,11 +41,11 @@ Outcome: copy, mocks, and docs reflect a multi-game marketplace where Riftbound 
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Catalog subtitle and home hero copy no longer hardcode MTG as the only game; multi-game copy reads naturally in es and en
-- [ ] #2 No remaining user-facing copy implies MTG is the only supported game (audit of messages es.json/en.json and hardcoded strings)
-- [ ] #3 Frontend mock data includes Riftbound entries so mock mode displays Riftbound listings
-- [ ] #4 docs/ingenieria/catalogo-multijuego.md updated: RiftCodex references replaced with the local D1 catalog provider and current import flow
-- [ ] #5 Typecheck, biome, and web tests green
+- [x] #1 Catalog subtitle and home hero copy no longer hardcode MTG as the only game; multi-game copy reads naturally in es and en
+- [x] #2 No remaining user-facing copy implies MTG is the only supported game (audit of messages es.json/en.json and hardcoded strings)
+- [x] #3 Frontend mock data includes Riftbound entries so mock mode displays Riftbound listings
+- [x] #4 docs/ingenieria/catalogo-multijuego.md updated: RiftCodex references replaced with the local D1 catalog provider and current import flow
+- [x] #5 Typecheck, biome, and web tests green
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -62,3 +69,11 @@ Two independent tracks on branch `task/TASK-044`, no file overlap.
 ## Risks
 - Copy changes touch shared i18n keys; the grep audit (AC#2) is the part most likely to miss a surface, so the verifier re-runs the audit independently.
 <!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+TCG_META (`display.ts`) se dejó intacto: todos sus valores son nombres propios de juego (Magic, Pokémon, Riftbound…), no hay label genérico que traducir. El paso 3 del plan quedó sin cambios por diseño, no por omisión.
+
+AC#3 se verificó con un test nuevo (`src/lib/catalog/mock-data.test.ts`, 4 casos) que ejercita el mismo camino que usa el modo mock: `MOCK_LISTINGS` activos + `applyFilters` por `tcg` y por faceta propia de Riftbound (`domain`). Cubre además la invariante de forma (gameAttributes null y oracleId no-null solo en MTG).
+<!-- SECTION:NOTES:END -->
