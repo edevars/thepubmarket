@@ -6,9 +6,10 @@ así que esto es confianza, no decoración: el comprador juzga rayones,
 whitening, centrado y curvatura del foil antes de pagar.
 
 Epic `inventory-photos`. **TASK-023** puso la base de datos y el contrato
-compartido. **TASK-024** (este documento) agrega los endpoints de escritura del
-panel del vendedor. **TASK-025** expone las fotos en el catálogo público y
-sirve los binarios — sin esa tarea, `InventoryPhoto.url` no resuelve todavía.
+compartido. **TASK-024** agregó los endpoints de escritura del panel del
+vendedor (§2-3). **TASK-025** expone las fotos en el catálogo público y monta
+la ruta que sirve los binarios (§4-7): con ella `InventoryPhoto.url` ya
+resuelve en cualquier ambiente.
 
 No toca ningún flujo de fondos: es metadata y objetos en R2, nada de pagos,
 payouts ni Stripe.
@@ -60,7 +61,7 @@ inventory-photos/{sellerId}/{inventoryId}/{photoId}.{ext}
 
 No adivinables, generadas por el servidor, bajo un prefijo fijo. Las llaves
 son **inmutables** — una foto nunca se sobrescribe — que es lo que hace segura
-la caché de larga duración que TASK-025 va a poner encima.
+la caché de larga duración que pone encima `GET /photos/:id` (§5).
 
 ### Límites
 
@@ -123,7 +124,7 @@ quitando una foto directamente es proporcional. `DELETE
 panel, el admin puede tocar la foto de cualquier seller — y usa el mismo
 mecanismo de auth que el resto de `/admin/*` (`x-admin-key`).
 
-## 4. El campo `url` del DTO — decisión que consume TASK-025
+## 4. El campo `url` del DTO
 
 `InventoryPhoto.url` (contrato en `packages/shared`) se construye como:
 
@@ -132,16 +133,86 @@ mecanismo de auth que el resto de `/admin/*` (`x-admin-key`).
 ```
 
 usando `new URL(c.req.url).origin` — sin variable de entorno nueva, correcto
-en cualquier ambiente (wrangler dev local, prod). Está keyed por **id de la
-foto**, no por la llave cruda de R2: la ruta pública que TASK-025 monta debe
-resolver la llave desde la fila de la DB, nunca aceptarla directo del cliente
-(su propio AC#6).
+en cualquier ambiente (wrangler dev local, prod, y cualquier dominio futuro sin
+tocar código). Está keyed por **id de la foto**, no por la llave cruda de R2:
+`GET /photos/:id` (§5) resuelve la llave desde la fila de la DB, nunca la
+acepta del cliente.
 
-**Esta tarea NO monta `/photos/*`.** El campo `url` existe desde ya en la
-respuesta de subida/reorder, pero no resuelve (404 o conexión rechazada) hasta
-que TASK-025 agregue la ruta de streaming.
+## 5. Servido: `GET /photos/:id` (TASK-025)
 
-## 5. Módulo puro y tests
+Ruta pública, sin auth — misma exposición que las URLs de Scryfall que ya
+vienen embebidas en cada listing. Vive en `apps/api/src/routes/photos.ts`,
+montada en `/photos`.
+
+```
+id de foto → SELECT r2_key FROM inventory_photos WHERE id = ? → R2.get(r2_key) → stream
+```
+
+**Por qué una ruta de Worker y no el bucket público con dominio propio:**
+`thepubmarket-assets` es compartido y el roadmap ya lo reserva para más usos
+(migrar las imágenes de Scryfall en Fase 5); hacerlo público es todo-o-nada y
+requiere pasos manuales de dashboard/DNS. Una ruta en código no cuesta nada
+extra, queda acotada a este prefijo, y no compromete el resto del bucket si
+algún día se agrega contenido que NO deba ser público.
+
+**Nunca acepta una llave de R2 del cliente** (AC#6): la URL solo lleva un id
+de foto. Incluso si algún escritor futuro se saltara `buildPhotoKey` y
+guardara una fila con una llave fuera de `inventory-photos/`, la ruta la
+rechaza igual — verifica el prefijo antes de pedirle el objeto a R2, defensa
+en profundidad sobre el hecho de que hoy `buildPhotoKey` es el único que
+escribe esa columna.
+
+Un id desconocido, o el de una foto ya borrada, responde `404 not_found` — sin
+distinguir un caso del otro (la fila ya no existe en ninguno de los dos).
+
+### Caché: `Cache-Control` + Cache API de Workers
+
+Las llaves de R2 son inmutables (una foto nunca se sobrescribe), así que un
+hit es seguro de cachear para siempre — no hay historia de invalidación que
+diseñar; una foto nueva siempre tiene un id nuevo.
+
+- **Navegador/CDN aguas abajo:** `Cache-Control: public, max-age=31536000, immutable`.
+- **Borde de Cloudflare:** una respuesta generada por un Worker NO se cachea
+  sola en el edge solo por llevar ese header — hay que escribirla
+  explícitamente con la [Cache API](https://developers.cloudflare.com/workers/runtime-apis/cache/)
+  (`caches.default`). La ruta hace `cache.match()` al entrar y, en un miss,
+  `cache.put()` de la respuesta clonada vía `waitUntil` (no bloquea la
+  respuesta al cliente). Solo se cachean los 200 — un 404 nunca se guarda, así
+  que una foto recién subida no queda bloqueada por un miss cacheado.
+
+Verificado localmente (`wrangler dev` también emula la Cache API): tras un
+primer `GET` exitoso, se borró la fila de la foto y su objeto en R2 (hard
+delete de admin) y un segundo `GET` a la misma URL siguió respondiendo 200 con
+los bytes originales — prueba de que la respuesta vino del caché del borde, no
+de una relectura.
+
+## 6. Fotos en el catálogo y el panel: carga en lote
+
+`loadPhotosByInventoryId(db, inventoryIds, origin)` en `lib/photos.ts` hace
+**una sola query** `WHERE inventory_id IN (...)` para todos los ids de la
+página y agrupa el resultado en un `Map`, mismo patrón que ya usaban `sellers`
+en `catalog.ts` y `orders.ts` — nunca una query por item.
+
+La usan cinco lugares, todos donde `rowToInventoryItem` ya se llamaba sobre
+una fila EXISTENTE (a diferencia de un alta, que nunca tiene fotos todavía):
+
+| Endpoint | Por qué |
+|---|---|
+| `GET /catalog` | La grilla pública necesita el indicador de "fotos reales" |
+| `GET /catalog/:id` | Detalle del listing |
+| `GET /seller/inventory` | Vista del panel |
+| `PATCH /seller/inventory/:id` | Sin esto, editar precio devolvería `photos: []` aunque el listing SÍ tenga fotos — una respuesta que miente |
+| `PATCH /admin/inventory/:id` | Mismo motivo, ruta de admin |
+
+`POST /seller/inventory` y `POST /admin/inventory` (alta) siguen sin pasar
+fotos: un listing recién creado genuinamente no tiene ninguna todavía, así que
+`photos: []` ahí es correcto, no una omisión.
+
+El arreglo va **ordenado por `sort_order`** en todas partes porque la query
+tiene `ORDER BY sort_order` — el orden que persiste `POST
+.../photos/reorder` (§3) es el mismo que ve el comprador.
+
+## 7. Módulo puro y tests
 
 `apps/api/src/lib/photos.ts` — sin I/O, testeable sin runtime de Workers
 (misma convención que `lib/delivery.ts`, `lib/stripe.ts`):
@@ -153,11 +224,17 @@ Cobertura en `photos.test.ts`: cabecera JPEG/PNG/WebP válida, archivo
 truncado, body vacío, texto plano renombrado, contenedor RIFF que no es WebP,
 formato de la llave.
 
+`loadPhotosByInventoryId` (§6) sí toca D1, así que queda fuera de esta
+cobertura por la misma razón que los handlers de ruta: se valida con el pase
+manual/E2E de abajo, no con vitest.
+
 Los handlers de ruta **no** llevan tests unitarios — misma convención que el
 resto de `apps/api` (vitest solo cubre módulos puros bajo `src/lib/`); se
 validan con un pase manual/E2E documentado abajo.
 
-## 6. Verificación manual (TASK-024)
+## 8. Verificación manual
+
+### TASK-024 — escritura
 
 Contra `wrangler dev` (emula R2 localmente) con curl, usando una sesión de
 seller real y un listing propio:
@@ -172,3 +249,21 @@ seller real y un listing propio:
 | Borrar una foto propia | 200 `{ ok: true }`, fila y objeto desaparecen |
 | Reordenar con un set parcial o con un id ajeno | 400 `photo_set_mismatch` |
 | Reordenar con el set exacto | 200, `sortOrder` persistido en el orden enviado |
+
+### TASK-025 — lectura y servido
+
+Misma configuración: subí 2 fotos reales a un listing existente, luego:
+
+| Caso | Resultado esperado |
+|---|---|
+| `GET /catalog` (lista) | `photos` del listing poblado, en orden |
+| `GET /catalog/:id` (detalle) | Mismo arreglo que en la lista |
+| `GET /seller/inventory` | Mismo arreglo |
+| `PATCH /seller/inventory/:id` (editar precio) | La respuesta sigue trayendo las fotos reales, no `[]` |
+| `GET /photos/:id` | 200, `Content-Type: image/jpeg`, `Cache-Control: public, max-age=31536000, immutable`, `ETag`, bytes idénticos a los subidos |
+| `GET /photos/:id` de un id inexistente | 404 |
+| Borrar la fila + el objeto de R2 (hard delete de admin) y repetir el `GET` a la misma URL | Sigue en 200 con los bytes originales — sirvió del caché del borde, no de una relectura |
+
+Datos de prueba limpiados al terminar (fotos, usuario, invitación, vínculo de
+seller, precio restaurado a su valor original) — el D1 local queda igual que
+antes de correr la verificación.

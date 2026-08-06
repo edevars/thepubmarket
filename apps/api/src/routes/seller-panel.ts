@@ -23,6 +23,7 @@ import {
   buildPhotoKey,
   contentTypeFor,
   detectImageKind,
+  loadPhotosByInventoryId,
   MAX_PHOTO_BYTES,
   rowToInventoryPhoto,
 } from '../lib/photos'
@@ -121,16 +122,25 @@ sellerPanel.get('/inventory', async (c) => {
   const seller = c.get('seller')
   if (!seller) return c.json({ error: 'not_a_seller' }, 403)
 
-  const rows = await c
-    .get('db')
+  const db = c.get('db')
+  const rows = await db
     .select()
     .from(inventory)
     .where(eq(inventory.sellerId, seller.id))
     .orderBy(desc(inventory.updatedAt), desc(inventory.id))
     .all()
 
+  const photosByInventoryId = await loadPhotosByInventoryId(
+    db,
+    rows.map((r) => r.id),
+    new URL(c.req.url).origin,
+  )
   const sellerInfo = { name: seller.name, verified: seller.verified }
-  return c.json({ items: rows.map((row) => rowToInventoryItem(row, sellerInfo)) })
+  return c.json({
+    items: rows.map((row) =>
+      rowToInventoryItem(row, sellerInfo, photosByInventoryId.get(row.id) ?? []),
+    ),
+  })
 })
 
 /** POST /seller/inventory — publica un single (sellerId = sesión, siempre). */
@@ -170,8 +180,8 @@ sellerPanel.patch('/inventory/:id', async (c) => {
   }
   const input = parsed.data
 
-  const [row] = await c
-    .get('db')
+  const db = c.get('db')
+  const [row] = await db
     .update(inventory)
     .set({
       ...(input.priceCents !== undefined ? { priceCents: input.priceCents } : {}),
@@ -185,7 +195,17 @@ sellerPanel.patch('/inventory/:id', async (c) => {
     .returning()
 
   if (!row) return c.json({ error: 'not_found' }, 404)
-  return c.json(rowToInventoryItem(row, { name: seller.name, verified: seller.verified }))
+  // El item editado puede ya tener fotos (TASK-024); sin esto la respuesta del
+  // PATCH mentiría con `photos: []` a un cliente que actualiza su estado desde
+  // ella, aunque GET /inventory muestre las fotos reales para el mismo item.
+  const photosByInventoryId = await loadPhotosByInventoryId(db, [row.id], new URL(c.req.url).origin)
+  return c.json(
+    rowToInventoryItem(
+      row,
+      { name: seller.name, verified: seller.verified },
+      photosByInventoryId.get(row.id) ?? [],
+    ),
+  )
 })
 
 /**

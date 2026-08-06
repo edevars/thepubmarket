@@ -11,6 +11,7 @@ import { auth } from './routes/auth'
 import { catalog } from './routes/catalog'
 import { checkout } from './routes/checkout'
 import { ordersRoutes } from './routes/orders'
+import { photosRoutes } from './routes/photos'
 import { sellerConnect } from './routes/seller-connect'
 import { sellerPanel } from './routes/seller-panel'
 import { sellersRoutes } from './routes/sellers'
@@ -69,6 +70,11 @@ app.route('/catalog', catalog)
 
 // Tiendas públicas (perfil de vendedor, solo lectura, sin auth).
 app.route('/sellers', sellersRoutes)
+
+// Fotos de inventario: streaming público de binarios desde R2 (TASK-025).
+// Sin auth — misma exposición que las URLs de Scryfall ya embebidas en cada
+// listing. Nunca acepta una llave de R2 del cliente, solo un id de foto.
+app.route('/photos', photosRoutes)
 
 // Onboarding de Stripe Connect (autoservicio; sesión + fila 'invited' o
 // 'active' en sellers — MÁS permisivo que sellerAuth). Se monta ANTES del

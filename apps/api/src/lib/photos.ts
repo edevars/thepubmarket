@@ -1,17 +1,31 @@
 /**
- * Pure helpers for inventory photo uploads: magic-byte image detection, R2 key
- * construction and the row→DTO mapping. No I/O, so this is unit-testable
- * without a Workers runtime (same convention as lib/delivery.ts, lib/stripe.ts).
+ * Inventory photo helpers: magic-byte image detection, R2 key construction,
+ * the row→DTO mapping, and the batched loader the catalog/panel routes use.
+ *
+ * The detection/key/DTO functions are pure — no I/O, unit-testable without a
+ * Workers runtime (same convention as lib/delivery.ts, lib/stripe.ts).
+ * `loadPhotosByInventoryId` is the one exception: it queries D1, because a
+ * per-item query from every route that lists inventory would be an N+1.
  *
  * The server never trusts a client-declared Content-Type or filename. Image
  * validity is decided by inspecting the first bytes of the body: a renamed
  * .txt or a truncated upload fails detection regardless of what the request
  * claims.
  */
-import type { InventoryPhotoRow } from '@thepubmarket/db'
+import type { Db, InventoryPhotoRow } from '@thepubmarket/db'
+import { inventoryPhotos } from '@thepubmarket/db'
 import type { InventoryPhoto } from '@thepubmarket/shared'
+import { asc, inArray } from 'drizzle-orm'
 
 export type ImageKind = 'jpeg' | 'png' | 'webp'
+
+/**
+ * Fixed prefix every R2 object key lives under. Exported so the streaming
+ * route (TASK-025) can refuse to serve a row whose key somehow landed outside
+ * it — belt-and-suspenders on top of the fact that `buildPhotoKey` is the only
+ * writer of this column.
+ */
+export const PHOTO_KEY_PREFIX = 'inventory-photos/'
 
 /** Max upload size per photo. Workers' body limit is far above this. */
 export const MAX_PHOTO_BYTES = 5 * 1024 * 1024
@@ -67,13 +81,12 @@ export function buildPhotoKey(params: {
   kind: ImageKind
 }): string {
   const { sellerId, inventoryId, photoId, kind } = params
-  return `inventory-photos/${sellerId}/${inventoryId}/${photoId}.${EXTENSION[kind]}`
+  return `${PHOTO_KEY_PREFIX}${sellerId}/${inventoryId}/${photoId}.${EXTENSION[kind]}`
 }
 
 /**
  * Maps a DB row to the public `InventoryPhoto` DTO. `origin` builds the
- * absolute URL (`{origin}/photos/{id}`); the streaming route that resolves it
- * is TASK-025's job, this only fixes the shape both tasks agree on.
+ * absolute URL served by `GET /photos/:id` (routes/photos.ts).
  */
 export function rowToInventoryPhoto(row: InventoryPhotoRow, origin: string): InventoryPhoto {
   return {
@@ -81,4 +94,33 @@ export function rowToInventoryPhoto(row: InventoryPhotoRow, origin: string): Inv
     url: `${origin}/photos/${row.id}`,
     sortOrder: row.sortOrder,
   }
+}
+
+/**
+ * Loads every photo for the given inventory ids in ONE query, grouped by
+ * listing and ordered by `sort_order`. Mirrors the batched-seller-lookup
+ * pattern already used in catalog.ts / seller-panel.ts — no per-item query
+ * for a page of results. Skips the query entirely for an empty input.
+ */
+export async function loadPhotosByInventoryId(
+  db: Db,
+  inventoryIds: string[],
+  origin: string,
+): Promise<Map<string, InventoryPhoto[]>> {
+  const byInventoryId = new Map<string, InventoryPhoto[]>()
+  if (inventoryIds.length === 0) return byInventoryId
+
+  const rows = await db
+    .select()
+    .from(inventoryPhotos)
+    .where(inArray(inventoryPhotos.inventoryId, inventoryIds))
+    .orderBy(asc(inventoryPhotos.sortOrder))
+    .all()
+
+  for (const row of rows) {
+    const list = byInventoryId.get(row.inventoryId) ?? []
+    list.push(rowToInventoryPhoto(row, origin))
+    byInventoryId.set(row.inventoryId, list)
+  }
+  return byInventoryId
 }

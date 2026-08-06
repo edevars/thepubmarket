@@ -21,6 +21,7 @@ import { desc, eq, sql } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { z } from 'zod'
 import { createListing, type ListingInput, rowToInventoryItem } from '../lib/inventory'
+import { loadPhotosByInventoryId } from '../lib/photos'
 import { clientIp } from '../lib/rate-limit'
 import { ScryfallError, searchCards } from '../lib/scryfall'
 import type { AppEnv } from '../types'
@@ -185,8 +186,8 @@ admin.patch('/inventory/:id', async (c) => {
   }
   const input = parsed.data
 
-  const [row] = await c
-    .get('db')
+  const db = c.get('db')
+  const [row] = await db
     .update(inventory)
     .set({
       ...(input.priceCents !== undefined ? { priceCents: input.priceCents } : {}),
@@ -199,9 +200,16 @@ admin.patch('/inventory/:id', async (c) => {
     .returning()
 
   if (!row) return c.json({ error: 'not_found' }, 404)
-  const seller = await c.get('db').select().from(sellers).where(eq(sellers.id, row.sellerId)).get()
+  const [seller, photosByInventoryId] = await Promise.all([
+    db.select().from(sellers).where(eq(sellers.id, row.sellerId)).get(),
+    loadPhotosByInventoryId(db, [row.id], new URL(c.req.url).origin),
+  ])
   return c.json(
-    rowToInventoryItem(row, { name: seller?.name ?? '', verified: seller?.verified ?? false }),
+    rowToInventoryItem(
+      row,
+      { name: seller?.name ?? '', verified: seller?.verified ?? false },
+      photosByInventoryId.get(row.id) ?? [],
+    ),
   )
 })
 

@@ -10,6 +10,7 @@ import { inventory, sellers } from '@thepubmarket/db'
 import { and, asc, count, eq, gt, inArray, like, type SQL } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { rowToInventoryItem } from '../lib/inventory'
+import { loadPhotosByInventoryId } from '../lib/photos'
 import type { AppEnv } from '../types'
 
 const DEFAULT_LIMIT = 24
@@ -64,19 +65,26 @@ catalog.get('/', async (c) => {
     .all()
 
   const sellerIds = [...new Set(rows.map((r) => r.sellerId))]
-  const sellerRows =
+  const [sellerRows, photosByInventoryId] = await Promise.all([
     sellerIds.length > 0
-      ? await db.select().from(sellers).where(inArray(sellers.id, sellerIds)).all()
-      : []
+      ? db.select().from(sellers).where(inArray(sellers.id, sellerIds)).all()
+      : Promise.resolve([]),
+    loadPhotosByInventoryId(
+      db,
+      rows.map((r) => r.id),
+      new URL(c.req.url).origin,
+    ),
+  ])
   const sellerById = new Map(sellerRows.map((s) => [s.id, s]))
 
   return c.json({
     items: rows.map((row) => {
       const seller = sellerById.get(row.sellerId)
-      return rowToInventoryItem(row, {
-        name: seller?.name ?? '',
-        verified: seller?.verified ?? false,
-      })
+      return rowToInventoryItem(
+        row,
+        { name: seller?.name ?? '', verified: seller?.verified ?? false },
+        photosByInventoryId.get(row.id) ?? [],
+      )
     }),
     total: totalRow?.total ?? 0,
     limit,
@@ -101,8 +109,15 @@ catalog.get('/:id', async (c) => {
   if (!row) {
     return c.json({ error: 'not_found' }, 404)
   }
-  const seller = await db.select().from(sellers).where(eq(sellers.id, row.sellerId)).get()
+  const [seller, photosByInventoryId] = await Promise.all([
+    db.select().from(sellers).where(eq(sellers.id, row.sellerId)).get(),
+    loadPhotosByInventoryId(db, [row.id], new URL(c.req.url).origin),
+  ])
   return c.json(
-    rowToInventoryItem(row, { name: seller?.name ?? '', verified: seller?.verified ?? false }),
+    rowToInventoryItem(
+      row,
+      { name: seller?.name ?? '', verified: seller?.verified ?? false },
+      photosByInventoryId.get(row.id) ?? [],
+    ),
   )
 })
