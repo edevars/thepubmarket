@@ -5,7 +5,7 @@ status: In Progress
 assignee:
   - claude
 created_date: '2026-08-03 04:03'
-updated_date: '2026-08-06 00:22'
+updated_date: '2026-08-06 00:26'
 labels:
   - api
   - stripe
@@ -87,6 +87,12 @@ Non-custodial check: no change to fund flow; reliability of bookkeeping/settleme
 **Committed** on branch `fix/task-021-022-payments-reliability` as `e0a6f6d` (migration 0009, schema, the `webhooks.ts` rewrite and the at-least-once section of `pagos.md`), on top of TASK-021's `c73e599`. Also corrected a stale line in `pagos.md` §2: it described the dedupe-before-work handler in the present tense, which this task removes.
 
 Still pending, unchanged: `wrangler d1 migrations apply thepubmarket-db --remote` + `wrangler deploy`, then the test payment that also closes TASK-021 AC#7 and exercises AC#4's rewritten happy path.
+
+**Prod rollout shipped 2026-08-05.** `wrangler d1 migrations apply thepubmarket-db --remote` → 0009 applied (6 commands), then `wrangler deploy` → version `1a8dacbe-ece7-4d5b-86dc-3be3325ad7a7`. Migration before deploy on purpose: the new handler reads `status`/`attempts`, so against the old schema every delivery would have fallen into the 500 path.
+
+Post-deploy checks against the deployed API: `/health` 200; webhook with no signature still answers `400 missing_signature` (AC#1's unchanged-400 half). D1: all 21 pre-existing `webhook_events` rows are `processed` with a non-NULL `processed_at` (AC#7 confirmed in prod, not just locally), and the dead-letter query `WHERE status='received'` returns empty.
+
+Still open: AC#4, which needs the prod test payment to exercise the rewritten `checkout.session.completed` happy path end to end.
 <!-- SECTION:NOTES:END -->
 
 ## Comments
