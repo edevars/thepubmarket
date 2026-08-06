@@ -10,6 +10,7 @@
 
 import { type Db, type InventoryRow, inventory } from '@thepubmarket/db'
 import type {
+  CardGameAttributes,
   CardSnapshot,
   Condition,
   Finish,
@@ -19,6 +20,21 @@ import type {
 } from '@thepubmarket/shared'
 import { CatalogError } from './catalog'
 import { catalogProviderFor, supportedTcgs } from './catalog-providers'
+
+/**
+ * Lee los atributos de juego guardados como JSON. Defensivo a propósito: un
+ * blob corrupto o de una forma vieja debe degradar el detalle, nunca tumbar el
+ * render de una publicación que por lo demás está bien.
+ */
+function parseGameAttributes(raw: string | null): CardGameAttributes | null {
+  if (!raw) return null
+  try {
+    const parsed = JSON.parse(raw) as CardGameAttributes
+    return parsed && typeof parsed === 'object' && 'tcg' in parsed ? parsed : null
+  } catch {
+    return null
+  }
+}
 
 /**
  * Convierte una fila de Drizzle al contrato público `InventoryItem`.
@@ -51,6 +67,7 @@ export function rowToInventoryItem(
       artist: row.artist,
       finishes: [],
       imageUrl: row.imageUrl,
+      gameAttributes: parseGameAttributes(row.cardAttributes),
     },
     photos,
     condition: (row.condition ?? 'NM') as Condition,
@@ -151,6 +168,7 @@ export async function createListing(
       status: 'active',
       // Snapshot de la URL del catálogo. TODO: migrar imágenes a R2.
       imageUrl: card.imageUrl,
+      cardAttributes: card.gameAttributes ? JSON.stringify(card.gameAttributes) : null,
     })
     .returning()
 

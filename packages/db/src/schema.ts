@@ -163,6 +163,11 @@ export const inventory = sqliteTable(
     cardLang: text('card_lang'),
     rarity: text('rarity'),
     artist: text('artist'),
+    // Atributos propios del juego (dominios, tipo, costes…) como blob JSON
+    // pequeño: son de presentación y nada filtra ni ordena por ellos. Una
+    // columna por atributo y por juego convertiría esta tabla en un mega-set
+    // de nulos. Si algún día hay que filtrar por uno, se promueve a columna.
+    cardAttributes: text('card_attributes'),
     finish: text('finish', { enum: ['nonfoil', 'foil'] })
       .notNull()
       .default('nonfoil'),

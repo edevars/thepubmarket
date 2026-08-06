@@ -77,6 +77,15 @@ describe('normalizeCard', () => {
       artist: 'Alix Branwyn',
       finishes: [],
       imageUrl: 'https://cmsassets.rgpub.io/spirit.png',
+      gameAttributes: {
+        tcg: 'riftbound',
+        type: 'Unit',
+        supertype: null,
+        domains: ['Chaos'],
+        energy: 3,
+        might: 2,
+        power: null,
+      },
     })
   })
 
@@ -105,10 +114,22 @@ describe('normalizeCard', () => {
     })
   })
 
-  it('keeps null attributes out of the snapshot entirely', () => {
-    // energy/might/power son de Riftbound y no viven en CardSnapshot todavía
-    // (llegan en TASK-034); normalizar no debe inventarles un hueco.
-    expect(normalizeCard(JINX_SIGNATURE)).not.toHaveProperty('attributes')
+  it('carries null costs through as null instead of zero', () => {
+    // Una Legend sin coste no es una carta de coste 0.
+    expect(normalizeCard(JINX_SIGNATURE).gameAttributes).toEqual({
+      tcg: 'riftbound',
+      type: 'Legend',
+      supertype: null,
+      domains: ['Fury'],
+      energy: null,
+      might: null,
+      power: null,
+    })
+  })
+
+  it('leaves game attributes empty-but-present when classification is missing', () => {
+    const attrs = normalizeCard({ id: 'abc', name: 'Mystery Card' }).gameAttributes
+    expect(attrs).toMatchObject({ tcg: 'riftbound', type: null, domains: [] })
   })
 })
 

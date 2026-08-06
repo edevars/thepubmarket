@@ -43,6 +43,31 @@ export const CONDITIONS: readonly Condition[] = ['NM', 'LP', 'MP', 'HP', 'DMG']
 export const FINISHES: readonly Finish[] = ['nonfoil', 'foil']
 
 /**
+ * Atributos de juego propios de Riftbound. Son de PRESENTACIÓN: se muestran en
+ * el detalle para que el comprador reconozca la carta; nada filtra ni ordena
+ * por ellos. Los nulos son legítimos — no toda carta tiene coste o fuerza.
+ */
+export interface RiftboundAttributes {
+  tcg: 'riftbound'
+  /** Tipo de carta ('Unit', 'Spell', 'Gear', 'Legend'…). */
+  type: string | null
+  /** Supertipo ('Champion'…), cuando aplica. */
+  supertype: string | null
+  /** Dominios de la carta ('Fury', 'Order'…). Puede venir vacío. */
+  domains: string[]
+  energy: number | null
+  might: number | null
+  power: number | null
+}
+
+/**
+ * Atributos específicos del juego de una impresión. Unión discriminada por
+ * `tcg`: cada juego que aporte datos propios suma su variante aquí, en vez de
+ * ensanchar `CardSnapshot` con campos nulos de todos los juegos.
+ */
+export type CardGameAttributes = RiftboundAttributes
+
+/**
  * Snapshot de los datos canónicos de una carta tomados de su catálogo de origen
  * (Scryfall para MTG, RiftCodex para Riftbound, …). Se guardan en la fila de
  * inventory para renderizar sin volver a llamar al proveedor. Las impresiones
@@ -85,6 +110,11 @@ export interface CardSnapshot {
    * TODO: migrar a R2 en fase posterior; por ahora se referencia directo.
    */
   imageUrl: string | null
+  /**
+   * Datos propios del juego, si su catálogo los aporta. Null para MTG (Scryfall
+   * no alimenta este campo) y para publicaciones anteriores a la columna.
+   */
+  gameAttributes: CardGameAttributes | null
 }
 
 /**

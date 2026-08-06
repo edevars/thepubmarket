@@ -103,6 +103,8 @@ function listing(s: Spec): InventoryItem {
       artist: s.artist,
       finishes: s.foil ? ['nonfoil', 'foil'] : ['nonfoil'],
       imageUrl: SCRYFALL_IMAGES[s.id] ?? null,
+      // Los mocks son MTG: no hay atributos de juego que mostrar.
+      gameAttributes: null,
     },
     // Los mocks no llevan fotos del ejemplar: son cartas inventadas.
     photos: [],

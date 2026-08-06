@@ -1,0 +1,1 @@
+ALTER TABLE `inventory` ADD `card_attributes` text;

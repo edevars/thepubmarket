@@ -50,7 +50,13 @@ interface RiftCodexCard {
   id: string
   name: string
   collector_number?: number
-  classification?: { rarity?: string }
+  attributes?: { energy?: number | null; might?: number | null; power?: number | null }
+  classification?: {
+    rarity?: string
+    type?: string | null
+    supertype?: string | null
+    domain?: string[]
+  }
   set?: { set_id?: string; label?: string }
   media?: { image_url?: string | null; artist?: string | null }
 }
@@ -83,6 +89,16 @@ export function normalizeCard(raw: RiftCodexCard): CardSnapshot {
     // RiftCodex no informa acabados. Vacío = `createListing` acepta cualquiera.
     finishes: [],
     imageUrl: raw.media?.image_url ?? null,
+    gameAttributes: {
+      tcg: 'riftbound',
+      type: raw.classification?.type ?? null,
+      supertype: raw.classification?.supertype ?? null,
+      domains: raw.classification?.domain ?? [],
+      // Nulos legítimos: no toda carta tiene coste, fuerza o poder.
+      energy: raw.attributes?.energy ?? null,
+      might: raw.attributes?.might ?? null,
+      power: raw.attributes?.power ?? null,
+    },
   }
 }
 

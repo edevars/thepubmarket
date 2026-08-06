@@ -72,6 +72,9 @@ export function normalizeCard(raw: ScryfallCard): CardSnapshot {
     artist: raw.artist ?? null,
     finishes: raw.finishes ?? [],
     imageUrl,
+    // Scryfall no alimenta atributos de juego: los de MTG (maná, colores) no
+    // se muestran hoy y no se guardan.
+    gameAttributes: null,
   }
 }
 

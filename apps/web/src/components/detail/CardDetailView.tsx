@@ -13,6 +13,7 @@ import {
   setLine,
   TCG_META,
 } from '@/lib/catalog/display'
+import { gameAttributeRows } from './game-attributes'
 import { PhotoGallery } from './PhotoGallery'
 
 /** Punto + código de condición con color, sin borde (para listados compactos). */
@@ -62,6 +63,15 @@ export function CardDetailView({
     [t('attrFoil'), item.finish === 'foil' ? t('yes') : t('no')],
     [t('attrRarity'), item.card.rarity],
     [t('attrGame'), gameLabel],
+    // Datos propios del juego (Riftbound: dominios, tipo, costes). Lista vacía
+    // cuando el catálogo no los aporta.
+    ...gameAttributeRows(item.card.gameAttributes, {
+      type: t('attrType'),
+      domains: t('attrDomains'),
+      energy: t('attrEnergy'),
+      might: t('attrMight'),
+      power: t('attrPower'),
+    }),
     [t('attrArtist'), item.card.artist ?? '—'],
   ]
 

@@ -33,6 +33,7 @@ const MTG_SNAPSHOT: CardSnapshot = {
   artist: 'Christopher Rush',
   finishes: ['nonfoil', 'foil'],
   imageUrl: 'https://cards.scryfall.io/normal/bolt.jpg',
+  gameAttributes: null,
 }
 
 const OFFER: Omit<ListingInput, 'tcg' | 'catalogId'> = {
@@ -68,6 +69,15 @@ const RIFTBOUND_SNAPSHOT: CardSnapshot = {
   artist: 'Jonathan Santoro',
   finishes: [],
   imageUrl: 'https://cmsassets.rgpub.io/card.png',
+  gameAttributes: {
+    tcg: 'riftbound',
+    type: 'Legend',
+    supertype: null,
+    domains: ['Fury', 'Order'],
+    energy: 4,
+    might: 3,
+    power: null,
+  },
 }
 
 beforeEach(() => {
@@ -135,7 +145,23 @@ describe('createListing', () => {
       setCode: 'OGN',
       collectorNumber: '301',
       rarity: 'showcase',
+      // Atributos de juego serializados como blob JSON.
+      cardAttributes: JSON.stringify(RIFTBOUND_SNAPSHOT.gameAttributes),
     })
+  })
+
+  it('stores no game attributes for a game whose catalog does not provide them', async () => {
+    mockedGetCardById.mockResolvedValue(MTG_SNAPSHOT)
+    const captured: Record<string, unknown>[] = []
+
+    await createListing(
+      fakeDb(captured),
+      KV,
+      { tcg: 'mtg', catalogId: MTG_SNAPSHOT.catalogId, ...OFFER },
+      'seller-1',
+    )
+
+    expect(captured[0]?.cardAttributes).toBeNull()
   })
 
   it('rejects a finish the printing does not offer, listing the available ones', async () => {
@@ -246,5 +272,24 @@ describe('rowToInventoryItem', () => {
   it('prefers catalog_id when present', () => {
     const item = rowToInventoryItem({ ...baseRow, catalogId: 'cat-1' } as InventoryRow, seller)
     expect(item.card.catalogId).toBe('cat-1')
+  })
+
+  it('parses stored game attributes back into the snapshot', () => {
+    const row = {
+      ...baseRow,
+      tcg: 'riftbound',
+      cardAttributes: JSON.stringify(RIFTBOUND_SNAPSHOT.gameAttributes),
+    } as InventoryRow
+    expect(rowToInventoryItem(row, seller).card.gameAttributes).toEqual(
+      RIFTBOUND_SNAPSHOT.gameAttributes,
+    )
+  })
+
+  it('degrades to no attributes rather than throwing on a corrupt or unknown blob', () => {
+    // Un blob roto no debe tumbar el render de una publicación válida.
+    for (const bad of ['{not json', 'null', '"a string"', '{"missing":"discriminant"}']) {
+      const row = { ...baseRow, cardAttributes: bad } as InventoryRow
+      expect(rowToInventoryItem(row, seller).card.gameAttributes).toBeNull()
+    }
   })
 })
