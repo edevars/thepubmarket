@@ -5,7 +5,7 @@ status: In Progress
 assignee:
   - claude
 created_date: '2026-08-06 00:13'
-updated_date: '2026-08-06 01:34'
+updated_date: '2026-08-06 01:37'
 labels:
   - 'epic:inventory-photos'
   - frontend
@@ -55,3 +55,30 @@ This feature touches no payment, payout or Stripe code path — no fund-custody 
 - [ ] #8 All new strings exist in both the Spanish and English message catalogs
 - [ ] #9 A manual E2E checklist covering a listing with photos, one without, both locales, and a mobile viewport is appended to docs/ingenieria/fotos-inventario.md
 <!-- AC:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+## Design
+
+The item detail view already renders a fake 3-thumbnail placeholder strip under the main image (`CardDetailView.tsx` lines ~103-110, hardcoded empty divs). This task replaces that with a real, working gallery — but only when the listing actually has seller photos; with zero photos the page must render byte-for-byte what it renders today (AC5).
+
+**New file**
+1. `apps/web/src/components/detail/PhotoGallery.tsx` (`'use client'`, same leaf-client-in-server-parent pattern as `AddToCartButton`) — owns the whole image experience for a listing that has ≥1 seller photo:
+   - `images` array = `[reference?, ...sellerPhotos]` — the Scryfall `card.imageUrl` (if present) prepended as a `kind: 'reference'` entry, then `item.photos` (already sortOrder-ordered by the API) as `kind: 'seller'` entries. Building it this way means the reference image is just another swappable slot in the same array/thumbnail-strip, not a special case in the render logic.
+   - Main image is a `<button>` (native keyboard support for free) that opens a lightbox; overlaid with the same `ConditionBadge`/`FoilTag` as before, plus a corner tag reading "Imagen de referencia" or "Foto real de este ejemplar" depending on which is active — this is AC1's at-a-glance distinction.
+   - Thumbnail strip: one `<button>` per image, `aria-current` + `border-primary` on the active one, `onClick` swaps `activeIndex`. Buttons are natively focusable/keyboard-activatable, satisfying AC2's keyboard requirement without extra arrow-key wiring.
+   - Lightbox: fixed overlay, closes on backdrop click and on a visible ✕ button (pointer), plus a `useEffect` `keydown` listener for Escape (only attached while open) — satisfies AC3. Same backdrop-click-stops-propagation pattern as `PhotoManagerModal`/`ConfirmDialog` from TASK-026, with matching biome-ignore annotations for the two intentional a11y suppressions.
+   - `ImageWithFallback` internal helper: wraps `<img onError={...}>`, tracks a local `broken` boolean, and on error swaps to a placeholder `<div>` carrying the *exact same* sizing className (`aspect-[5/7] w-full`) — same box, so no layout jump (AC6). Used for the main image, every thumbnail, and the lightbox image.
+   - `item.quantity > 1` renders a buyer-facing hint distinct from the seller panel's copy: buyer framing is "these photos are representative of the copy you'll receive, more than one copy is available at this condition" (not "this is the exact copy").
+
+**Modified files**
+2. `apps/web/src/components/detail/CardDetailView.tsx` — image column becomes `item.photos.length > 0 ? <PhotoGallery item={item} /> : (...unchanged original markup...)`. The zero-photos branch is a byte-for-byte copy of what's there today, not a refactor, so AC5 holds by construction.
+3. `apps/web/src/components/catalog/ProductCard.tsx` — when `item.photos.length > 0`, a small unicode-glyph badge (◈, matching the app's existing icon convention of ▶/❙❙/✓ rather than emoji) in an unused image corner (bottom-left; top-left is `ConditionBadge`, top-right is `FoilTag`), `title`/`aria-label` from a new `detail.hasRealPhotos` key. Subtle per AC7 — no layout change, just a small marker.
+4. `apps/web/messages/es.json` / `en.json` — ~9 new keys under the existing `detail` namespace (both files currently 563 lines, `detail` at line 237 in both — verified): `galleryReferenceLabel`, `gallerySellerPhotoLabel`, `galleryQuantityHint`, `galleryZoomAria`, `galleryCloseAria`, `galleryThumbReferenceAria`, `galleryThumbPhotoAria` (`{n}` interpolation), `galleryImageError`, `hasRealPhotos`.
+5. `docs/ingenieria/fotos-inventario.md` — append §10 with the manual E2E checklist: a listing with photos, one without (must match current behavior exactly), both locales, and a mobile viewport — per this repo's apps/web convention (documented manual pass, no automated browser suite; consistent with not driving browser automation for verification in this session).
+
+**AC mapping**: #1→1's corner tag, #2→1's thumbnail buttons, #3→1's lightbox, #4→1's quantity hint, #5→2's branch split, #6→1's `ImageWithFallback`, #7→3, #8→4, #9→5.
+
+No payment/payout/Stripe code touched — pure catalog/detail display wiring.
+<!-- SECTION:PLAN:END -->
