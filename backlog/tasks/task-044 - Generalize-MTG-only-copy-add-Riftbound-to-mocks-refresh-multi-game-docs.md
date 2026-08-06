@@ -1,7 +1,7 @@
 ---
 id: TASK-044
 title: 'Generalize MTG-only copy, add Riftbound to mocks, refresh multi-game docs'
-status: In Progress
+status: Done
 assignee:
   - '@Claude'
 created_date: '2026-08-06 05:45'
@@ -77,3 +77,29 @@ TCG_META (`display.ts`) se dejó intacto: todos sus valores son nombres propios 
 
 AC#3 se verificó con un test nuevo (`src/lib/catalog/mock-data.test.ts`, 4 casos) que ejercita el mismo camino que usa el modo mock: `MOCK_LISTINGS` activos + `applyFilters` por `tcg` y por faceta propia de Riftbound (`domain`). Cubre además la invariante de forma (gameAttributes null y oracleId no-null solo en MTG).
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+## Qué cambió
+
+Copy, mocks y docs dejan de asumir que MTG es el único juego del marketplace.
+
+**Copy (i18n)** — `home.heroSub` y `catalog.subtitle` en `es.json`/`en.json` pasan de "Arrancamos con Magic: The Gathering" / "Magic: The Gathering singles" a copy multi-juego que nombra Magic y Riftbound y anticipa más juegos. Redacción propia por locale, no traducción literal. El blurb del seller ancla (`sellers/mock-data.ts`) también menciona Riftbound y lo agrega a `favoriteGames`.
+
+**Mocks** — 8 entradas de Riftbound (set OGN/Origins) en `catalog/mock-data.ts`, cubriendo los tipos de carta del juego (Legend, Unit, Spell, Gear, Battlefield, Rune, Token) y varios dominios, con `gameAttributes` tipados como `CardGameAttributes`. Dos correcciones de fidelidad al snapshot real: `oracleId` ahora es null fuera de MTG (es concepto de Scryfall) y `gameAttributes` deja de estar hardcodeado a null.
+
+**Docs** — `docs/ingenieria/catalogo-multijuego.md` reemplaza RiftCodex (API fan, eliminado en TASK-037) por el proveedor local en D1: tabla `catalog_cards`, flujo de importación con `scripts/import-riftbound.mjs` contra `api.dotgg.gg`, espejo de imágenes a R2, y las dos defensas del importer que no deben desactivarse (aborta ante cambios de esquema de dotgg; allowlist de hosts de imagen para evitar que el endpoint admin sea un proxy SSRF). Queda nota histórica de RiftCodex.
+
+## Verificación
+
+- `npm run typecheck` — 4 paquetes OK.
+- `npm run lint` (biome) — 208 archivos, sin errores.
+- `apps/web` vitest — 8 archivos, 67 tests en verde.
+- Test nuevo `src/lib/catalog/mock-data.test.ts` (4 casos): verifica que el modo mock sirve listings de Riftbound activos, que todos llevan `gameAttributes` de Riftbound, la invariante `oracleId`/`gameAttributes` por juego, y que filtran por `tcg` y por faceta propia (`domain`) vía `applyFilters` — el mismo camino que usa `NEXT_PUBLIC_USE_MOCKS=true`.
+- Auditoría AC#2: el único "magic" restante en los messages es "magic link" del gate de login, no relacionado.
+
+## Notas
+
+`TCG_META` se dejó igual: todos sus valores son nombres propios de juego, no hay label genérico que traducir.
+<!-- SECTION:FINAL_SUMMARY:END -->
