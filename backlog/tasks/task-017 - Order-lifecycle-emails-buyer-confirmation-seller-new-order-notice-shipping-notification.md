@@ -7,7 +7,7 @@ status: In Progress
 assignee:
   - Claude
 created_date: '2026-07-29 01:59'
-updated_date: '2026-08-06 03:41'
+updated_date: '2026-08-06 03:52'
 labels:
   - 'epic:transactional-email'
   - api
@@ -51,16 +51,16 @@ Constraints:
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Buyer receives a confirmation email after a successful payment containing order reference, items with condition/set, total paid, the selling store, and how the order will arrive (shipping address or pickup store)
-- [ ] #2 Selling store receives a notification of the new paid order with what to pull from stock, the delivery method with its address or destination store, and a pointer to the seller panel
-- [ ] #3 Buyer receives a shipping email when a shipping order is marked shipped, including the tracking number and carrier as entered in the panel
-- [ ] #4 Buyer receives a ready-for-pickup email when a pickup order is marked ready, naming the store, its address and hours
-- [ ] #5 A redelivered webhook or a retried post-payment workflow run does not send duplicate confirmation or seller-notice emails for the same order, verified by replaying the event
-- [ ] #6 An email provider failure leaves the order fully processed: inventory decremented, order state correct, failure logged, and no error surfaced to the buyer or seller
-- [ ] #7 Buyer-facing emails contain no application fee, commission, or platform balance information
+- [x] #1 Buyer receives a confirmation email after a successful payment containing order reference, items with condition/set, total paid, the selling store, and how the order will arrive (shipping address or pickup store)
+- [x] #2 Selling store receives a notification of the new paid order with what to pull from stock, the delivery method with its address or destination store, and a pointer to the seller panel
+- [x] #3 Buyer receives a shipping email when a shipping order is marked shipped, including the tracking number and carrier as entered in the panel
+- [x] #4 Buyer receives a ready-for-pickup email when a pickup order is marked ready, naming the store, its address and hours
+- [x] #5 A redelivered webhook or a retried post-payment workflow run does not send duplicate confirmation or seller-notice emails for the same order, verified by replaying the event
+- [x] #6 An email provider failure leaves the order fully processed: inventory decremented, order state correct, failure logged, and no error surfaced to the buyer or seller
+- [x] #7 Buyer-facing emails contain no application fee, commission, or platform balance information
 - [ ] #8 Emails render correctly in at least one major web client and remain readable as plain text
 - [ ] #9 Verified end to end in Stripe test mode against the deployed API: pay a shipping order and a pickup order, confirm both confirmation and seller-notice emails arrive, then drive each to shipped / ready from /panel and confirm the buyer email arrives
-- [ ] #10 docs/ingenieria/ documents which events send which email, to whom, and where to look when one does not arrive
+- [x] #10 docs/ingenieria/ documents which events send which email, to whom, and where to look when one does not arrive
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -87,6 +87,20 @@ Four Spanish templates as pure functions, one loader that assembles an order's e
 ## What I cannot close alone
 - **AC#8** (renders in a real web client) and **AC#9** (emails actually arrive in an inbox, test-mode payment against the deployed API) need the user's own mailbox and eyes. I will prepare everything and hand back exact steps; these two stay unchecked until confirmed.
 <!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Idempotency reuses what already existed instead of adding a sent-flag column: the two paid-order emails run as separate `step.do` calls in the post-payment Workflow (Workflows checkpoints completed steps; instance id = orderId; the webhook ledger from TASK-022 sits in front), and shipped/ready ride the guarded UPDATEs in the panel (`shipped_at IS NULL` / `ready_at IS NULL`) that already answer 409 on a second call. Two separate steps rather than one so a retry of the buyer send can never resend the seller notice. Because the order-email helpers never throw, a notify step cannot fail, so it cannot retry, so it cannot duplicate.
+
+Live verification against wrangler dev in EMAIL_MODE=log, reading the rendered messages out of the log: signed a real `checkout.session.completed` webhook by HMAC and delivered it TWICE. Exactly 4 emails were produced across the whole run, not 6 — confirmation (#TPM-7468, correct address block, correct totals) and seller notice on the first delivery, nothing on the redelivery (answered `duplicate: true`). Separately: /ready produced the pickup email and a second /ready returned 409 with no second email; /ship produced the tracking email with carrier. Notably the ready email named the PICKUP store (The Pub Game Store) and not the SELLING store (Eldrazi Corner) — they differ, and that distinction is the reason sendOrderReady reads the delivery block rather than the order's seller.
+
+AC#6 evidence, being precise about what was and was not proven: the live run confirmed the order reached `paid` and inventory decremented from 5 to 4 while the emails were dispatched. It did NOT prove the provider-failure branch — a `wrangler dev` run with EMAIL_MODE=send only SIMULATES the send (Miniflare), which docs/ingenieria/email.md already warned about at §2, and indeed no send/failure log line appeared. The failure branch is instead covered by a new unit test (`email.test.ts`): a provider that throws yields `{ok:false, reason}` with no exception escaping, and the message body is never written to the log. Real-provider failure remains unobservable outside the deployed Worker.
+
+AC#8 and AC#9 are intentionally left unchecked: both need a human mailbox and eyes. AC#8 is 'renders in a real web client'; AC#9 is a test-mode payment against the DEPLOYED API with confirmation that mail actually arrives. Everything is in place for them — see the final summary for the exact steps to run.
+
+Copy decisions worth keeping: buyer emails state 'Le compras directo a <tienda>; The Pub Market solo conecta la venta', which is the non-custodial model in the buyer's own words. A regression test fails if any buyer-facing template mentions comisión / fee / saldo, so AC#7 cannot rot silently. Store hours render 'Domingo: cerrado' rather than dropping the row, and the carrier line disappears entirely when the seller left it blank rather than printing an empty label.
+<!-- SECTION:NOTES:END -->
 
 ## Comments
 
