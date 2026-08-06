@@ -3,10 +3,11 @@ id: TASK-042
 title: >-
   Card detail: render full Riftbound metadata (rules text, flavor text, rarity,
   set)
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - claude
 created_date: '2026-08-06 05:44'
-updated_date: '2026-08-06 05:50'
+updated_date: '2026-08-06 08:40'
 labels:
   - 'epic:riftbound-ux'
   - web
