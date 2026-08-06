@@ -1,9 +1,11 @@
 ---
 id: TASK-026
 title: Build seller panel UI for managing listing photos
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - claude
 created_date: '2026-08-06 00:13'
+updated_date: '2026-08-06 01:20'
 labels:
   - 'epic:inventory-photos'
   - frontend
