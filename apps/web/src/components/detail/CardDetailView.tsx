@@ -13,6 +13,7 @@ import {
   setLine,
   TCG_META,
 } from '@/lib/catalog/display'
+import { PhotoGallery } from './PhotoGallery'
 
 /** Punto + código de condición con color, sin borde (para listados compactos). */
 function ConditionDot({ condition }: { condition: Condition }) {
@@ -82,32 +83,28 @@ export function CardDetailView({
       <div className="md:grid md:grid-cols-[minmax(0,400px)_1fr] md:items-start md:gap-10">
         {/* columna imagen */}
         <div>
-          <div className="relative mx-auto w-full max-w-[400px] border border-line">
-            <CardArt
-              name={item.card.name}
-              tint={artTintFor(item)}
-              imageUrl={item.card.imageUrl}
-              size="lg"
-            />
-            <ConditionBadge
-              condition={item.condition}
-              size="md"
-              className="absolute left-3 top-3 bg-[#060911]/85"
-            />
-            {item.finish === 'foil' && (
-              <span className="absolute right-3 top-3">
-                <FoilTag size="md" />
-              </span>
-            )}
-          </div>
-          <div className="mt-3.5 flex justify-center gap-2">
-            {[0, 1, 2].map((i) => (
-              <div
-                key={i}
-                className={`aspect-[5/7] w-[50px] border bg-[#0e1626] bg-[repeating-linear-gradient(135deg,rgba(255,255,255,0.03)_0_2px,transparent_2px_7px)] ${i === 0 ? 'border-primary' : 'border-line'}`}
+          {item.photos.length > 0 ? (
+            <PhotoGallery item={item} />
+          ) : (
+            <div className="relative mx-auto w-full max-w-[400px] border border-line">
+              <CardArt
+                name={item.card.name}
+                tint={artTintFor(item)}
+                imageUrl={item.card.imageUrl}
+                size="lg"
               />
-            ))}
-          </div>
+              <ConditionBadge
+                condition={item.condition}
+                size="md"
+                className="absolute left-3 top-3 bg-[#060911]/85"
+              />
+              {item.finish === 'foil' && (
+                <span className="absolute right-3 top-3">
+                  <FoilTag size="md" />
+                </span>
+              )}
+            </div>
+          )}
         </div>
 
         {/* columna info */}

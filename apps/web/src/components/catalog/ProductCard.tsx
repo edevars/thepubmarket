@@ -46,6 +46,17 @@ export function ProductCard({ item }: ProductCardProps) {
             </span>
           </div>
         )}
+
+        {item.photos.length > 0 && (
+          <span
+            role="img"
+            title={t('hasRealPhotos')}
+            aria-label={t('hasRealPhotos')}
+            className="absolute bottom-2 left-2 flex h-5 w-5 items-center justify-center border border-line-soft bg-[#060911]/78 text-[10px] text-cond-nm"
+          >
+            ◈
+          </span>
+        )}
       </div>
 
       <div className="flex flex-col gap-1.5 px-3 pb-3 pt-2.5">

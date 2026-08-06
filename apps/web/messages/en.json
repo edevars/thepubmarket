@@ -257,7 +257,16 @@
     "foil": "Foil",
     "nonfoil": "Non-foil",
     "notFound": "This item is not available.",
-    "backToCatalog": "← Back to catalog"
+    "backToCatalog": "← Back to catalog",
+    "galleryReferenceLabel": "Reference image",
+    "gallerySellerPhotoLabel": "Real photo of this copy",
+    "galleryQuantityHint": "Representative photos of the copy you'll receive — more than one copy is available at this condition.",
+    "galleryZoomAria": "Zoom image",
+    "galleryCloseAria": "Close zoomed image",
+    "galleryThumbReferenceAria": "View reference image",
+    "galleryThumbPhotoAria": "View photo {n}",
+    "galleryImageError": "Image failed to load",
+    "hasRealPhotos": "Real photos of this copy"
   },
   "states": {
     "loadingMsg": "Loading catalog…",

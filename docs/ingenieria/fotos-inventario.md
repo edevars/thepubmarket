@@ -320,3 +320,64 @@ Verificación de build/tipos (sí automatizada, a diferencia del flujo interacti
 @thepubmarket/web build` en verde — el build de producción confirma que los
 nuevos componentes cliente (`'use client'`) compilan y las rutas `/panel/*`
 siguen generándose sin errores.
+
+## 10. Galería en la ficha de catálogo: `PhotoGallery` (TASK-027)
+
+El payoff del epic: la ficha de un item (`/catalog/:id`) ya renderizaba una
+tira de 3 miniaturas decorativas (divs vacíos) bajo la imagen principal. Esta
+tarea la vuelve real — pero **solo** cuando el listing tiene fotos del
+vendedor. Con cero fotos, `CardDetailView` sigue renderizando exactamente el
+mismo markup de siempre (AC#5): la rama sin fotos es una copia literal del
+código anterior, no un refactor que "coincide por ahora".
+
+### Referencia vs. foto real: nunca se confunden
+
+La imagen canónica de Scryfall y las fotos reales del vendedor viven en el
+mismo arreglo intercambiable (`images = [referencia?, ...fotosDelVendedor]`),
+así que la lógica de miniaturas/lightbox no distingue casos especiales — pero
+la imagen activa siempre lleva una etiqueta visible ("Imagen de referencia" /
+"Foto real de este ejemplar") para que el comprador nunca confunda el arte de
+stock con el ejemplar real que está comprando.
+
+### Sin pipeline de thumbnails
+
+Las miniaturas son la imagen ya comprimida client-side por `PhotoManagerModal`
+(TASK-026, JPEG, lado más largo 1600px) escalada con CSS
+(`aspect-[5/7] w-[50px] object-cover`) — a 6 fotos por listing no vale la pena
+un pipeline de generación de thumbnails server-side.
+
+### Degradación ante una URL rota
+
+`ImageWithFallback` envuelve cada `<img>` (principal, miniaturas, lightbox)
+con un `onError` que la reemplaza por un `<div>` con el **mismo className**
+(mismo `aspect-[5/7]`) — la caja no cambia de tamaño, solo su contenido, así
+que una URL rota no genera salto de layout (AC#6).
+
+### Verificación manual (ambos locales, `es` y `en`, y un viewport móvil)
+
+Contra `pnpm --filter @thepubmarket/web build && pnpm --filter
+@thepubmarket/web start` (o `next dev`) local, con un listing que tenga fotos
+reales (subidas vía el panel, TASK-026) y otro sin ninguna:
+
+| Caso | Resultado esperado |
+|---|---|
+| Ficha de un listing CON fotos | Imagen principal + tira de miniaturas real (referencia + fotos), no la tira decorativa de antes |
+| Ficha de un listing SIN fotos | Idéntica a como se veía antes de este cambio: sin tira de miniaturas, sin lightbox al hacer clic en la imagen |
+| Etiqueta sobre la imagen principal | Dice "Imagen de referencia" cuando la miniatura de Scryfall está activa, "Foto real de este ejemplar" cuando una foto del vendedor está activa |
+| Clic en una miniatura | La imagen principal cambia, la miniatura activa queda resaltada (borde primario) |
+| Seleccionar una miniatura con Tab + Enter/Espacio (sin mouse) | Mismo resultado que con clic |
+| Clic en la imagen principal | Abre el lightbox a tamaño completo |
+| Clic fuera de la imagen dentro del lightbox (backdrop) | Cierra el lightbox |
+| Tecla Escape con el lightbox abierto | Cierra el lightbox |
+| Botón ✕ del lightbox | Cierra el lightbox |
+| Listing con `quantity > 1` y fotos | Texto visible aclarando que las fotos son representativas del ejemplar que se recibirá |
+| Forzar una URL de foto rota (editar la fila en D1 a una llave/URL inexistente) | La miniatura/imagen afectada muestra el fallback sin cambiar de tamaño ni mover el resto del layout |
+| Tarjeta de la grilla del catálogo para un listing con fotos | Indicador sutil (◈) visible en una esquina de la imagen |
+| Tarjeta de la grilla para un listing sin fotos | Sin indicador, igual que antes |
+| Repetir en `/en/catalog/...` | Todos los textos en inglés, sin claves sin traducir |
+| Viewport móvil (~375px) | La imagen principal y la tira de miniaturas siguen centradas y legibles, sin overflow horizontal |
+
+Datos de prueba: usar los mismos listings/fotos ya sembrados durante la
+verificación de TASK-026 (o subir 1-2 fotos nuevas y limpiarlas al terminar,
+misma disciplina de "D1 local queda igual que antes" de las secciones
+anteriores).
