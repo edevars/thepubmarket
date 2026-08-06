@@ -1,9 +1,11 @@
 ---
 id: TASK-027
 title: Show seller photo gallery on catalog item page
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - claude
 created_date: '2026-08-06 00:13'
+updated_date: '2026-08-06 01:34'
 labels:
   - 'epic:inventory-photos'
   - frontend
