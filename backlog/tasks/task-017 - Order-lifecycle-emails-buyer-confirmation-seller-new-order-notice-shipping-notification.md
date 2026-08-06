@@ -112,3 +112,36 @@ Scope amended before starting: the original criteria assumed data the product do
 Rather than invent that data here, the delivery model itself became TASK-019 (buyer chooses shipping at MXN 200 flat or free pickup at an allied store in the same city) and TASK-020 (fulfilment paths, carrier, ready-for-pickup state). This task now depends on both and gained a fourth email: ready for pickup, which is the event a pickup buyer is actually waiting on. Sending order emails before the delivery model exists would mean writing copy we would rewrite immediately.
 ---
 <!-- COMMENTS:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+## What changed
+
+A purchase is no longer silent. Four Spanish emails now carry an order through its life, all on the single existing provider path.
+
+- **apps/api/src/lib/email-templates.ts** — four pure templates on the existing layout: buyer confirmation, seller new-order notice, shipped, ready-for-pickup. Each returns HTML *and* plain text.
+- **apps/api/src/lib/order-emails.ts** (new) — turns an order id into a rendered message: items joined to inventory for set/condition, buyer email, selling store, and the pickup store when it differs. Never throws, so an order never pays for an email.
+- **apps/api/src/workflows/post-payment.ts** — the `notify` stub becomes `notify-buyer` and `notify-seller`, two separate checkpointed steps.
+- **apps/api/src/routes/seller-panel.ts** — `/ship` and `/ready` fire the buyer email through `waitUntil` after their guarded UPDATE succeeds.
+- **docs/ingenieria/email.md** — §1 lists every trigger→recipient, and a new §8 covers why each email cannot duplicate plus a five-step "it didn't arrive" checklist.
+
+## Tests / verification
+
+25 new tests (140 API + 28 web green), typecheck + biome clean. Live against `wrangler dev`: an HMAC-signed `checkout.session.completed` delivered **twice** produced exactly 4 emails across the whole run, not 6 — the redelivery answered `duplicate: true` and sent nothing; a second `/ready` returned 409 with no second email. The order settled to `paid` with inventory decremented while mail dispatched. The ready email correctly named the pickup store rather than the selling store, which are different rows.
+
+## What is left for you (AC#8, AC#9)
+
+Both need a real mailbox, so they stay unchecked:
+
+1. Deploy, then in Stripe **test mode** buy one shipping order and one pickup order with a real address you control.
+2. Confirm the buyer confirmation and the store notice arrive; open one in Gmail or Outlook web to satisfy AC#8, and view its plain-text part.
+3. From `/panel`, mark the shipping order **shipped** (with tracking + carrier) and the pickup order **ready**, and confirm both buyer emails arrive.
+
+The store notice goes to the email of the user linked to that seller; a seller with no claimed account logs `no linked user` and is skipped by design.
+
+## Risks
+
+- `EMAIL_MODE=send` is set in `wrangler.jsonc`, so **this deploy starts sending real mail** on every paid order. That is the intent, but it is a behaviour change in production worth knowing before you push the button.
+- A `wrangler dev` run cannot exercise a real provider failure (Miniflare simulates the send); that branch is covered by unit test only until it happens in production.
+<!-- SECTION:FINAL_SUMMARY:END -->
