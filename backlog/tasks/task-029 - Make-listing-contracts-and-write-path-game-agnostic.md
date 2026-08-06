@@ -5,7 +5,7 @@ status: In Progress
 assignee:
   - Claude
 created_date: '2026-08-06 02:19'
-updated_date: '2026-08-06 02:24'
+updated_date: '2026-08-06 02:26'
 labels:
   - 'epic:riftbound'
   - api
@@ -45,3 +45,28 @@ This task is the foundation the rest of epic:riftbound depends on.
 - [ ] #4 inventory.tcg stores the correct game per listing; no D1 table rebuild is required
 - [ ] #5 Tests cover the MTG regression path and the new game validation
 <!-- AC:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+## Approach
+
+Introduce a game-agnostic catalog identity (`catalogId`) plus an explicit `tcg` on the listing contracts and write path, with a minimal per-game provider seam. MTG keeps resolving through Scryfall with identical behavior; unsupported games fail fast with a clear error until their provider lands (TASK-030/031).
+
+## Steps
+
+1. **Shared contracts** (`packages/shared/src/index.ts`)
+   - `CardSnapshot`: add `tcg: Tcg`; rename `scryfallId` → `catalogId` (provider printing id; Scryfall UUID for MTG); `oracleId: string | null` (MTG-only concept).
+   - `CreateListingRequest`: `{ tcg?: Tcg (default 'mtg'), catalogId, condition, finish, language, priceCents, quantity }`.
+2. **D1 additive column** (`packages/db/src/schema.ts`): nullable `catalog_id` text + index `idx_inventory_catalog_id`. Generate migration with `db:generate` (pure ALTER TABLE ADD COLUMN — no rebuild), apply with `db:migrate:local`. Existing MTG rows keep `scryfall_id`; reads fall back `catalogId ?? scryfallId`.
+3. **Write path** (`apps/api/src/lib/inventory.ts`): provider registry `{ mtg: getCardById }` keyed by `Tcg`; unknown-to-registry games return 400 `tcg_not_supported`. Insert stores `tcg` from input, `catalog_id` always, `scryfall_id`/`oracle_id` only for MTG. `rowToInventoryItem` emits `tcg` + `catalogId` with legacy fallback.
+4. **Scryfall client** (`apps/api/src/lib/scryfall.ts`): `normalizeCard` emits `tcg: 'mtg'`, `catalogId`, nullable `oracleId`.
+5. **Route schemas** (`apps/api/src/routes/seller-panel.ts`, `admin.ts`): `tcg: z.enum(TCGS).default('mtg')` (unknown values → zod 400); accept `catalogId` with legacy `scryfallId` alias on the wire so the deployed web bundle and `scripts/load-inventory.mjs` keep working until TASK-031/032 migrate them.
+6. **Web mechanical rename only** (no behavior change, keeps typecheck green): `AddCardFlow.tsx` (`sel.scryfallId` → `catalogId`, send `tcg: 'mtg'`), `mock-data.ts`, `client-api.ts` if typed. Game selector stays in TASK-032.
+7. **Tests** (`apps/api/src/lib/inventory.test.ts`, vitest, mock scryfall module + stub db): MTG happy path unchanged (row fields, finish validation vs Scryfall finishes), `finish_not_available`, `tcg_not_supported` without touching the provider, legacy-row fallback in `rowToInventoryItem`.
+8. **Validate**: `pnpm typecheck`, `pnpm lint`, `pnpm --filter @thepubmarket/api test`, migration generate+apply local.
+
+## Risks
+- Wire compat: legacy `scryfallId` alias kept at the zod layer on purpose; removal happens in TASK-031.
+- `catalog_id` is additive and reversible; no CHECK added on `tcg` (validation stays app-level, consistent with D1 no-rebuild constraint).
+<!-- SECTION:PLAN:END -->
