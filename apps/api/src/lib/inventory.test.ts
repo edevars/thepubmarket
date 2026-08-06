@@ -2,7 +2,7 @@ import type { Db, InventoryRow } from '@thepubmarket/db'
 import type { CardSnapshot } from '@thepubmarket/shared'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { CatalogContext } from './catalog-providers'
-import { createListing, type ListingInput, rowToInventoryItem } from './inventory'
+import { catalogIdOf, createListing, type ListingInput, rowToInventoryItem } from './inventory'
 import { getCardById, ScryfallError } from './scryfall'
 
 // El provider local de Riftbound (catalog-db) leería D1; aquí se mockea la
@@ -291,5 +291,56 @@ describe('rowToInventoryItem', () => {
       const row = { ...baseRow, cardAttributes: bad } as InventoryRow
       expect(rowToInventoryItem(row, seller).card.gameAttributes).toBeNull()
     }
+  })
+
+  it('leaves rules/flavor text unset (TASK-038): they only live in catalog_cards, not in the snapshot', () => {
+    // `inventory` nunca guardó rules_text/flavor_text; el detalle público los
+    // junta aparte desde `catalog_cards` (ver routes/catalog.ts). El snapshot
+    // que sale de aquí debe quedarse sin ellos, no inventar null.
+    const item = rowToInventoryItem(baseRow, seller)
+    expect(item.card.rulesText).toBeUndefined()
+    expect(item.card.flavorText).toBeUndefined()
+  })
+
+  it('exposes rarity, set code/name and collector number for both MTG and Riftbound rows', () => {
+    const mtgItem = rowToInventoryItem(baseRow, seller)
+    expect(mtgItem.card).toMatchObject({
+      rarity: 'common',
+      setCode: 'lea',
+      setName: 'Limited Edition Alpha',
+      collectorNumber: '161',
+    })
+
+    const riftboundRow = {
+      ...baseRow,
+      tcg: 'riftbound',
+      rarity: 'showcase',
+      setCode: 'OGN',
+      setName: 'Origins',
+      collectorNumber: '301',
+      cardAttributes: JSON.stringify(RIFTBOUND_SNAPSHOT.gameAttributes),
+    } as InventoryRow
+    const riftboundItem = rowToInventoryItem(riftboundRow, seller)
+    expect(riftboundItem.card).toMatchObject({
+      rarity: 'showcase',
+      setCode: 'OGN',
+      setName: 'Origins',
+      collectorNumber: '301',
+      gameAttributes: RIFTBOUND_SNAPSHOT.gameAttributes,
+    })
+  })
+})
+
+describe('catalogIdOf', () => {
+  it('prefers catalog_id when present', () => {
+    expect(catalogIdOf({ catalogId: 'cat-1', scryfallId: 'legacy' } as InventoryRow)).toBe('cat-1')
+  })
+
+  it('falls back to scryfall_id for rows created before catalog_id existed', () => {
+    expect(catalogIdOf({ catalogId: null, scryfallId: 'legacy' } as InventoryRow)).toBe('legacy')
+  })
+
+  it('is empty when neither column has a value', () => {
+    expect(catalogIdOf({ catalogId: null, scryfallId: null } as InventoryRow)).toBe('')
   })
 })

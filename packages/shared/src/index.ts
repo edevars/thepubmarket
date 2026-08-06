@@ -115,6 +115,18 @@ export interface CardSnapshot {
    * no alimenta este campo) y para publicaciones anteriores a la columna.
    */
   gameAttributes: CardGameAttributes | null
+  /**
+   * Texto de reglas de la carta, cuando el catálogo de origen lo aporta (hoy
+   * solo el catálogo local en D1, p.ej. Riftbound — ver `catalog_cards`).
+   *
+   * OPCIONAL a propósito (no `| null`): es un campo aditivo (TASK-038) y
+   * snapshots viejos —cacheados en KV antes de este cambio, o servidos por un
+   * proveedor que no lo aporta como Scryfall— simplemente no lo traen. Un
+   * consumidor debe tratar `undefined` y `null` igual: "no hay texto".
+   */
+  rulesText?: string | null
+  /** Texto de ambientación ("flavor text"). Mismo criterio que `rulesText`. */
+  flavorText?: string | null
 }
 
 /**

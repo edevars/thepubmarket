@@ -15,7 +15,7 @@
  * espejada en R2, con fallback a la URL del CDN de origen mientras tanto.
  */
 
-import { type CatalogCardRow, catalogCards } from '@thepubmarket/db'
+import { type CatalogCardRow, catalogCards, type Db } from '@thepubmarket/db'
 import type { CardGameAttributes, CardSnapshot, Tcg } from '@thepubmarket/shared'
 import { and, asc, eq, sql } from 'drizzle-orm'
 import { CatalogError } from './catalog'
@@ -44,7 +44,30 @@ export function rowToSnapshot(row: CatalogCardRow, origin: string): CardSnapshot
     gameAttributes: row.gameAttributes
       ? (JSON.parse(row.gameAttributes) as CardGameAttributes)
       : null,
+    rulesText: row.rulesText,
+    flavorText: row.flavorText,
   }
+}
+
+/**
+ * Trae solo rules_text/flavor_text de `catalog_cards` para enriquecer un
+ * detalle que ya se sirvió desde el snapshot guardado en `inventory` (esa
+ * fila NO guarda estos textos — ver TASK-038). Null si el juego no tiene
+ * catálogo local o la impresión ya no está en él; un detalle nunca debe
+ * fallar por esto, solo mostrar menos.
+ */
+export async function getCardText(
+  db: Db,
+  tcg: Tcg,
+  catalogId: string,
+): Promise<{ rulesText: string | null; flavorText: string | null } | null> {
+  if (!catalogId) return null
+  const row = await db
+    .select({ rulesText: catalogCards.rulesText, flavorText: catalogCards.flavorText })
+    .from(catalogCards)
+    .where(and(eq(catalogCards.tcg, tcg), eq(catalogCards.catalogId, catalogId)))
+    .get()
+  return row ?? null
 }
 
 /**

@@ -37,6 +37,17 @@ function parseGameAttributes(raw: string | null): CardGameAttributes | null {
 }
 
 /**
+ * Id de impresión de una fila de inventario en el catálogo de su juego.
+ * Filas previas a la columna `catalog_id` solo tienen `scryfall_id` (MTG).
+ * Se usa tanto para armar el snapshot como para enriquecer el detalle con
+ * datos que viven en `catalog_cards` y no en el snapshot de `inventory`
+ * (rules_text/flavor_text — ver `catalog.get('/:id')` y TASK-038).
+ */
+export function catalogIdOf(row: InventoryRow): string {
+  return row.catalogId ?? row.scryfallId ?? ''
+}
+
+/**
  * Convierte una fila de Drizzle al contrato público `InventoryItem`.
  *
  * `photos` es opcional y default vacío: quien no consulte `inventory_photos`
@@ -55,8 +66,7 @@ export function rowToInventoryItem(
     tcg: row.tcg as Tcg,
     card: {
       tcg: row.tcg as Tcg,
-      // Filas previas a la columna catalog_id solo tienen scryfall_id (MTG).
-      catalogId: row.catalogId ?? row.scryfallId ?? '',
+      catalogId: catalogIdOf(row),
       oracleId: row.oracleId,
       name: row.title,
       setCode: row.setCode ?? '',
