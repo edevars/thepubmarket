@@ -21,12 +21,8 @@ export function BrowseByGame({ items }: { items: InventoryItem[] }) {
         {TCGS.map((tcg) => {
           const count = counts.get(tcg) ?? 0
           const meta = TCG_META[tcg]
-          return (
-            <Link
-              key={tcg}
-              href="/catalog"
-              className="clip-tile relative flex min-h-[84px] flex-col justify-between overflow-hidden border border-line bg-panel px-4 py-4.5 transition hover:border-primary hover:bg-[#101a30]"
-            >
+          const tile = (
+            <>
               <span className="absolute -right-2.5 -top-2.5 font-display text-[46px] font-bold text-white/[0.03]">
                 {meta.short}
               </span>
@@ -36,7 +32,25 @@ export function BrowseByGame({ items }: { items: InventoryItem[] }) {
               <span className="relative font-mono text-[10px] tracking-[0.06em] text-faint">
                 {count > 0 ? `${count} singles` : tCommon('soon')}
               </span>
+            </>
+          )
+          const base =
+            'clip-tile relative flex min-h-[84px] flex-col justify-between overflow-hidden border border-line bg-panel px-4 py-4.5'
+
+          // Un juego sin inventario no lleva a ningún lado: enlazarlo mandaría
+          // al comprador a un catálogo vacío.
+          return count > 0 ? (
+            <Link
+              key={tcg}
+              href={`/catalog?game=${tcg}`}
+              className={`${base} transition hover:border-primary hover:bg-[#101a30]`}
+            >
+              {tile}
             </Link>
+          ) : (
+            <div key={tcg} className={`${base} opacity-60`}>
+              {tile}
+            </div>
           )
         })}
       </div>

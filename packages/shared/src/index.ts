@@ -142,6 +142,20 @@ export interface InventoryItem {
   status: 'active' | 'inactive'
 }
 
+/** Cuántos singles disponibles hay de un juego. */
+export interface CatalogGameCount {
+  tcg: Tcg
+  count: number
+}
+
+/**
+ * Respuesta de `GET /catalog/games`: conteo por juego sobre TODO el inventario
+ * disponible, independiente del filtro activo. Solo aparecen juegos con stock.
+ */
+export interface CatalogGamesResponse {
+  items: CatalogGameCount[]
+}
+
 /** Respuesta paginada de `GET /catalog`. */
 export interface CatalogListResponse {
   items: InventoryItem[]

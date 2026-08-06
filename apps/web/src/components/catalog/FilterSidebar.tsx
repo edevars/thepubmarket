@@ -3,7 +3,6 @@ import { useTranslations } from 'next-intl'
 import { FILTER_LANGUAGES, TCG_META } from '@/lib/catalog/display'
 
 export interface FilterState {
-  tcgs: Tcg[]
   conditions: Condition[]
   languages: string[]
   foilOnly: boolean
@@ -15,6 +14,11 @@ interface FilterSidebarProps {
   state: FilterState
   /** Juegos presentes en el inventario, con su conteo. */
   tcgCounts: { tcg: Tcg; count: number }[]
+  /**
+   * Juego activo. Es de selección única y vive en la URL (lo filtra la API),
+   * a diferencia del resto de los filtros, que son estado local.
+   */
+  activeGame?: Tcg
   conditionCounts: Record<Condition, number>
   languageCounts: Record<string, number>
   foilCount: number
@@ -36,6 +40,7 @@ const controlBase =
 export function FilterSidebar({
   state,
   tcgCounts,
+  activeGame,
   conditionCounts,
   languageCounts,
   foilCount,
@@ -91,7 +96,7 @@ export function FilterSidebar({
         </div>
         <div className="mb-5 grid gap-1.5">
           {tcgCounts.map(({ tcg, count }) => {
-            const active = state.tcgs.includes(tcg)
+            const active = activeGame === tcg
             return (
               <button
                 key={tcg}

@@ -1,9 +1,10 @@
 'use client'
 
-import { type Condition, type InventoryItem, TCGS, type Tcg } from '@thepubmarket/shared'
+import type { CatalogGameCount, Condition, InventoryItem, Tcg } from '@thepubmarket/shared'
 import { useTranslations } from 'next-intl'
 import { useMemo, useState } from 'react'
 import { NoResultsState } from '@/components/states/NoResultsState'
+import { useRouter } from '@/i18n/navigation'
 import { applyFilters, type CatalogFilters } from '@/lib/catalog/data'
 import { TCG_META } from '@/lib/catalog/display'
 import { type ActiveChip, ActiveChips } from './ActiveChips'
@@ -11,7 +12,6 @@ import { CardGrid } from './CardGrid'
 import { FilterSidebar, type FilterState } from './FilterSidebar'
 
 const EMPTY: FilterState = {
-  tcgs: [],
   conditions: [],
   languages: [],
   foilOnly: false,
@@ -38,23 +38,42 @@ function priceLabel(minPesos: string, maxPesos: string): string {
 interface CatalogViewProps {
   items: InventoryItem[]
   initialQuery?: string
+  /** Juego activo. Lo filtra el servidor y vive en la URL (`?game=`). */
+  activeGame?: Tcg
+  /** Conteo por juego sobre TODO el inventario, no solo el juego activo. */
+  gameCounts: CatalogGameCount[]
 }
 
-export function CatalogView({ items, initialQuery = '' }: CatalogViewProps) {
+export function CatalogView({
+  items,
+  initialQuery = '',
+  activeGame,
+  gameCounts,
+}: CatalogViewProps) {
   const t = useTranslations('catalog')
   const tDetail = useTranslations('detail')
+  const router = useRouter()
   const [q, setQ] = useState(initialQuery)
   const [filters, setFilters] = useState<FilterState>(EMPTY)
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false)
 
-  const tcgCounts = useMemo(() => {
-    const counts = new Map<Tcg, number>()
-    for (const item of items) counts.set(item.tcg, (counts.get(item.tcg) ?? 0) + 1)
-    return TCGS.filter((tcg) => counts.has(tcg)).map((tcg) => ({
-      tcg,
-      count: counts.get(tcg) ?? 0,
-    }))
-  }, [items])
+  const tcgCounts = useMemo(
+    () => gameCounts.map(({ tcg, count }) => ({ tcg, count })),
+    [gameCounts],
+  )
+
+  /**
+   * El juego es navegación, no estado local: cambia la URL para que la lista
+   * se vuelva a pedir ya filtrada por el servidor. Tocar el juego activo lo
+   * quita. La búsqueda del header se conserva.
+   */
+  function goToGame(tcg: Tcg) {
+    const params = new URLSearchParams()
+    if (q.trim()) params.set('q', q.trim())
+    if (tcg !== activeGame) params.set('game', tcg)
+    const qs = params.toString()
+    router.push(qs ? `/catalog?${qs}` : '/catalog')
+  }
 
   const conditionCounts = useMemo(() => {
     const counts = Object.fromEntries(['NM', 'LP', 'MP', 'HP', 'DMG'].map((c) => [c, 0])) as Record<
@@ -74,9 +93,9 @@ export function CatalogView({ items, initialQuery = '' }: CatalogViewProps) {
   const foilCount = useMemo(() => items.filter((item) => item.finish === 'foil').length, [items])
 
   const visible = useMemo(() => {
+    // Sin `tcg`: los items ya vienen filtrados por juego desde la API.
     const assembled: CatalogFilters = {
       q,
-      tcgs: filters.tcgs,
       conditions: filters.conditions,
       languages: filters.languages,
       foilOnly: filters.foilOnly,
@@ -87,7 +106,7 @@ export function CatalogView({ items, initialQuery = '' }: CatalogViewProps) {
   }, [items, q, filters])
 
   const activeFilterCount =
-    filters.tcgs.length +
+    (activeGame ? 1 : 0) +
     filters.conditions.length +
     filters.languages.length +
     (filters.foilOnly ? 1 : 0) +
@@ -97,14 +116,20 @@ export function CatalogView({ items, initialQuery = '' }: CatalogViewProps) {
   function clearAll() {
     setQ('')
     setFilters(EMPTY)
+    // Limpiar también saca el juego de la URL, o el catálogo seguiría acotado.
+    if (activeGame) router.push('/catalog')
   }
 
   const chips: ActiveChip[] = [
-    ...filters.tcgs.map((tcg) => ({
-      key: `tcg-${tcg}`,
-      label: TCG_META[tcg].name,
-      onRemove: () => setFilters((f) => ({ ...f, tcgs: toggle(f.tcgs, tcg) })),
-    })),
+    ...(activeGame
+      ? [
+          {
+            key: `tcg-${activeGame}`,
+            label: TCG_META[activeGame].name,
+            onRemove: () => goToGame(activeGame),
+          },
+        ]
+      : []),
     ...filters.conditions.map((c) => ({
       key: `cond-${c}`,
       label: c,
@@ -181,7 +206,8 @@ export function CatalogView({ items, initialQuery = '' }: CatalogViewProps) {
             foilCount={foilCount}
             activeCount={activeFilterCount}
             resultCount={visible.length}
-            onToggleTcg={(tcg) => setFilters((f) => ({ ...f, tcgs: toggle(f.tcgs, tcg) }))}
+            activeGame={activeGame}
+            onToggleTcg={goToGame}
             onToggleCondition={(c: Condition) =>
               setFilters((f) => ({ ...f, conditions: toggle(f.conditions, c) }))
             }

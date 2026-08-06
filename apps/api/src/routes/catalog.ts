@@ -7,7 +7,9 @@
  */
 
 import { inventory, sellers } from '@thepubmarket/db'
-import { and, asc, count, eq, gt, inArray, like, type SQL } from 'drizzle-orm'
+import type { CatalogGamesResponse, Tcg } from '@thepubmarket/shared'
+import { TCGS } from '@thepubmarket/shared'
+import { and, asc, count, desc, eq, gt, inArray, like, type SQL } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { rowToInventoryItem } from '../lib/inventory'
 import { loadPhotosByInventoryId } from '../lib/photos'
@@ -31,24 +33,38 @@ function parseIntParam(
   return Math.min(Math.max(n, min), max)
 }
 
+/**
+ * Interpreta el filtro de juego. Ausente/vacío = sin filtro; un juego fuera de
+ * `TCGS` es un error explícito y no un catálogo vacío silencioso, que se vería
+ * igual que "no hay nada de ese juego".
+ */
+export function parseTcgParam(raw: string | undefined): { tcg?: Tcg; invalid: boolean } {
+  const value = raw?.trim()
+  if (!value) return { invalid: false }
+  return TCGS.includes(value as Tcg) ? { tcg: value as Tcg, invalid: false } : { invalid: true }
+}
+
 export const catalog = new Hono<AppEnv>()
 
 /**
  * GET /catalog — lista paginada de inventario disponible.
- * Query: q (nombre, LIKE), set (set_code exacto), seller (id exacto), limit, offset.
- * Disponible = status 'active' y quantity > 0.
+ * Query: q (nombre, LIKE), tcg (juego exacto), set (set_code exacto),
+ * seller (id exacto), limit, offset. Disponible = status 'active' y quantity > 0.
  */
 catalog.get('/', async (c) => {
   const db = c.get('db')
   const q = c.req.query('q')?.trim()
   const set = c.req.query('set')?.trim()
   const seller = c.req.query('seller')?.trim()
+  const { tcg, invalid } = parseTcgParam(c.req.query('tcg'))
+  if (invalid) return c.json({ error: 'invalid_tcg', supported: TCGS }, 400)
   const limit = parseIntParam(c.req.query('limit'), DEFAULT_LIMIT, 1, MAX_LIMIT)
   const offset = parseIntParam(c.req.query('offset'), 0, 0, Number.MAX_SAFE_INTEGER)
 
   const filters: SQL[] = [eq(inventory.status, 'active'), gt(inventory.quantity, 0)]
   // SQLite LIKE es case-insensitive para ASCII; el índice usa COLLATE NOCASE.
   if (q) filters.push(like(inventory.title, `%${q}%`))
+  if (tcg) filters.push(eq(inventory.tcg, tcg))
   if (set) filters.push(eq(inventory.setCode, set))
   if (seller) filters.push(eq(inventory.sellerId, seller))
   const where = and(...filters)
@@ -90,6 +106,32 @@ catalog.get('/', async (c) => {
     limit,
     offset,
   })
+})
+
+/**
+ * GET /catalog/games — cuántos singles disponibles hay por juego.
+ *
+ * Va ANTES de `/:id` a propósito: registrada después, Hono trataría "games"
+ * como el id de un item.
+ *
+ * Existe para que el filtro de juego pueda vivir en el servidor sin romper la
+ * navegación: la barra lateral necesita los conteos de TODOS los juegos, no
+ * solo el que se está viendo, o el comprador no podría cambiarse de juego.
+ */
+catalog.get('/games', async (c) => {
+  const db = c.get('db')
+  const rows = await db
+    .select({ tcg: inventory.tcg, total: count() })
+    .from(inventory)
+    .where(and(eq(inventory.status, 'active'), gt(inventory.quantity, 0)))
+    .groupBy(inventory.tcg)
+    .orderBy(desc(count()))
+    .all()
+
+  const body: CatalogGamesResponse = {
+    items: rows.map((r) => ({ tcg: r.tcg as Tcg, count: r.total })),
+  }
+  return c.json(body)
 })
 
 /**

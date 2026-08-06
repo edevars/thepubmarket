@@ -66,11 +66,16 @@ export function SellerInventory({ items }: { items: InventoryItem[] }) {
   const visible = useMemo(() => {
     const filtered = applyFilters(items, {
       q,
-      tcgs,
       conditions,
       maxCents: maxPesos < maxBound ? maxPesos * 100 : undefined,
     })
-    return setCode ? filtered.filter((i) => i.card.setCode === setCode) : filtered
+    // Juego y set se filtran aquí y no en `applyFilters`: esta vista es
+    // multi-selección sobre una lista ya cargada, mientras que el filtro de
+    // juego del catálogo es de selección única y lo resuelve el servidor.
+    return filtered.filter(
+      (i) =>
+        (tcgs.length === 0 || tcgs.includes(i.tcg)) && (!setCode || i.card.setCode === setCode),
+    )
   }, [items, q, tcgs, conditions, maxPesos, maxBound, setCode])
 
   function clearAll() {

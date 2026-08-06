@@ -10,8 +10,8 @@
  * Fallback offline: con `NEXT_PUBLIC_USE_MOCKS=true` se sirven los mocks de
  * `mock-data.ts` (útil para desarrollar sin la API levantada).
  */
-import type { Condition, InventoryItem, Tcg } from '@thepubmarket/shared'
-import { fetchCatalog, fetchCatalogItem } from '@/lib/api'
+import type { CatalogGameCount, Condition, InventoryItem, Tcg } from '@thepubmarket/shared'
+import { fetchCatalog, fetchCatalogGameCounts, fetchCatalogItem } from '@/lib/api'
 import { MOCK_LISTINGS } from './mock-data'
 
 /** Trae todo el inventario activo en una sola página (tope alto de la API). */
@@ -21,7 +21,12 @@ const USE_MOCKS = process.env.NEXT_PUBLIC_USE_MOCKS === 'true'
 export interface CatalogFilters {
   /** Búsqueda por nombre (substring, case-insensitive). */
   q?: string
-  tcgs?: Tcg[]
+  /**
+   * Juego. Se aplica en el SERVIDOR (`GET /catalog?tcg=`), no aquí: si se
+   * filtrara en cliente, el tope de `FETCH_LIMIT` recortaría antes de filtrar
+   * y un juego con pocos singles podría no aparecer.
+   */
+  tcg?: Tcg
   conditions?: Condition[]
   /** Idiomas de la impresión ('es' | 'en' | 'jp'). */
   languages?: string[]
@@ -31,12 +36,16 @@ export interface CatalogFilters {
   maxCents?: number
 }
 
-/** Aplica los filtros sobre una lista ya cargada (reutilizable en cliente). */
+/**
+ * Aplica los filtros sobre una lista ya cargada (reutilizable en cliente).
+ * `tcg` también se respeta aquí para que los mocks y las listas ya cargadas se
+ * comporten igual que la API, pero en producción llega ya filtrado.
+ */
 export function applyFilters(items: InventoryItem[], f: CatalogFilters): InventoryItem[] {
   const q = f.q?.trim().toLowerCase()
   return items.filter((item) => {
     if (q && !item.card.name.toLowerCase().includes(q)) return false
-    if (f.tcgs?.length && !f.tcgs.includes(item.tcg)) return false
+    if (f.tcg && item.tcg !== f.tcg) return false
     if (f.conditions?.length && !f.conditions.includes(item.condition)) return false
     if (f.languages?.length && !f.languages.includes(item.language)) return false
     if (f.foilOnly && item.finish !== 'foil') return false
@@ -47,15 +56,30 @@ export function applyFilters(items: InventoryItem[], f: CatalogFilters): Invento
 }
 
 /** Carga el inventario activo (API real o mocks según el toggle). */
-async function loadActive(): Promise<InventoryItem[]> {
+async function loadActive(tcg?: Tcg): Promise<InventoryItem[]> {
   if (USE_MOCKS) return MOCK_LISTINGS.filter((i) => i.status === 'active')
-  const { items } = await fetchCatalog({ limit: FETCH_LIMIT })
+  const { items } = await fetchCatalog({ limit: FETCH_LIMIT, tcg })
   return items
 }
 
-/** Lista del catálogo. Sin filtros devuelve todo el inventario activo. */
+/**
+ * Lista del catálogo. Sin filtros devuelve todo el inventario activo. El juego
+ * viaja a la API; el resto de los filtros se aplican sobre lo ya cargado.
+ */
 export async function getCatalog(filters: CatalogFilters = {}): Promise<InventoryItem[]> {
-  return applyFilters(await loadActive(), filters)
+  return applyFilters(await loadActive(filters.tcg), filters)
+}
+
+/** Singles disponibles por juego, para el filtro y los mosaicos de la home. */
+export async function getGameCounts(): Promise<CatalogGameCount[]> {
+  if (USE_MOCKS) {
+    const counts = new Map<Tcg, number>()
+    for (const item of MOCK_LISTINGS.filter((i) => i.status === 'active')) {
+      counts.set(item.tcg, (counts.get(item.tcg) ?? 0) + 1)
+    }
+    return [...counts].map(([tcg, count]) => ({ tcg, count })).sort((a, b) => b.count - a.count)
+  }
+  return fetchCatalogGameCounts()
 }
 
 /** Detalle de un item por id. Null si no existe / no está activo. */

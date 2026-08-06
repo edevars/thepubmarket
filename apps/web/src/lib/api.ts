@@ -3,10 +3,13 @@
  * público en Fase 1 (sin carrito ni checkout).
  */
 import type {
+  CatalogGameCount,
+  CatalogGamesResponse,
   CatalogListResponse,
   InventoryItem,
   Seller,
   SellerListResponse,
+  Tcg,
 } from '@thepubmarket/shared'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8787'
@@ -15,6 +18,8 @@ export const CATALOG_PAGE_SIZE = 24
 
 export interface CatalogQuery {
   q?: string
+  /** Filtra por juego. La API lo aplica en SQL, no el cliente. */
+  tcg?: Tcg
   set?: string
   /** Filtra por id de seller (inventario de una tienda). */
   seller?: string
@@ -29,6 +34,7 @@ export async function fetchCatalog(query: CatalogQuery): Promise<CatalogListResp
   const limit = query.limit ?? CATALOG_PAGE_SIZE
   const params = new URLSearchParams()
   if (query.q) params.set('q', query.q)
+  if (query.tcg) params.set('tcg', query.tcg)
   if (query.set) params.set('set', query.set)
   if (query.seller) params.set('seller', query.seller)
   params.set('limit', String(limit))
@@ -37,6 +43,17 @@ export async function fetchCatalog(query: CatalogQuery): Promise<CatalogListResp
   const res = await fetch(`${API_URL}/catalog?${params.toString()}`, { cache: 'no-store' })
   if (!res.ok) throw new Error(`catalog request failed: ${res.status}`)
   return (await res.json()) as CatalogListResponse
+}
+
+/**
+ * Singles disponibles por juego, sobre todo el inventario. Lo necesita el
+ * filtro de juego para seguir mostrando los demás juegos cuando la lista ya
+ * viene filtrada por el servidor.
+ */
+export async function fetchCatalogGameCounts(): Promise<CatalogGameCount[]> {
+  const res = await fetch(`${API_URL}/catalog/games`, { cache: 'no-store' })
+  if (!res.ok) throw new Error(`catalog games request failed: ${res.status}`)
+  return ((await res.json()) as CatalogGamesResponse).items
 }
 
 /** Detalle de un item. Devuelve null si no existe / no está activo (404). */
