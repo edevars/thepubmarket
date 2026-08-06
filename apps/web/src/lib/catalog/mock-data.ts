@@ -1,14 +1,16 @@
 /**
- * Datos de prueba del catálogo (Fase 1 — shell visual). ~26 singles de ejemplo
+ * Datos de prueba del catálogo (Fase 1 — shell visual). Singles de ejemplo
  * tipados como `InventoryItem` del contrato real, para que el cableado a D1 en
  * una sesión futura sea cambio de FUENTE de datos, no de tipos.
  *
  * Precios en CENTAVOS MXN (entero). Las cartas MTG llevan URL de imagen real de
- * Scryfall (ver `SCRYFALL_IMAGES`); las no-MTG quedan con `imageUrl: null` y
- * conservan el placeholder geométrico (Scryfall es MTG-only).
+ * Scryfall (ver `SCRYFALL_IMAGES`); el resto queda con `imageUrl: null` y
+ * conserva el placeholder geométrico (Scryfall solo cubre MTG; los demás
+ * catálogos de origen — p.ej. Riftbound en D1, TASK-037 — no se llaman aquí).
  */
 import {
   ANCHOR_SELLER_ID,
+  type CardGameAttributes,
   type Condition,
   type InventoryItem,
   type Tcg,
@@ -30,11 +32,17 @@ interface Spec {
   pesos: number
   qty: number
   artist: string
+  /**
+   * Atributos propios del juego (hoy solo Riftbound, ver `CardGameAttributes`).
+   * `undefined` para juegos sin atributos propios: se normaliza a `null` en
+   * `listing()`, igual que hace la API real.
+   */
+  gameAttributes?: CardGameAttributes
 }
 
 /**
  * URLs de imagen de Scryfall por id de mock (solo MTG; Scryfall es MTG-only).
- * Las 4 cartas no-MTG (Charizard, Blue-Eyes, Luffy, Elsa) no tienen entrada y
+ * El resto de los mocks (Riftbound y los demás TCG) no tienen entrada aquí y
  * conservan el placeholder geométrico.
  */
 const SCRYFALL_IMAGES: Record<string, string> = {
@@ -93,7 +101,9 @@ function listing(s: Spec): InventoryItem {
     card: {
       tcg: s.tcg,
       catalogId: `mock-${s.id}`,
-      oracleId: `oracle-${s.id}`,
+      // Concepto exclusivo de MTG (carta lógica de Scryfall compartida entre
+      // impresiones) — null en el resto, igual que en los snapshots reales.
+      oracleId: s.tcg === 'mtg' ? `oracle-${s.id}` : null,
       name: s.name,
       setCode: s.setCode,
       setName: s.setName,
@@ -103,8 +113,7 @@ function listing(s: Spec): InventoryItem {
       artist: s.artist,
       finishes: s.foil ? ['nonfoil', 'foil'] : ['nonfoil'],
       imageUrl: SCRYFALL_IMAGES[s.id] ?? null,
-      // Los mocks son MTG: no hay atributos de juego que mostrar.
-      gameAttributes: null,
+      gameAttributes: s.gameAttributes ?? null,
     },
     // Los mocks no llevan fotos del ejemplar: son cartas inventadas.
     photos: [],
@@ -450,7 +459,225 @@ const SPECS: Spec[] = [
     artist: 'Anna Steinbauer',
   },
 
-  // ---- Otros TCG (fidelidad al diseño; lanzamiento real es MTG-first) ----
+  // ---- Riftbound (TASK-037: catálogo real en D1, set Origins/OGN) ----
+  {
+    id: 'jinx-loose-cannon',
+    name: 'Jinx - Loose Cannon (Signature)',
+    tcg: 'riftbound',
+    setCode: 'OGN',
+    setName: 'Origins',
+    num: '301',
+    rarity: 'showcase',
+    cond: 'NM',
+    lang: 'en',
+    foil: true,
+    pesos: 1650,
+    qty: 2,
+    artist: 'Jonathan Santoro',
+    gameAttributes: {
+      tcg: 'riftbound',
+      type: 'Legend',
+      supertype: null,
+      domains: ['Fury', 'Order'],
+      energy: 4,
+      might: 3,
+      power: null,
+    },
+  },
+  {
+    id: 'ashe-frost-archer',
+    name: 'Ashe, Frost Archer',
+    tcg: 'riftbound',
+    setCode: 'OGN',
+    setName: 'Origins',
+    num: '014',
+    rarity: 'rare',
+    cond: 'NM',
+    lang: 'en',
+    foil: false,
+    pesos: 420,
+    qty: 6,
+    artist: 'Alex Flores',
+    gameAttributes: {
+      tcg: 'riftbound',
+      type: 'Unit',
+      supertype: 'Champion',
+      domains: ['Calm'],
+      energy: 3,
+      might: 3,
+      power: null,
+    },
+  },
+  {
+    id: 'darius-hand-of-noxus',
+    name: 'Darius, Hand of Noxus',
+    tcg: 'riftbound',
+    setCode: 'OGN',
+    setName: 'Origins',
+    num: '027',
+    rarity: 'epic',
+    cond: 'NM',
+    lang: 'en',
+    foil: true,
+    pesos: 890,
+    qty: 3,
+    artist: 'Grafit Studio',
+    gameAttributes: {
+      tcg: 'riftbound',
+      type: 'Unit',
+      supertype: 'Champion',
+      domains: ['Fury'],
+      energy: 5,
+      might: 6,
+      power: null,
+    },
+  },
+  {
+    id: 'piltover-peacekeeper',
+    name: 'Piltover Peacekeeper',
+    tcg: 'riftbound',
+    setCode: 'OGN',
+    setName: 'Origins',
+    num: '118',
+    rarity: 'common',
+    cond: 'LP',
+    lang: 'es',
+    foil: false,
+    pesos: 45,
+    qty: 18,
+    artist: 'Studio Roa',
+    gameAttributes: {
+      tcg: 'riftbound',
+      type: 'Unit',
+      supertype: 'Basic',
+      domains: ['Order'],
+      energy: 2,
+      might: 2,
+      power: null,
+    },
+  },
+  {
+    id: 'zaunite-recruit',
+    name: 'Zaunite Recruit',
+    tcg: 'riftbound',
+    setCode: 'OGN',
+    setName: 'Origins',
+    num: '342',
+    rarity: 'common',
+    cond: 'NM',
+    lang: 'en',
+    foil: false,
+    pesos: 30,
+    qty: 24,
+    artist: 'Studio Roa',
+    gameAttributes: {
+      tcg: 'riftbound',
+      type: 'Unit',
+      supertype: 'Token',
+      domains: ['Chaos'],
+      energy: 1,
+      might: 1,
+      power: null,
+    },
+  },
+  {
+    id: 'get-excited',
+    name: 'Get Excited!',
+    tcg: 'riftbound',
+    setCode: 'OGN',
+    setName: 'Origins',
+    num: '205',
+    rarity: 'uncommon',
+    cond: 'NM',
+    lang: 'en',
+    foil: false,
+    pesos: 65,
+    qty: 10,
+    artist: 'Sixmorevodka',
+    gameAttributes: {
+      tcg: 'riftbound',
+      type: 'Spell',
+      supertype: null,
+      domains: ['Chaos'],
+      energy: 1,
+      might: null,
+      power: null,
+    },
+  },
+  {
+    id: 'zaunite-invention',
+    name: 'Zaunite Invention',
+    tcg: 'riftbound',
+    setCode: 'OGN',
+    setName: 'Origins',
+    num: '233',
+    rarity: 'common',
+    cond: 'NM',
+    lang: 'es',
+    foil: false,
+    pesos: 40,
+    qty: 14,
+    artist: 'Grafit Studio',
+    gameAttributes: {
+      tcg: 'riftbound',
+      type: 'Gear',
+      supertype: null,
+      domains: ['Body'],
+      energy: 2,
+      might: null,
+      power: 1,
+    },
+  },
+  {
+    id: 'the-placidium',
+    name: 'The Placidium',
+    tcg: 'riftbound',
+    setCode: 'OGN',
+    setName: 'Origins',
+    num: '260',
+    rarity: 'rare',
+    cond: 'NM',
+    lang: 'en',
+    foil: false,
+    pesos: 150,
+    qty: 5,
+    artist: 'Alex Flores',
+    gameAttributes: {
+      tcg: 'riftbound',
+      type: 'Battlefield',
+      supertype: null,
+      domains: ['Colorless'],
+      energy: null,
+      might: null,
+      power: null,
+    },
+  },
+  {
+    id: 'mindful-ward',
+    name: 'Mindful Ward',
+    tcg: 'riftbound',
+    setCode: 'OGN',
+    setName: 'Origins',
+    num: '288',
+    rarity: 'common',
+    cond: 'NM',
+    lang: 'en',
+    foil: false,
+    pesos: 25,
+    qty: 20,
+    artist: 'Sixmorevodka',
+    gameAttributes: {
+      tcg: 'riftbound',
+      type: 'Rune',
+      supertype: null,
+      domains: ['Mind'],
+      energy: null,
+      might: null,
+      power: null,
+    },
+  },
+
+  // ---- Otros TCG (fidelidad al diseño; sin catálogo propio conectado aún) ----
   {
     id: 'charizard',
     name: 'Charizard ex',

@@ -186,7 +186,7 @@
   "home": {
     "heroEyebrow": "The Pub Game Store · CDMX",
     "heroTitle": "TCG singles, curated by players who know the hobby.",
-    "heroSub": "A discerning selection of singles and sealed product. Known sellers, verified condition, prices in pesos. We start with Magic: The Gathering.",
+    "heroSub": "A discerning selection of singles and sealed product. Known sellers, verified condition, prices in pesos. We started with Magic: The Gathering and Riftbound, with more games on the way.",
     "popular": "POPULAR:",
     "featuredEyebrow": "House selection",
     "featuredTitle": "Featured this week",
@@ -215,7 +215,7 @@
   "catalog": {
     "eyebrow": "Catalog",
     "title": "Catalog",
-    "subtitle": "Magic: The Gathering singles",
+    "subtitle": "Magic: The Gathering and Riftbound singles",
     "sort": "SORT",
     "sortRelevance": "Relevance",
     "filters": "Filters",
