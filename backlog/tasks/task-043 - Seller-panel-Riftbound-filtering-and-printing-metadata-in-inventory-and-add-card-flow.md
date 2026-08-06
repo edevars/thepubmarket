@@ -3,10 +3,11 @@ id: TASK-043
 title: >-
   Seller panel: Riftbound filtering and printing metadata in inventory and
   add-card flow
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - '@claude'
 created_date: '2026-08-06 05:45'
-updated_date: '2026-08-06 05:50'
+updated_date: '2026-08-06 08:52'
 labels:
   - 'epic:riftbound-ux'
   - web
