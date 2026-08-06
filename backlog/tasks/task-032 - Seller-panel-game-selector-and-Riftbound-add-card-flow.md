@@ -1,11 +1,11 @@
 ---
 id: TASK-032
 title: 'Seller panel: game selector and Riftbound add-card flow'
-status: In Progress
+status: Done
 assignee:
   - Claude
 created_date: '2026-08-06 02:20'
-updated_date: '2026-08-06 03:04'
+updated_date: '2026-08-06 03:08'
 labels:
   - 'epic:riftbound'
   - web
@@ -36,12 +36,12 @@ This consumes the multi-game API contract from the sibling task "Multi-game cata
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Seller can select Riftbound, search by card name, pick a printing, and publish a listing end-to-end from the panel
-- [ ] #2 The MTG add-card flow is unchanged in behavior
-- [ ] #3 Search-result identity/keying no longer assumes Scryfall ids
-- [ ] #4 i18n copy in both es and en no longer hardcodes Scryfall; game names come from TCG_META
-- [ ] #5 The photo manager works for Riftbound listings
-- [ ] #6 Typecheck and lint pass; flow verified per repo practice (no browser automation)
+- [x] #1 Seller can select Riftbound, search by card name, pick a printing, and publish a listing end-to-end from the panel
+- [x] #2 The MTG add-card flow is unchanged in behavior
+- [x] #3 Search-result identity/keying no longer assumes Scryfall ids
+- [x] #4 i18n copy in both es and en no longer hardcodes Scryfall; game names come from TCG_META
+- [x] #5 The photo manager works for Riftbound listings
+- [x] #6 Typecheck and lint pass; flow verified per repo practice (no browser automation)
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -63,3 +63,39 @@ Add a game selector as the first control of the search step, driven by the list 
 - Finish stays a two-button nonfoil/foil control for every game: RiftCodex reports no finishes, so `finishes: []` accepts either, and Riftbound variants (Signature / Alternate Art / Overnumbered) are distinct catalog entries already disambiguated in the card name.
 - Offer languages stay `es/en/ja` — that is the language of the physical copy the seller owns, independent of the catalog's language.
 <!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Key decision: the list of publishable games comes from the API, not a frontend constant. `SellerPanelMe` gained `catalogGames: Tcg[]`, filled by `GET /seller/me` from `supportedTcgs()` (the TASK-031 provider registry). The panel already loads SellerPanelMe through PanelProvider, so this needed no new endpoint and cannot drift: adding a provider entry lights the game up in the selector automatically. The selector hides itself when only one game is publishable, so the MTG-only experience is untouched.
+
+Switching game clears query, results and selection — catalog ids are per-provider, so keeping a stale selection across games would let a seller publish an id against the wrong catalog. The finish control stays nonfoil/foil for every game (RiftCodex reports no finishes, so `finishes: []` accepts either) and offer languages stay es/en/ja since that is the language of the physical copy, not of the catalog.
+
+i18n: `scryfallLabel` was replaced by `catalogLabel` interpolating the game name from TCG_META ('Catálogo {game}' / '{game} catalog') plus a new `offerGame` heading, in both es and en. Remaining 'Scryfall' strings in apps/web are code comments about MTG image URLs and mock data, not user-facing copy.
+
+Verification: typecheck (4 packages) + biome clean, 106 API tests pass. Live smoke against wrangler dev with a real seller session, exercising the same client calls AddCardFlow makes: GET /seller/me returned catalogGames ['mtg','riftbound']; riftbound search for 'Vi' returned 10 printings; published 'Vi - Hotheaded' (UNL #30) as LP/es/qty3 with tcg riftbound; uploaded and deleted a photo on that Riftbound listing through the PhotoManagerModal endpoints (HTTP 200); MTG publish through the same path unchanged. PhotoManagerModal itself needed no change — it keys off item.id, never the game.
+
+Cleanup follow-up to the TASK-031 incident: this time deletion was scoped to the two row ids created. First attempt still slipped — one id was reconstructed from a truncated 8-char prefix and silently matched nothing, leaving a smoke row behind; caught it by re-counting rows, then deleted it using the id from a fresh exact query. Local D1 verified back at 20 rows, Coliseo TCG at its original 4, zero non-MTG rows, no leftover users or seller links. Rule: always re-query the full id and verify counts after cleanup.
+<!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+## What changed
+
+Sellers can now pick the game before searching, so Riftbound is reachable from the panel end to end.
+
+- **packages/shared/src/index.ts** — `SellerPanelMe.catalogGames: Tcg[]`: the games with an integrated catalog, decided server-side.
+- **apps/api/src/routes/seller-panel.ts** — `GET /seller/me` fills `catalogGames` from the provider registry, so the panel never keeps its own list.
+- **apps/web/src/components/panel/AddCardFlow.tsx** — a game selector above the search box, rendered from `me.catalogGames` with `TCG_META` labels and hidden when only one game is publishable. Switching game resets query, results and selection; search and publish both carry the chosen game.
+- **apps/web/messages/{es,en}.json** — `scryfallLabel` → `catalogLabel` interpolating the game name, plus an `offerGame` heading. No provider name in user-facing copy.
+
+## Tests / verification
+
+Typecheck + biome clean, 106 API tests green. Live smoke with a real seller session reproduced the panel's own calls: `catalogGames` returned `['mtg','riftbound']`, Riftbound search returned 10 printings, publishing gave `tcg=riftbound` with the correct set/collector number/condition/language, a photo uploaded and deleted cleanly on that Riftbound listing, and the MTG path was unchanged. No browser automation, per project practice.
+
+## Risks / follow-ups
+
+- The store still has no per-game filter or deep links (TASK-033), and Riftbound-specific attributes (domains, energy/might/power) are not shown on detail yet (TASK-034).
+- `scripts/load-inventory.mjs` remains MTG-only and still posts `scryfallId` (TASK-035).
+<!-- SECTION:FINAL_SUMMARY:END -->
