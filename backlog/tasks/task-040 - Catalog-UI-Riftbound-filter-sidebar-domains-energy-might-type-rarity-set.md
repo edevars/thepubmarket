@@ -3,10 +3,11 @@ id: TASK-040
 title: >-
   Catalog UI: Riftbound filter sidebar (domains, energy, might, type, rarity,
   set)
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - '@claude'
 created_date: '2026-08-06 05:44'
-updated_date: '2026-08-06 05:49'
+updated_date: '2026-08-06 07:39'
 labels:
   - 'epic:riftbound-ux'
   - web
