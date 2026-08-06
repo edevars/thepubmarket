@@ -518,7 +518,11 @@
     "photoErrorNetwork": "Couldn't connect. Check your connection and try again.",
     "photoErrorGeneric": "Something went wrong. Try again.",
     "postPublishPhotosBody": "Want to add real photos of the item? You can do it later from your inventory, but it helps sell faster.",
-    "postPublishPhotosCta": "Add photos now"
+    "postPublishPhotosCta": "Add photos now",
+    "photoCameraCta": "Use camera",
+    "photoCameraCapture": "Capture",
+    "photoCameraClose": "Close camera",
+    "cameraErrorAccess": "Couldn't access the camera. Check your browser's permissions."
   },
   "purchases": {
     "eyebrow": "The Pub Market · Account",

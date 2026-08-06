@@ -3,7 +3,7 @@
 import type { InventoryItem, InventoryPhoto } from '@thepubmarket/shared'
 import { MAX_PHOTOS_PER_ITEM } from '@thepubmarket/shared'
 import { useTranslations } from 'next-intl'
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { angularButtonClasses } from '@/components/ui/AngularButton'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { Spinner } from '@/components/ui/Spinner'
@@ -73,6 +73,16 @@ export function PhotoManagerModal({
   const [reorderingId, setReorderingId] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
+  // SSR-safe even though in practice this component only ever mounts
+  // client-side, after a button click — never part of the initial HTML.
+  const cameraSupported =
+    typeof navigator !== 'undefined' && typeof navigator.mediaDevices?.getUserMedia === 'function'
+  const [cameraOpen, setCameraOpen] = useState(false)
+  const [cameraStarting, setCameraStarting] = useState(false)
+  const [cameraError, setCameraError] = useState<string | null>(null)
+  const videoRef = useRef<HTMLVideoElement>(null)
+  const streamRef = useRef<MediaStream | null>(null)
+
   const activeCount = photos.length + uploads.length
   const atCap = activeCount >= MAX_PHOTOS_PER_ITEM
   const remaining = Math.max(0, MAX_PHOTOS_PER_ITEM - activeCount)
@@ -116,6 +126,13 @@ export function PhotoManagerModal({
     }
   }
 
+  /** Enqueues one file and runs it through resize+upload. Shared by the file picker and the camera capture. */
+  function enqueueFile(file: File) {
+    const taskId = crypto.randomUUID()
+    setUploads((prev) => [...prev, { id: taskId, file, status: 'resizing' }])
+    return runTask(taskId, file)
+  }
+
   // Files are processed serially (not in parallel) to avoid two races: the
   // server's photo-cap check, and stale closures overwriting `photos` if two
   // uploads resolved out of order.
@@ -125,11 +142,82 @@ export function PhotoManagerModal({
     const files = all.slice(0, remaining)
     setSelectionNotice(all.length > files.length ? 'photoErrorLimit' : null)
     for (const file of files) {
-      const taskId = crypto.randomUUID()
-      setUploads((prev) => [...prev, { id: taskId, file, status: 'resizing' }])
-      await runTask(taskId, file)
+      await enqueueFile(file)
     }
     if (fileInputRef.current) fileInputRef.current.value = ''
+  }
+
+  // Only attaches the stream to the <video> element once it exists — it
+  // doesn't until `cameraOpen` flips true and React commits the new markup.
+  useEffect(() => {
+    if (cameraOpen && videoRef.current && streamRef.current) {
+      videoRef.current.srcObject = streamRef.current
+    }
+  }, [cameraOpen])
+
+  // Releases the camera on unmount — covers "the whole modal closed" for
+  // free, since closing it unmounts this component via the parent's
+  // `{managingPhotosFor && <PhotoManagerModal/>}` conditional. No need to
+  // special-case the modal's own close button on top of this.
+  useEffect(() => {
+    return () => {
+      streamRef.current?.getTracks().forEach((track) => {
+        track.stop()
+      })
+    }
+  }, [])
+
+  async function startCamera() {
+    setCameraError(null)
+    setCameraStarting(true)
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'environment' },
+        audio: false,
+      })
+      streamRef.current = stream
+      setCameraOpen(true)
+    } catch {
+      setCameraError('cameraErrorAccess')
+    } finally {
+      setCameraStarting(false)
+    }
+  }
+
+  function stopCamera() {
+    streamRef.current?.getTracks().forEach((track) => {
+      track.stop()
+    })
+    streamRef.current = null
+    setCameraOpen(false)
+  }
+
+  function capturePhoto() {
+    const video = videoRef.current
+    if (!video || video.videoWidth === 0) return
+    const canvas = document.createElement('canvas')
+    canvas.width = video.videoWidth
+    canvas.height = video.videoHeight
+    const ctx = canvas.getContext('2d')
+    if (!ctx) {
+      setCameraError('photoErrorGeneric')
+      return
+    }
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
+    // Quality here isn't the final quality — runTask's resizeImageForUpload
+    // re-compresses to 1600px/JPEG@0.85 exactly like a picked file would.
+    // This step's only job is producing a File for the shared pipeline.
+    canvas.toBlob(
+      (blob) => {
+        if (!blob) {
+          setCameraError('photoErrorGeneric')
+          return
+        }
+        enqueueFile(new File([blob], `webcam-${Date.now()}.jpg`, { type: 'image/jpeg' }))
+      },
+      'image/jpeg',
+      0.92,
+    )
   }
 
   function retryUpload(taskId: string) {
@@ -206,30 +294,80 @@ export function PhotoManagerModal({
             </p>
           )}
 
-          <div className="flex items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
             <span className="font-mono text-[11px] text-muted">
               {t('photoCount', { count: photos.length, max: MAX_PHOTOS_PER_ITEM })}
             </span>
-            <label
-              className={
-                atCap
-                  ? 'clip-btn cursor-not-allowed border border-line bg-[#101a30] px-4 py-2.5 font-display text-[13px] font-bold uppercase tracking-[0.1em] text-faint-2'
-                  : `${angularButtonClasses('outline')} cursor-pointer`
-              }
-            >
-              {t('photoAddCta')}
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/jpeg,image/png,image/webp"
-                multiple
-                disabled={atCap}
-                onChange={(e) => handleFilesSelected(e.target.files)}
-                className="hidden"
-              />
-            </label>
+            <div className="flex items-center gap-2">
+              <label
+                className={
+                  atCap
+                    ? 'clip-btn cursor-not-allowed border border-line bg-[#101a30] px-4 py-2.5 font-display text-[13px] font-bold uppercase tracking-[0.1em] text-faint-2'
+                    : `${angularButtonClasses('outline')} cursor-pointer`
+                }
+              >
+                {t('photoAddCta')}
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  multiple
+                  disabled={atCap}
+                  onChange={(e) => handleFilesSelected(e.target.files)}
+                  className="hidden"
+                />
+              </label>
+              {cameraSupported && !cameraOpen && (
+                <button
+                  type="button"
+                  onClick={startCamera}
+                  disabled={atCap || cameraStarting}
+                  className={
+                    atCap
+                      ? 'clip-btn cursor-not-allowed border border-line bg-[#101a30] px-4 py-2.5 font-display text-[13px] font-bold uppercase tracking-[0.1em] text-faint-2'
+                      : angularButtonClasses('outline')
+                  }
+                >
+                  {cameraStarting ? <Spinner /> : t('photoCameraCta')}
+                </button>
+              )}
+            </div>
           </div>
           {selectionNotice && <p className="text-[12px] text-cond-mp">{t(selectionNotice)}</p>}
+          {cameraError && <p className="text-[12px] text-cond-dmg">{t(cameraError)}</p>}
+
+          {cameraOpen && (
+            <div className="flex flex-col items-center gap-2 border border-line bg-[#0e1626] p-2">
+              <video
+                ref={videoRef}
+                autoPlay
+                playsInline
+                muted
+                className="aspect-[4/3] w-full max-w-[320px] bg-black object-cover"
+              />
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={capturePhoto}
+                  disabled={atCap}
+                  className={
+                    atCap
+                      ? 'clip-btn cursor-not-allowed border border-line bg-[#101a30] px-4 py-2.5 font-display text-[13px] font-bold uppercase tracking-[0.1em] text-faint-2'
+                      : angularButtonClasses('primary')
+                  }
+                >
+                  {t('photoCameraCapture')}
+                </button>
+                <button
+                  type="button"
+                  onClick={stopCamera}
+                  className="font-mono text-[11px] text-faint hover:text-ink"
+                >
+                  {t('photoCameraClose')}
+                </button>
+              </div>
+            </div>
+          )}
 
           {photos.length === 0 && uploads.length === 0 ? (
             <div className="border border-dashed border-line px-4 py-8 text-center">

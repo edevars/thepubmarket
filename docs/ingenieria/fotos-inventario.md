@@ -9,7 +9,10 @@ Epic `inventory-photos`. **TASK-023** puso la base de datos y el contrato
 compartido. **TASK-024** agregó los endpoints de escritura del panel del
 vendedor (§2-3). **TASK-025** expone las fotos en el catálogo público y monta
 la ruta que sirve los binarios (§4-7): con ella `InventoryPhoto.url` ya
-resuelve en cualquier ambiente.
+resuelve en cualquier ambiente. **TASK-026** construyó el manager de fotos del
+panel (§9) y **TASK-027** la galería del comprador en la ficha (§10).
+**TASK-028** le agregó una segunda fuente de fotos al manager: capturar
+directo con la cámara/webcam, sin salir del modal (§11).
 
 No toca ningún flujo de fondos: es metadata y objetos en R2, nada de pagos,
 payouts ni Stripe.
@@ -381,3 +384,65 @@ Datos de prueba: usar los mismos listings/fotos ya sembrados durante la
 verificación de TASK-026 (o subir 1-2 fotos nuevas y limpiarlas al terminar,
 misma disciplina de "D1 local queda igual que antes" de las secciones
 anteriores).
+
+## 11. Captura con cámara/webcam en el manager (TASK-028)
+
+Segunda fuente de fotos en `PhotoManagerModal` (§9), pensada para el mostrador
+de The Pub Game Store: fotografiar la carta directo con una webcam sin pasar
+por un celular ni transferir archivos.
+
+### Un solo pipeline, dos orígenes
+
+El botón "Usar cámara" y el picker de archivos terminan en el mismo
+`enqueueFile(file)` — capturar un frame del `<video>` a un `<canvas>` produce
+un `File` normal, que entra a la misma cola serial, el mismo
+`resizeImageForUpload` (1600px, JPEG, sin EXIF) y los mismos estados de
+error/reintento que ya existían. No hay una segunda ruta de subida que
+mantener.
+
+### La cámara se libera siempre
+
+Un solo mecanismo cubre los tres casos donde la cámara debe apagarse:
+
+- **Cerrar la vista de cámara** (botón explícito) → `stopCamera()` detiene los
+  tracks de inmediato.
+- **Cerrar el modal completo** → al desmontarse `PhotoManagerModal`, un
+  `useEffect` de limpieza (montado una sola vez) detiene cualquier stream que
+  siguiera activo. No hace falta interceptar el botón de cerrar del modal por
+  separado: desmontar ya dispara la limpieza.
+- **Navegar fuera / recargar** → el navegador libera la cámara por su cuenta
+  al destruir el documento.
+
+### Degradación
+
+- Sin `navigator.mediaDevices.getUserMedia` (contexto no seguro, navegador sin
+  soporte) el botón "Usar cámara" ni aparece — no se ofrece una opción
+  garantizada a fallar.
+- Permiso denegado o sin cámara disponible: un mensaje bilingüe legible
+  (`cameraErrorAccess`), sin tumbar el resto del modal — el picker de
+  archivos y las fotos ya subidas siguen funcionando normalmente.
+- El tope de 6 fotos aplica igual: el botón "Capturar" se deshabilita en
+  `atCap`, mismo flag que ya deshabilita el picker de archivos.
+
+### Verificación manual
+
+Contra `pnpm --filter @thepubmarket/web build && pnpm --filter
+@thepubmarket/web start` (o `next dev`) local, en un navegador con cámara
+disponible (real o virtual):
+
+| Caso | Resultado esperado |
+|---|---|
+| Abrir el photo manager de un listing propio | Botón "Usar cámara" visible junto a "Agregar fotos" |
+| Clic en "Usar cámara", conceder el permiso | Aparece la vista previa en vivo con botones "Capturar" / "Cerrar cámara" |
+| Clic en "Usar cámara", **denegar** el permiso | Mensaje de error bilingüe, sin vista previa; el resto del modal sigue usable |
+| Clic en "Capturar" | La foto aparece en la cola de subida (mismo estado "Procesando imagen…" / "Subiendo…" que una foto elegida por archivo) y termina en la lista de fotos del listing |
+| Capturar varias fotos seguidas en la misma sesión de cámara | Cada una se sube de forma independiente, en orden |
+| Capturar hasta llegar a 6 fotos | El botón "Capturar" se deshabilita; "Usar cámara" tampoco se ofrece de nuevo al llegar al tope |
+| Clic en "Cerrar cámara" | La vista previa desaparece; el indicador de cámara del navegador/SO se apaga (verificar en la barra de pestañas o el ícono del SO) |
+| Cerrar el modal completo (✕ o clic en el fondo) mientras la cámara sigue abierta | El indicador de cámara del navegador/SO se apaga igual, sin necesidad de cerrar la cámara primero |
+| Repetir "Usar cámara" tras haberla cerrado | Vuelve a pedir/reusar el permiso y abre una vista previa nueva sin errores |
+| Repetir en `/en/panel/...` | Todos los textos en inglés, sin claves sin traducir |
+
+Sin datos de prueba que limpiar en D1 — las fotos capturadas se suben por el
+mismo endpoint que las fotos por archivo, así que la limpieza es la misma que
+en TASK-026 (borrar la foto de prueba desde el propio manager o vía admin).
