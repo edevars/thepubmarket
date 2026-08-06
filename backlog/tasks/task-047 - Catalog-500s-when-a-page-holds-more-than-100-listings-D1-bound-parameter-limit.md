@@ -3,11 +3,11 @@ id: TASK-047
 title: >-
   Catalog 500s when a page holds more than 100 listings (D1 bound-parameter
   limit)
-status: In Progress
+status: Done
 assignee:
   - '@Claude'
 created_date: '2026-08-06 14:36'
-updated_date: '2026-08-06 14:40'
+updated_date: '2026-08-06 14:42'
 labels:
   - api
   - catalog
