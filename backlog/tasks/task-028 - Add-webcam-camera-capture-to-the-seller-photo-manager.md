@@ -1,9 +1,11 @@
 ---
 id: TASK-028
 title: Add webcam/camera capture to the seller photo manager
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - claude
 created_date: '2026-08-06 01:52'
+updated_date: '2026-08-06 01:53'
 labels:
   - 'epic:inventory-photos'
   - frontend
