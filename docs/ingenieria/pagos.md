@@ -51,10 +51,12 @@ webhook checkout.session.completed
 
 Tres decisiones que importan:
 
-- **Lo escribe el Workflow, no el handler.** El webhook deduplica insertando
-  `event.id` en `webhook_events` *antes* de hacer nada; si una escritura fallara
-  ahí, el reintento de Stripe se descartaría como duplicado y el dato se
-  perdería para siempre. Cada `step.do` del Workflow, en cambio, reintenta solo.
+- **Lo escribe el Workflow, no el handler.** Cuando se decidió, el handler
+  deduplicaba insertando `event.id` en `webhook_events` *antes* de trabajar: una
+  escritura que fallara ahí se perdía para siempre, porque el reintento de
+  Stripe se descartaba como duplicado. TASK-022 arregló ese dedupe (sección 5),
+  pero la decisión se sostiene igual: cada `step.do` reintenta por su cuenta y
+  con backoff, mientras que el handler solo tiene el retry de Stripe.
 - **Va después del settle.** Es contabilidad, no dinero. Si el enlace falla, la
   orden ya quedó pagada y el inventario descontado. Nunca al revés.
 - **El UPDATE lleva `AND stripe_payment_intent_id IS NULL`.** Un evento
@@ -114,7 +116,53 @@ Que las canceladas se queden NULL no es deuda pendiente — es el valor correcto
 
 ---
 
-## 5. Diagnóstico
+## 5. Webhooks: entrega at-least-once
+
+Introducido en **TASK-022**. Antes, el handler insertaba el `event.id` en
+`webhook_events` *antes* de trabajar: si algo mataba la request después de ese
+insert (error transitorio de D1, deploy a media request, excepción), el
+reintento de Stripe chocaba con el dedupe y se descartaba — **el efecto se
+perdía para siempre**, porque ningún evento futuro trae el mismo id.
+
+No hay transacción posible entre D1, Workflows y Durable Objects, así que la
+garantía no es atomicidad sino **convergencia**: el retry de Stripe es la cola,
+`webhook_events` es un ledger `claim → work → processed`, y la corrección la da
+la **idempotencia de cada handler**, no el dedupe.
+
+| Entrega | Qué pasa |
+|---|---|
+| Evento nuevo | se reclama (`received`), se procesa, se marca `processed` |
+| Redelivery de un `processed` | se descarta (dedupe = solo optimización) |
+| Redelivery de un `received` | el intento anterior murió a medias → **se re-ejecuta** |
+| Fallo procesando | `last_error` + respuesta **500** → Stripe redeliverea |
+
+**Contrato (en el header de `webhooks.ts`):** todo case del switch debe ser
+idempotente y seguro ante ejecución concurrente. Antes de agregar un efecto ahí
+(los correos de TASK-017, por ejemplo), hazlo idempotente por orden o muévelo
+al Workflow.
+
+### Dead-letter queue gratis
+
+Un evento que falla siempre queda visible — nunca desaparece en silencio:
+
+```sh
+npx wrangler d1 execute thepubmarket-db --remote --command \
+  "SELECT id, type, attempts, last_error FROM webhook_events
+   WHERE status='received' AND created_at < unixepoch()-900"
+```
+
+Vacío = todo convergió. Una fila aquí con `attempts` alto es un evento
+envenenado: Stripe hace backoff y se rinde (~3 días en live mode), así que esta
+consulta es el lugar donde mirar. `last_error` dice por qué murió; arreglada la
+causa, redispara con `stripe events resend evt_…` (eventos de plataforma; los
+Connect no soportan resend — ver `validacion-e2e-task-005.md`).
+
+La migración `0009` marcó `processed` todo lo anterior a este ledger: la
+historia nunca se re-ejecuta.
+
+---
+
+## 6. Diagnóstico
 
 | Síntoma | Dónde mirar |
 |---|---|
@@ -123,11 +171,11 @@ Que las canceladas se queden NULL no es deuda pendiente — es el valor correcto
 | Llega una disputa y el `pi` no coincide con ninguna orden | Si es anterior al 2026-08-02 y no está en el backfill, búscala por `stripe_checkout_session_id`. Si es posterior, el enlace falló: revisa los logs del Workflow de esa orden. |
 | `resource_missing` consultando un `pi_…` en Stripe | Falta `--stripe-account`. El cargo vive en la cuenta del vendedor, no en la de la plataforma. |
 | La columna se llenó al crear la sesión | Imposible hoy, y si vuelve a pasar es que alguien reintrodujo la lectura de `session.payment_intent` en `checkout.ts`. Ver sección 1. |
-| El comprador pagó pero la orden sigue `pending` | El `checkout.session.completed` no llegó o el Workflow murió: revisa sus instancias con `wrangler workflows instances describe post-payment <orderId>`. |
+| El comprador pagó pero la orden sigue `pending` | Primero la dead-letter query (sección 5): si el `checkout.session.completed` está en `received`, ahí está el porqué en `last_error`. Si está `processed`, el Workflow arrancó pero murió: revisa sus instancias con `wrangler workflows instances describe post-payment <orderId>`. |
 
 ---
 
-## 6. No custodia
+## 7. No custodia
 
 Nada de esto toca el flujo de fondos: el cargo se sigue creando en la cuenta
 Connect del vendedor (direct charge) y la plataforma sigue cobrando solo

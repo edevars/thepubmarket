@@ -3,8 +3,28 @@
  *
  * - Verifica la firma con `constructEventAsync` (SubtleCrypto, requerido en
  *   Workers) usando el signing secret del endpoint **Connect**.
- * - Idempotencia: inserta el `event.id` en `webhook_events`; si ya existe, el
- *   evento es un reintento y se ignora (no re-ejecuta efectos).
+ *
+ * ENTREGA AT-LEAST-ONCE (TASK-022). No hay transacción posible entre D1,
+ * Workflows y Durable Objects, así que la corrección es por convergencia:
+ * `webhook_events` es un ledger claim → work → processed, y el retry de Stripe
+ * es la cola de reintentos.
+ *
+ *   - Evento nuevo: se reclama (`received`), se procesa, se marca `processed`.
+ *   - Redelivery de un `processed`: se descarta (dedupe, solo optimización).
+ *   - Redelivery de un `received`: el trabajo anterior murió a medias —
+ *     se RE-EJECUTA, no se descarta.
+ *   - Fallo procesando: se guarda `last_error` y se responde 500 para que
+ *     Stripe redeliverée. Un evento que muere siempre queda visible en
+ *     `status='received'` (dead-letter queryable en D1).
+ *
+ * CONTRATO: por lo anterior, TODO case del switch debe ser idempotente Y
+ * seguro ante ejecución concurrente (dos deliveries del mismo evento pueden
+ * correr a la vez). Hoy: el Workflow es idempotente por instancia id=orderId,
+ * `releaseAndCancel` exige `pending`, el flip de seller exige `invited`, el
+ * pago fallido solo loguea. Si agregas un efecto (p.ej. correos de TASK-017),
+ * hazlo idempotente por orden o muévelo al Workflow — no rompas el contrato.
+ *
+ * Efectos por evento:
  * - `checkout.session.completed` → arranca el Workflow post-pago (instancia con
  *   id = orderId, idempotente) y le pasa el PaymentIntent id, que solo existe a
  *   partir de este evento. `checkout.session.expired` → libera reservas y
@@ -71,14 +91,53 @@ webhooks.post('/stripe', async (c) => {
     return c.json({ error: 'invalid_signature' }, 400)
   }
 
-  // Idempotencia: el primer insert gana; un reintento choca con la PK y se ignora.
+  // Claim: el primer insert gana. Un conflicto de PK ya NO descarta de entrada:
+  // solo un evento ya `processed` es duplicado; uno `received` es trabajo que
+  // murió a medias y el redelivery lo re-ejecuta (ver contrato en el header).
   const db = c.get('db')
   try {
-    await db.insert(webhookEvents).values({ id: event.id, type: event.type })
+    await db.insert(webhookEvents).values({ id: event.id, type: event.type, attempts: 1 })
   } catch {
-    return c.json({ received: true, duplicate: true })
+    const prior = await db.select().from(webhookEvents).where(eq(webhookEvents.id, event.id)).get()
+    // Fila ilegible tras el conflicto = no fue conflicto de PK sino un error de
+    // D1. Responder "duplicate" aquí perdería el evento; 500 → Stripe reintenta.
+    if (!prior) return c.json({ error: 'claim_failed' }, 500)
+    if (prior.status === 'processed') return c.json({ received: true, duplicate: true })
+    await db
+      .update(webhookEvents)
+      .set({ attempts: prior.attempts + 1 })
+      .where(eq(webhookEvents.id, event.id))
   }
 
+  try {
+    await processEvent(c, event)
+  } catch (err) {
+    // last_error es diagnóstico best-effort: si esta escritura también falla,
+    // igual respondemos 500 y el redelivery vuelve a intentar todo.
+    const msg = err instanceof Error ? err.message : String(err)
+    console.error(`[webhooks] ${event.type} ${event.id} falló:`, err)
+    await db
+      .update(webhookEvents)
+      .set({ lastError: msg.slice(0, 500) })
+      .where(eq(webhookEvents.id, event.id))
+      .catch(() => {})
+    return c.json({ error: 'processing_failed' }, 500)
+  }
+
+  await db
+    .update(webhookEvents)
+    .set({ status: 'processed', processedAt: Math.floor(Date.now() / 1000) })
+    .where(eq(webhookEvents.id, event.id))
+
+  return c.json({ received: true })
+})
+
+/**
+ * Efectos por tipo de evento. Lanza en fallo real → el caller responde 500 y
+ * Stripe redeliverea. Un tipo no contemplado es trivialmente procesado.
+ */
+async function processEvent(c: Context<AppEnv>, event: Stripe.Event): Promise<void> {
+  const db = c.get('db')
   switch (event.type) {
     case 'checkout.session.completed': {
       const session = event.data.object
@@ -92,11 +151,19 @@ webhooks.post('/stripe', async (c) => {
             `[webhooks] checkout.session.completed order=${orderId} sin payment_intent — la orden queda sin id de pago`,
           )
         }
-        // Instancia idempotente por orden; si ya existe, ignora el error.
-        await c.env.POST_PAYMENT.create({
-          id: orderId,
-          params: { orderId, paymentIntentId },
-        }).catch(() => {})
+        // Instancia idempotente por orden. Solo se tolera "ya existe", y se
+        // verifica con get() en vez de parsear el mensaje del error: si la
+        // instancia no está, el fallo fue real y DEBE subir al 500 — tragarlo
+        // dejaba órdenes pagadas en `pending` para siempre (TASK-022).
+        try {
+          await c.env.POST_PAYMENT.create({ id: orderId, params: { orderId, paymentIntentId } })
+        } catch (createErr) {
+          try {
+            await c.env.POST_PAYMENT.get(orderId)
+          } catch {
+            throw createErr
+          }
+        }
       }
       break
     }
@@ -143,6 +210,4 @@ webhooks.post('/stripe', async (c) => {
       break
     }
   }
-
-  return c.json({ received: true })
-})
+}

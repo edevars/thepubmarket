@@ -292,13 +292,21 @@ export const orderItems = sqliteTable(
 )
 
 // =====================================================================
-// webhook_events — ledger de idempotencia de webhooks de Stripe. La PK es el id
-// del evento (`evt_…`); insertar con conflicto = evento ya procesado. Garantiza
-// que un webhook reintentado no re-ejecute efectos (no doble descuento de stock).
+// webhook_events — ledger de PROCESAMIENTO de webhooks de Stripe (TASK-022).
+// La PK es el id del evento (`evt_…`). No es solo dedupe: un conflicto de PK
+// distingue entre evento ya `processed` (se descarta) y evento `received` cuyo
+// trabajo nunca terminó (se re-ejecuta en el redelivery de Stripe). Un evento
+// que falla queda en `received` con `last_error` — esa es la dead-letter queue.
 // =====================================================================
 export const webhookEvents = sqliteTable('webhook_events', {
   id: text('id').primaryKey(),
   type: text('type').notNull(),
+  // 'received' | 'processed'. Sin CHECK: mismo criterio que delivery_method
+  // (D1 rechaza recrear tablas); se valida en la app.
+  status: text('status').notNull().default('received'),
+  processedAt: integer('processed_at'),
+  attempts: integer('attempts').notNull().default(0),
+  lastError: text('last_error'),
   createdAt: integer('created_at').notNull().default(sql`(unixepoch())`),
 })
 
