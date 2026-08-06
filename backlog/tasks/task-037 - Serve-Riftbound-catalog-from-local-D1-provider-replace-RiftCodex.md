@@ -1,10 +1,11 @@
 ---
 id: TASK-037
 title: Serve Riftbound catalog from local D1 provider (replace RiftCodex)
-status: To Do
+status: In Progress
 assignee:
   - '@Claude'
 created_date: '2026-08-06 05:03'
+updated_date: '2026-08-06 05:19'
 labels:
   - 'epic:riftbound'
   - api
@@ -36,3 +37,14 @@ Changes: extend `CatalogProvider` to a context-object signature `{ db, kv, origi
 - [ ] #4 CardSnapshot.imageUrl points to the local /card-images/ route when the R2 mirror exists, with source URL fallback
 - [ ] #5 riftcodex.ts and its test are removed; typecheck, biome, and vitest green
 <!-- AC:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+Implemented alongside TASK-036 (same session):
+1. New apps/api/src/lib/catalog-db.ts — localCatalogProvider(tcg) factory reading catalog_cards; getCardById → CatalogError 404 on miss; searchCards via name LIKE (%/_ escaped, ESCAPE '\\', NOCASE index) LIMIT 60, no KV cache.
+2. catalog-providers.ts — CatalogContext { db, kv, origin }; provider signatures take ctx; PROVIDERS.riftbound = localCatalogProvider('riftbound').
+3. scryfall.ts — signature change only (uses ctx.kv).
+4. createListing(ctx, input, sellerId); call sites updated in routes/admin.ts and routes/seller-panel.ts (both searches build ctx with request origin).
+5. riftcodex.ts + riftcodex.test.ts deleted; inventory.test.ts mocks ./catalog-db instead.
+<!-- SECTION:PLAN:END -->
