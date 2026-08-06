@@ -4,12 +4,15 @@ title: Display Riftbound-specific attributes on listing detail
 status: To Do
 assignee: []
 created_date: '2026-08-06 02:20'
+updated_date: '2026-08-06 02:20'
 labels:
   - 'epic:riftbound'
   - web
   - api
 milestone: m-3
-dependencies: []
+dependencies:
+  - TASK-029
+  - TASK-031
 references:
   - apps/web/src/components/detail/CardDetailView.tsx
   - packages/db/src/schema.ts
