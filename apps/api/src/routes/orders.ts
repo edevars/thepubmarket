@@ -8,6 +8,7 @@ import { inventory, orderItems, orders as ordersTable, sellers } from '@thepubma
 import type { BuyerOrdersResponse } from '@thepubmarket/shared'
 import { and, desc, eq, inArray } from 'drizzle-orm'
 import { Hono } from 'hono'
+import { selectByIds } from '../lib/d1-batch'
 import { orderToBuyerOrder, orderToSummary } from '../lib/orders'
 import { buyerAuth } from '../middleware/buyer-auth'
 import type { AppEnv } from '../types'
@@ -30,16 +31,12 @@ ordersRoutes.get('/', async (c) => {
     .all()
   if (rows.length === 0) return c.json({ items: [] } satisfies BuyerOrdersResponse)
 
-  const items = await db
-    .select()
-    .from(orderItems)
-    .where(
-      inArray(
-        orderItems.orderId,
-        rows.map((r) => r.id),
-      ),
-    )
-    .all()
+  // Por tramos: este listado no tiene LIMIT, así que el `IN (...)` crece con
+  // el historial del comprador y rebasaría el tope de D1 (TASK-047).
+  const items = await selectByIds(
+    rows.map((r) => r.id),
+    (chunk) => db.select().from(orderItems).where(inArray(orderItems.orderId, chunk)).all(),
+  )
   const itemsByOrder = new Map<string, typeof items>()
   for (const it of items) {
     const list = itemsByOrder.get(it.orderId) ?? []
@@ -59,10 +56,12 @@ ordersRoutes.get('/', async (c) => {
   ]
   const inventoryIds = [...new Set(items.map((i) => i.inventoryId).filter((x): x is string => !!x))]
   const [sellerRows, inventoryRows] = await Promise.all([
+    // sellerIds queda muy por debajo del tope: el modelo es vetted, son un
+    // puñado de tiendas. inventoryIds sí crece con el historial de compras.
     db.select().from(sellers).where(inArray(sellers.id, sellerIds)).all(),
-    inventoryIds.length > 0
-      ? db.select().from(inventory).where(inArray(inventory.id, inventoryIds)).all()
-      : Promise.resolve([]),
+    selectByIds(inventoryIds, (chunk) =>
+      db.select().from(inventory).where(inArray(inventory.id, chunk)).all(),
+    ),
   ])
   const sellerById = new Map(sellerRows.map((s) => [s.id, s]))
   const inventoryById = new Map(inventoryRows.map((i) => [i.id, i]))
