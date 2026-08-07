@@ -43,7 +43,14 @@ export default async function CatalogPage({ params, searchParams }: CatalogPageP
   // mismo inventario ya filtrado por `tcg`. Es lo que hace computable el
   // conteo por valor de facet-counts.ts: si el servidor filtrara por
   // facetas, los items de los valores NO seleccionados nunca llegarían.
-  const [items, gameCounts] = await Promise.all([getCatalog({ tcg: activeGame }), getGameCounts()])
+  //
+  // `q` SÍ va al servidor (TASK-059) y no rompe eso: no alimenta ningún
+  // conteo por valor, acota el universo entero. Filtrarlo en cliente sobre la
+  // página truncada era lo que dejaba media tienda fuera del buscador.
+  const [items, gameCounts] = await Promise.all([
+    getCatalog({ tcg: activeGame, q }),
+    getGameCounts(),
+  ])
 
   const empty = items.length === 0 && !activeGame
 
