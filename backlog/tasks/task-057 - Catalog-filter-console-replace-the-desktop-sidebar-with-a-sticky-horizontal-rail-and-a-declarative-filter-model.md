@@ -7,7 +7,7 @@ status: Done
 assignee:
   - '@claude'
 created_date: '2026-08-07 03:13'
-updated_date: '2026-08-07 03:33'
+updated_date: '2026-08-07 03:54'
 labels:
   - 'epic:catalog-filter-console'
   - web
@@ -173,6 +173,25 @@ verdes. Tests: **346** (207 api + 139 web), desde 322 — +24 de `filter-model`.
 Paridad i18n verificada por script sobre los 14 namespaces.
 
 Sin pruebas de navegador, según la preferencia del proyecto.
+
+## Verificación en producción (navegador)
+
+Desplegado a `https://thepubmarket-web.enrique-devars-cee.workers.dev` y verificado
+con Claude in Chrome a 1512px.
+
+**Funciona como se diseñó:**
+- Riel sticky bajo el header; el grid pasa por debajo sin rendija y a ancho completo.
+- Riftbound: 7 runas de dominio inline + `TIPO · SUPERTIPO · RAREZA · MÁS FILTROS` │ `CONDICIÓN · IDIOMA · PRECIO · SOLO FOIL`. El split inline/overflow coincide exactamente con lo que asertan los tests.
+- Togglear la runa `Body` → URL `?domain=Body`, runa encendida con glow, 200→33 resultados, chip «Body ×».
+- **El fix del remount se confirmó en vivo**: con el popover "Más filtros" abierto, seleccionar `Energía 2` dejó el popover ABIERTO, actualizó la URL a `&energy=2`, pintó el badge «1» en el trigger y recalculó los conteos de Poderío con autoexclusión (solo 1 y 2 quedaron activos). Antes del fix el remount habría cerrado el popover.
+- Escape cierra y devuelve el foco al trigger, con `aria-expanded="false"`.
+- Popover con `z-10` sobre el grid: no queda recortado ni por debajo de las cartas.
+
+**Bug encontrado y corregido en `c8a3372`:** `--header-h` estaba en 63px, derivado a mano. Medido en el navegador, el header son **66.5px** — el hijo más alto no es el logo (34px) sino el buscador (37.5px), que es `hidden md:flex`. O sea la altura cambia con el breakpoint, cosa que mi comentario negaba. El token salió de `@theme` (ahí no se puede sobrescribir por media query) a `:root` con override en `md`, y el valor de desktop se redondea hacia arriba a 67px: pasarse esconde unos px del riel bajo el header `z-20` (invisible), quedarse corto abre una rendija. Verificado en vivo: 66.5px de header, riel a 67px.
+
+**Hueco de datos preexistente (NO es regresión):** los 200 items de MTG en producción tienen `gameAttributes: null`, así que sus facetas propias (color/tipo/rareza) cuentan 0 y los 6 pips de maná salen deshabilitados. La regla `count === 0 && !selected` es la misma que ya aplicaba el sidebar anterior, así que el comportamiento no cambió — pero significa que hoy la zona de identidad de MTG está muerta en prod. Se arregla repoblando los snapshots de inventario de MTG con el normalizador de Scryfall de TASK-049. Riftbound sí trae atributos (catálogo propio en D1) y funciona completo.
+
+**No verificado:** el breakpoint mobile. La extensión no pudo redimensionar la ventana (`innerWidth` se quedó en 1512px pese a varios intentos), así que el bottom sheet y la fila de pips con scroll horizontal siguen sin prueba visual. Su marcado sí está en el HTML servido y el botón «Filtros (N)» existe con `display:none` en desktop, como corresponde.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
