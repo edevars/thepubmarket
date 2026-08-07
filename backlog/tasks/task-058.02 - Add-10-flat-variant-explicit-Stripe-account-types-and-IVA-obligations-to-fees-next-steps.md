@@ -7,7 +7,7 @@ status: Done
 assignee:
   - claude
 created_date: '2026-08-07 22:47'
-updated_date: '2026-08-07 22:54'
+updated_date: '2026-08-07 23:03'
 labels:
   - 'epic:pricing'
   - pitch
@@ -78,6 +78,8 @@ Legal basis read directly from the statute PDF (diputados.gob.mx LIVA, texto con
 Model verification: page JS reproduces script output exactly — P5 $26,253/7.9%, and T7 account-type table $27,373 (Standard) / $26,253 (Express legacy) / $12,431 (current) at 10% flat, break-evens $490k/$510k/$1.04M. Hero now reads 3.74% vs 7.91% (same 10% pricing both sides). Dry-run build passes; curl smoke dev+prod 200 with fx-ivas/fx-table--accounts/fx-good/config C present; deck route intact. Deployed version ef9283bd.
 
 Finding worth carrying forward: Standard accounts also remove the negative-balance liability that TASK-007 flagged as needing business sign-off — choosing Standard resolves that open item rather than just improving margin.
+
+Lint follow-up (branch fix/TASK-058.02-lint, merged): the new markup introduced 8 Biome a11y errors plus a formatter error. Fixed by replacing div[role=region]/div[role=group] with real <section> elements and dropping the redundant role=list on the card <ul>. Kept tabindex="0" on the three scrollable table wrappers behind a scoped biome-ignore — removing it satisfies the rule but makes the horizontally-scrolling tables unreachable by keyboard (WCAG 2.1.1). Verified after: pnpm lint exits 0 (only the 2 pre-existing apps/web noImgElement warnings from TASK-057 remain), pnpm typecheck passes 4/4, model parity re-checked after the formatter touched fees.js (P0 $12,034 / P4 $21,844 / P5 $26,253 still match the script), dry-run build and dev+prod smoke 200. Deployed version df46f7b8.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
