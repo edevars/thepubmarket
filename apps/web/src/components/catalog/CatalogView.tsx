@@ -2,7 +2,7 @@
 
 import type { CatalogGameCount, Condition, InventoryItem, Tcg } from '@thepubmarket/shared'
 import { useTranslations } from 'next-intl'
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { NoResultsState } from '@/components/states/NoResultsState'
 import { useRouter } from '@/i18n/navigation'
 import { applyFilters, type CatalogFilters } from '@/lib/catalog/data'
@@ -25,6 +25,7 @@ import {
 import { type ActiveChip, ActiveChips } from './ActiveChips'
 import { CardGrid } from './CardGrid'
 import { FilterSidebar, type FilterState } from './FilterSidebar'
+import { MobileFilterSheet } from './MobileFilterSheet'
 
 function toggle<T>(arr: T[], value: T): T[] {
   return arr.includes(value) ? arr.filter((x) => x !== value) : [...arr, value]
@@ -127,6 +128,9 @@ export function CatalogView({
     () => initialLocalFilters ?? EMPTY_LOCAL_FILTERS,
   )
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false)
+  /** Botón "Filtros" (trigger de `MobileFilterSheet`, TASK-055): recibe el
+   * foco de vuelta cuando el sheet se cierra por cualquier vía. */
+  const filtersTriggerRef = useRef<HTMLButtonElement>(null)
 
   const tcgCounts = useMemo(
     () => gameCounts.map(({ tcg, count }) => ({ tcg, count })),
@@ -417,8 +421,11 @@ export function CatalogView({
         </div>
         <div className="flex items-center gap-2.5">
           <button
+            ref={filtersTriggerRef}
             type="button"
             onClick={() => setMobileFiltersOpen((v) => !v)}
+            aria-haspopup="dialog"
+            aria-expanded={mobileFiltersOpen}
             className="clip-btn border border-line-strong bg-panel px-3.5 py-2 font-display text-[13px] font-semibold uppercase tracking-[0.06em] text-ink transition duration-fast ease-standard active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/70 md:hidden"
           >
             {t('filters')} ({activeFilterCount})
@@ -443,13 +450,8 @@ export function CatalogView({
       </div>
 
       <div className="md:grid md:grid-cols-[232px_1fr] md:items-start md:gap-6">
-        <aside
-          className={`${
-            mobileFiltersOpen
-              ? 'tpm-reveal fixed inset-0 z-40 block bg-bg/80 p-4 backdrop-blur-sm'
-              : 'hidden'
-          } md:sticky md:top-[74px] md:z-auto md:block md:bg-transparent md:p-0 md:backdrop-blur-0 md:self-start`}
-        >
+        {/* Desktop: sidebar sticky sin semántica de dialog (no es overlay). */}
+        <aside className="hidden md:sticky md:top-[74px] md:block md:self-start">
           <FilterSidebar
             state={filterState}
             tcgCounts={tcgCounts}
@@ -477,9 +479,41 @@ export function CatalogView({
             onToggleGameFilterValue={toggleGameFilterValue}
             onSetGameFilterValue={setGameFilterValue}
             onClear={clearAll}
-            onClose={() => setMobileFiltersOpen(false)}
           />
         </aside>
+
+        {/* Mobile: bottom sheet con semántica de dialog (TASK-055). */}
+        <MobileFilterSheet
+          open={mobileFiltersOpen}
+          onClose={() => setMobileFiltersOpen(false)}
+          triggerRef={filtersTriggerRef}
+          state={filterState}
+          tcgCounts={tcgCounts}
+          conditionCounts={conditionCounts}
+          languageCounts={languageCounts}
+          foilCount={foilCount}
+          activeCount={activeFilterCount}
+          resultCount={visible.length}
+          activeGame={activeGame}
+          onToggleTcg={goToGame}
+          onToggleCondition={(c: Condition) =>
+            writeLocalFilters({ ...localFilters, conditions: toggle(localFilters.conditions, c) })
+          }
+          onToggleLanguage={(l) =>
+            writeLocalFilters({ ...localFilters, languages: toggle(localFilters.languages, l) })
+          }
+          onToggleFoil={() =>
+            writeLocalFilters({ ...localFilters, foilOnly: !localFilters.foilOnly })
+          }
+          onPriceChange={(field, value) => writeLocalFilters({ ...localFilters, [field]: value })}
+          gameFacets={activeFacets}
+          gameFilterState={gameFilters}
+          freeTextOptions={freeTextOptions}
+          gameFacetCounts={gameFacetCounts}
+          onToggleGameFilterValue={toggleGameFilterValue}
+          onSetGameFilterValue={setGameFilterValue}
+          onClear={clearAll}
+        />
 
         <div>
           <ActiveChips chips={chips} onClearAll={clearAll} />
