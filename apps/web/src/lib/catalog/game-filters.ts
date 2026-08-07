@@ -13,8 +13,11 @@
  * component — un valor corrupto en la URL se ignora, igual que un `game`
  * desconocido (ver `catalog/page.tsx`).
  */
-import type { InventoryItem, RiftboundAttributes, Tcg } from '@thepubmarket/shared'
+import type { InventoryItem, MtgAttributes, RiftboundAttributes, Tcg } from '@thepubmarket/shared'
 import {
+  MTG_CARD_TYPES,
+  MTG_COLORS,
+  MTG_RARITIES,
   RIFTBOUND_CARD_TYPES,
   RIFTBOUND_DOMAINS,
   RIFTBOUND_RARITIES,
@@ -44,10 +47,16 @@ function riftboundAttrs(item: InventoryItem): RiftboundAttributes | null {
   return attrs && attrs.tcg === 'riftbound' ? attrs : null
 }
 
+/** Espejo de `riftboundAttrs` para MTG (TASK-051) — misma narrowing por `tcg`. */
+function mtgAttrs(item: InventoryItem): MtgAttributes | null {
+  const attrs = item.card.gameAttributes
+  return attrs && attrs.tcg === 'mtg' ? attrs : null
+}
+
 /**
- * Registro por juego. Solo Riftbound hoy. `set` es técnicamente genérico en
- * la API (no requiere `tcg`, ver `catalog-filters.ts`), pero en la UI solo lo
- * ofrecemos junto al resto de facetas de Riftbound — el alcance de esta task.
+ * Registro por juego. `set` es técnicamente genérico en la API (no requiere
+ * `tcg`, ver `catalog-filters.ts`), pero en la UI cada juego lo ofrece junto
+ * al resto de sus propias facetas.
  */
 export const GAME_FACETS: Partial<Record<Tcg, readonly GameFacet[]>> = {
   riftbound: [
@@ -116,6 +125,39 @@ export const GAME_FACETS: Partial<Record<Tcg, readonly GameFacet[]>> = {
       valuesOf: (item) => [item.card.setCode],
     },
   ],
+  // MTG (TASK-051): `type`/`rarity`/`set` reusan los mismos nombres de param
+  // que Riftbound, cada uno con su propio vocabulario — la API ya soporta
+  // esta superposición (ver ALL_GAME_PARAMS en catalog-filters.ts); el fix
+  // de `facetByParam` de abajo es lo que la hace segura también en el cliente.
+  mtg: [
+    {
+      param: 'color',
+      kind: 'multiValue',
+      values: MTG_COLORS,
+      labelKey: 'fColor',
+      valuesOf: (item) => mtgAttrs(item)?.colors ?? [],
+    },
+    {
+      param: 'type',
+      kind: 'multiValue',
+      values: MTG_CARD_TYPES,
+      labelKey: 'fType',
+      valuesOf: (item) => mtgAttrs(item)?.types ?? [],
+    },
+    {
+      param: 'rarity',
+      kind: 'multiValue',
+      values: MTG_RARITIES,
+      labelKey: 'fRarity',
+      valuesOf: (item) => (item.card.rarity ? [item.card.rarity] : []),
+    },
+    {
+      param: 'set',
+      kind: 'freeText',
+      labelKey: 'fSet',
+      valuesOf: (item) => [item.card.setCode],
+    },
+  ],
 }
 
 const EMPTY_FACETS: readonly GameFacet[] = []
@@ -125,13 +167,18 @@ export function facetsFor(tcg: Tcg | undefined): readonly GameFacet[] {
   return (tcg && GAME_FACETS[tcg]) || EMPTY_FACETS
 }
 
-/** Busca una faceta por nombre de param sin importar el juego que la registró. */
-function facetByParam(param: string): GameFacet | undefined {
-  for (const facets of Object.values(GAME_FACETS)) {
-    const found = facets?.find((f) => f.param === param)
-    if (found) return found
-  }
-  return undefined
+/**
+ * Busca una faceta por nombre de param DENTRO del registro de un solo juego
+ * (TASK-051). Antes recorría `Object.values(GAME_FACETS)` completo y
+ * devolvía el primer match sin importar el juego que lo registró — inofensivo
+ * mientras solo Riftbound tenía facetas, pero en cuanto MTG también registró
+ * `type`/`rarity`/`set` (mismos nombres, vocabularios distintos, ver arriba)
+ * un item de un juego podía evaluarse con el `valuesOf` del OTRO juego. Se
+ * acota a `facetsFor(tcg)` para que cada item solo vea las facetas de su
+ * propio juego.
+ */
+function facetByParam(tcg: Tcg | undefined, param: string): GameFacet | undefined {
+  return facetsFor(tcg).find((f) => f.param === param)
 }
 
 /**
@@ -214,7 +261,7 @@ export function serializeGameFilters(game: Record<string, string[]>): string {
 export function matchesGameFilters(item: InventoryItem, game: Record<string, string[]>): boolean {
   for (const [param, selected] of Object.entries(game)) {
     if (selected.length === 0) continue
-    const facet = facetByParam(param)
+    const facet = facetByParam(item.tcg, param)
     if (!facet) continue
     const itemValues = facet.valuesOf(item).map((v) => v.toLowerCase())
     const selectedLower = selected.map((v) => v.toLowerCase())
