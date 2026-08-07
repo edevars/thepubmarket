@@ -3,11 +3,11 @@ id: TASK-052
 title: >-
   Facet presentation registry + per-game accent theming (icons, identity colors,
   --game-accent)
-status: To Do
+status: In Progress
 assignee:
   - '@claude'
 created_date: '2026-08-07 00:02'
-updated_date: '2026-08-07 00:04'
+updated_date: '2026-08-07 01:06'
 labels:
   - 'epic:catalog-visual-refactor'
   - web
@@ -52,3 +52,15 @@ Depends on TASK-048 (icon files must exist at the referenced paths) and TASK-051
 - [ ] #4 accentFor returns undefined for pokemon/yugioh/onepiece/lorcana
 - [ ] #5 pnpm typecheck, vitest, and biome are green
 <!-- AC:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+Plan (deps TASK-048/TASK-051 both Done and merged to main):
+1. New `apps/web/src/lib/catalog/facet-presentation.ts`: FACET_PRESENTATION registry (mtg + riftbound), GAME_ACCENT, presentationFor()/accentFor() helpers per spec in description — never throw, undefined on miss.
+2. Reuse Tcg type + GAME_FACETS from game-filters.ts to build the coverage test (every multiValue value has entry or documented gap: mtg supertype n/a since mtg has no supertype facet param, riftbound supertype/energy/might intentionally icon-less).
+3. Icon paths reference existing files from TASK-048 (/symbols/mtg/*.svg, /symbols/riftbound/domain/*.svg, /symbols/riftbound/rarity/*.svg) — verify paths match what's actually on disk.
+4. Unit tests in facet-presentation.test.ts: no React import, hex validation regex, coverage loop over GAME_FACETS, accentFor undefined for pokemon/yugioh/onepiece/lorcana.
+5. pnpm typecheck, vitest, biome green.
+Executed by nextjs-frontend subagent in isolated worktree on branch task/TASK-052; verified by task-verifier before merge.
+<!-- SECTION:PLAN:END -->
