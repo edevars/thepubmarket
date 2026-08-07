@@ -71,14 +71,18 @@ Todas las descargas devolvieron 200 en vivo — la ruta de fallback a `.webp` ex
 
 Verificación (task-verifier, PASS en las 4 AC): `pnpm typecheck` verde en los 5 paquetes; biome limpio; script corrido dos veces confirmando idempotencia; `next dev` + curl a `/symbols/mtg/W.svg`, `/symbols/riftbound/domain/colorless.svg` y `/symbols/riftbound/rarity/epic.svg` → 200 `image/svg+xml`. Build completo omitido por lentitud, sustituido por la verificación de servido real. Los emblemas decorativos llevan `aria-hidden="true"` sin perder alternativa textual; transiciones sobre tokens `duration-fast`/`ease-standard`, cubiertas por el bloque global de `prefers-reduced-motion`.
 
-El componente aún no se cablea a la UI — eso es TASK-054.</implementationNotes>
-<parameter name="finalSummary">Pipeline de assets de iconografía de filtros y componente de identidad por juego, primer entregable del epic:catalog-visual-refactor.
+El componente aún no se cablea a la UI — eso es TASK-054.
+<!-- SECTION:NOTES:END -->
 
-Se agregó `scripts/fetch-filter-symbols.mjs`, que autohospeda 17 SVG en `apps/web/public/symbols/` (antes el repo no tenía ni un asset binario): símbolos de maná oficiales de Scryfall y runas de dominio + iconos de rareza de dotgg. Se commitean a propósito para que producción nunca dependa de CDNs de terceros; el script es idempotente y tolera el 404 conocido de la rareza `showcase`.
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Pipeline de assets de iconografía de filtros y componente de identidad por juego: primer entregable del epic:catalog-visual-refactor.
+
+Se agregó `scripts/fetch-filter-symbols.mjs`, que autohospeda 17 SVG en `apps/web/public/symbols/` (antes el repo no tenía ni un asset binario): símbolos de maná oficiales de Scryfall, y runas de dominio + iconos de rareza de dotgg. Se commitean a propósito para que producción nunca dependa de CDNs de terceros; el script es idempotente y tolera el 404 conocido de la rareza `showcase`.
 
 Se agregó `GameWordmark`, un wordmark SVG propio por TCG (deliberadamente no logos registrados — decisión de IP del dueño): emblema de pips WUBRG para MTG, clúster de rombos para Riftbound, monograma para los otros cuatro juegos, todo sobre la estética angular del sitio y consumiendo `--game-accent`.
 
 Verificado por task-verifier con PASS en las 4 AC. Mergeado a main en 710ffe7.</finalSummary>
-<modifiedFiles">["scripts/fetch-filter-symbols.mjs", "apps/web/src/components/catalog/GameWordmark.tsx", "apps/web/public/symbols/"]</modifiedFiles">
-</invoke>
-<!-- SECTION:NOTES:END -->
+<parameter name="modifiedFiles">["scripts/fetch-filter-symbols.mjs", "apps/web/src/components/catalog/GameWordmark.tsx", "apps/web/public/symbols/mtg/W.svg", "apps/web/public/symbols/riftbound/domain/fury.svg", "apps/web/public/symbols/riftbound/rarity/epic.svg"]
+<!-- SECTION:FINAL_SUMMARY:END -->
