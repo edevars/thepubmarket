@@ -3,11 +3,11 @@ id: TASK-054
 title: >-
   FilterSidebar premium visual refactor: instrument-panel identity per TCG
   (wordmarks, pips, rune tiles, accents, micro-interactions)
-status: In Progress
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-08-07 00:03'
-updated_date: '2026-08-07 01:29'
+updated_date: '2026-08-07 01:46'
 labels:
   - 'epic:catalog-visual-refactor'
   - web
@@ -24,6 +24,15 @@ references:
   - >-
     backlog/tasks/task-045 -
     Motion-and-interaction-foundation-transition-tokens-micro-interactions-reduced-motion-support.md
+modified_files:
+  - apps/web/src/app/globals.css
+  - apps/web/src/components/catalog/CatalogView.tsx
+  - apps/web/src/components/catalog/FilterSidebar.tsx
+  - apps/web/src/components/catalog/CollapsibleSection.tsx
+  - apps/web/src/components/catalog/FacetTile.tsx
+  - apps/web/src/components/catalog/GameFacetSection.tsx
+  - apps/web/src/components/catalog/PipRow.tsx
+  - apps/web/src/components/catalog/filterControls.ts
 priority: high
 type: feature
 ordinal: 56000
@@ -49,11 +58,11 @@ Depends on TASK-048 (wordmarks/symbols), TASK-051 (mtg facets), TASK-052 (presen
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 MTG shows color pips, rarity/type/set with icons and identity colors; Riftbound shows rune-iconed domain tiles in official domain hexes; each game's accent visibly themes the panel; games without presentation entries degrade to plain tiles
-- [ ] #2 Zero-count values are visibly disabled and unclickable, but a selected value always stays removable
-- [ ] #3 All animation is transform/opacity-only on existing motion tokens; prefers-reduced-motion collapses it; keyboard focus rings intact on every control including collapsed section headers, and disabled tiles are skipped correctly
-- [ ] #4 Registry genericity preserved: no per-game branching in the renderer beyond presentation lookups
-- [ ] #5 pnpm typecheck, pnpm build, vitest, and biome are green
+- [x] #1 MTG shows color pips, rarity/type/set with icons and identity colors; Riftbound shows rune-iconed domain tiles in official domain hexes; each game's accent visibly themes the panel; games without presentation entries degrade to plain tiles
+- [x] #2 Zero-count values are visibly disabled and unclickable, but a selected value always stays removable
+- [x] #3 All animation is transform/opacity-only on existing motion tokens; prefers-reduced-motion collapses it; keyboard focus rings intact on every control including collapsed section headers, and disabled tiles are skipped correctly
+- [x] #4 Registry genericity preserved: no per-game branching in the renderer beyond presentation lookups
+- [x] #5 pnpm typecheck, pnpm build, vitest, and biome are green
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -68,3 +77,23 @@ Plan (deps TASK-048/051/052/053 all Done and merged to main):
 6. pnpm typecheck, pnpm build, vitest, biome green.
 Executed by nextjs-frontend subagent (with frontend-design skill) in isolated worktree on branch task/TASK-054; verified by task-verifier before merge — verifier must specifically check AC#4 (no per-game branching) and AC#3 (reduced-motion + focus rings), not just visual claims.
 <!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Extraídos 5 subcomponentes nuevos de FilterSidebar.tsx (que se mantiene sin 'use client'): CollapsibleSection (accordion con grid-template-rows 0fr→1fr, aria-expanded, stagger .tpm-reveal), PipRow (pips circulares MTG, grayscale→color+ring+glow, press-pop), FacetTile (tile genérico icon/hex, tinte por hex mirroring CONDITION_HEX, rombo 8px para rarezas solo-hex, fallback a tile plano sin entry de presentación), GameFacetSection (decide pips/tiles/multiInt/freeText solo por facet.kind y presence de FACET_PRESENTATION — cero branching por tcg), filterControls.ts (constantes compartidas CONTROL_BASE/DISABLED_TILE).
+
+`--game-accent` inline desde accentFor(activeGame) en el wrapper del sidebar y en el eyebrow del header. Conteos con auto-exclusión (facet-counts.ts de TASK-053) deshabilitan valores en cero salvo que ya estén seleccionados (disabled nativo, no solo aria-disabled). `.tpm-collapse`/`.tpm-tick` agregados a globals.css, cubiertos por el bloque global de prefers-reduced-motion (selector universal `*`).
+
+Verificado por task-verifier con PASS en las 5 AC, incluyendo auditoría real de web-design-guidelines (guidelines frescas vía curl, no solo checklist de memoria) — sin violaciones bloqueantes; único nit (inputs de precio sin ring compartido) es preexistente, no introducido por esta task. Grep confirmó cero literales 'mtg'/'riftbound' usados como branching de renderizado (AC#4). typecheck/vitest(115/115)/biome/build verdes. Mergeado a main en 29679fd (merge commit posterior).
+<!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+El sidebar de filtros deja de ser tiles de texto genérico y se convierte en el "instrument panel" insignia del epic: plates GameWordmark por juego, pips circulares de color para MTG (con anillo+glow del hex de identidad al seleccionar), tiles con icono/hex para rareza/dominio, acento por juego (`--game-accent`) que tiñe el panel completo, secciones colapsables con animación CSS pura, y micro-interacciones (stagger de entrada, tick de conteo, press-pop de pips) — todo transform/opacity sobre los tokens de movimiento existentes.
+
+El renderer sigue siendo 100% genérico: ninguna rama por nombre de juego, solo lookups contra el registro de presentación (TASK-052) y el motor de conteos con auto-exclusión (TASK-053). Un facet o valor sin entrada de presentación degrada a un tile plano sin romperse — verificado con los gaps documentados de MTG type / Riftbound rarity "showcase".
+
+Verificado por task-verifier con PASS explícito en las 5 AC, incluyendo una auditoría real (no solo de memoria) contra web-design-guidelines sin hallazgos bloqueantes. Mergeado a main en 29679fd.
+<!-- SECTION:FINAL_SUMMARY:END -->
