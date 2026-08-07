@@ -3,10 +3,11 @@ id: TASK-048
 title: >-
   Filter symbol asset pipeline + GameWordmark components (mana SVGs, Riftbound
   runes, custom wordmarks)
-status: To Do
+status: In Progress
 assignee:
   - '@claude'
 created_date: '2026-08-07 00:00'
+updated_date: '2026-08-07 00:04'
 labels:
   - 'epic:catalog-visual-refactor'
   - web
@@ -46,3 +47,15 @@ Subagent: nextjs-frontend. No dependencies — runs parallel with the shared-typ
 - [ ] #3 GameWordmark renders all 6 TCGs: distinct emblems for mtg and riftbound, monogram fallback for the other 4; no official logo artwork is used anywhere
 - [ ] #4 pnpm typecheck, pnpm build, and biome are green
 <!-- AC:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+## Plan (from approved epic plan, sources verified live)
+
+1. `scripts/fetch-filter-symbols.mjs` modeled on `scripts/import-riftbound.mjs`: UA header, ~150ms throttle, skip-existing (idempotent), `--force` flag. Sources: Scryfall symbology `svg_uri` for W/U/B/R/G/C; dotgg `text/rb_rune_{domain}.svg` for the 7 domains (colorless → rb_rune_rainbow.svg, fallback colors/colorless.webp); dotgg `rarity/{common,uncommon,rare,epic}.svg` (showcase 404 → warn + continue). Output tree: `apps/web/public/symbols/{mtg,riftbound/domain,riftbound/rarity}/`, committed to git.
+2. `apps/web/src/components/catalog/GameWordmark.tsx` per binding visual spec (angular Rajdhani letterforms on clip-btn plate; MTG pip-arc emblem, Riftbound rhombus cluster, monogram fallback via TCG_META.short). Template-literal classes, no cn/clsx; comments in Spanish per repo style.
+3. Run script, verify assets serve at /symbols/... in dev; typecheck + build + biome.
+
+Executed by nextjs-frontend subagent in an isolated worktree on branch task/TASK-048; verified by task-verifier before merge.
+<!-- SECTION:PLAN:END -->
