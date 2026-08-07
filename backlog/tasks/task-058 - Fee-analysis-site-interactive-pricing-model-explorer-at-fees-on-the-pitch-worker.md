@@ -3,9 +3,11 @@ id: TASK-058
 title: >-
   Fee-analysis site: interactive pricing model explorer at /fees on the pitch
   worker
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - claude
 created_date: '2026-08-07 04:52'
+updated_date: '2026-08-07 04:53'
 labels:
   - 'epic:pricing'
   - pitch
@@ -48,3 +50,15 @@ The page lives in apps/pitch/public/fees/ (assets-only Worker, vanilla HTML/CSS/
 - [ ] #5 Spanish UI; visual quality per frontend-design skill and audited against web-design-guidelines (micro-interactions, prefers-reduced-motion respected)
 - [ ] #6 Model logic committed as scripts/fee-model.mjs and referenced from the page/docs so numbers are reproducible
 <!-- AC:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+1. Branch task/TASK-058-fees-site off main.
+2. Commit the analysis model as scripts/fee-model.mjs (verbatim from session, deterministic; node scripts/fee-model.mjs regenerates all tables).
+3. Build apps/pitch/public/fees/ as a self-contained page (index.html + fees.css + fees.js) served by the existing assets-only worker — no wrangler changes needed (assets dir already ./public; /fees/ resolves to fees/index.html).
+4. fees.js ports the model 1:1 (same constants/distributions/defaults) and renders: hero with the central finding; assumptions strip; bundle comparison cards (P0–P4) with monthly net per scenario + salary break-even; interactive explorer (config A/B toggle, singles/sealed fee sliders, mix, refund, GMV) recomputing live; sensitivity table; MSI note; caveats block (ex-IVA, illustrative, no elasticity, not tax advice).
+5. Aesthetic: reuse deck tokens (Mística TCG premium — same palette/fonts/clip-path language, dark), micro-interactions with prefers-reduced-motion guards. frontend-design skill for build, web-design-guidelines audit before close.
+6. Verify: node script output matches page defaults; wrangler dev smoke (curl /fees/) + dry-run build; deck routes untouched.
+7. Commit → merge to main → deploy pitch worker.
+<!-- SECTION:PLAN:END -->
