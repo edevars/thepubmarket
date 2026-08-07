@@ -3,10 +3,11 @@ id: TASK-049
 title: >-
   Shared MTG types + catalog API filter registry for MTG (color, type, rarity)
   with multi-game param support
-status: To Do
+status: In Progress
 assignee:
   - '@claude'
 created_date: '2026-08-07 00:01'
+updated_date: '2026-08-07 00:04'
 labels:
   - 'epic:catalog-visual-refactor'
   - api
@@ -49,3 +50,17 @@ Subagent: cloudflare-worker-dev. No dependencies — runs parallel with the asse
 - [ ] #4 docs/ingenieria/catalogo-multijuego.md documents the multi-game param registration semantics (Map<string, Tcg[]>)
 - [ ] #5 pnpm typecheck, vitest, and biome are green across api and shared
 <!-- AC:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+## Plan (from approved epic plan, collisions verified in source)
+
+1. `packages/shared/src/index.ts`: MtgAttributes variant + MTG_COLORS/MTG_RARITIES/MTG_CARD_TYPES consts + optional InventoryItem.createdAt.
+2. `apps/api/src/lib/catalog-filters.ts`: GAME_FILTERS.mtg (color jsonArray $.colors, type jsonArray $.types, rarity column). Rework ALL_GAME_PARAMS (line ~109) from Map<string,Tcg> to Map<string,Tcg[]> — flatMap currently lets mtg overwrite riftbound's type/rarity entries and corrupt filter_requires_tcg.requiresTcg. Invariant: param valid for active tcg never 400s because another game registers it too.
+3. `apps/api/src/lib/scryfall.ts`: normalizeCard builds MtgAttributes (colors union card_faces, empty → ['C']; types from front-face type_line; manaValue from cmc). Bump KV cache key prefixes to :v2:.
+4. `apps/api/src/routes/catalog.ts`: map createdAt.
+5. Tests: extend catalog-filters.test.ts (mtg per-kind, case-insensitivity, cross-game vocab errors, 400 shapes) + scryfall derivation tests; riftbound tests untouched. Update docs/ingenieria/catalogo-multijuego.md §6.
+
+Executed by cloudflare-worker-dev subagent in an isolated worktree on branch task/TASK-049; verified by task-verifier before merge.
+<!-- SECTION:PLAN:END -->
