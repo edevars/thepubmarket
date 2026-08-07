@@ -222,6 +222,7 @@
     "sortPriceDesc": "Precio: mayor a menor",
     "sortNewest": "Más recientes",
     "filters": "Filtros",
+    "closeFilters": "Cerrar filtros",
     "clear": "Limpiar",
     "clearAll": "Limpiar filtros",
     "fGame": "Juego",

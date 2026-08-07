@@ -18,7 +18,7 @@ export interface FilterState {
   game: Record<string, string[]>
 }
 
-interface FilterSidebarProps {
+export interface FilterSidebarProps {
   state: FilterState
   /** Juegos presentes en el inventario, con su conteo. */
   tcgCounts: { tcg: Tcg; count: number }[]
@@ -49,6 +49,14 @@ interface FilterSidebarProps {
   gameFacetCounts: Record<string, Record<string, number>>
   onToggleGameFilterValue: (param: string, value: string) => void
   onSetGameFilterValue: (param: string, value: string | undefined) => void
+  /**
+   * Id del encabezado "Filtros" para `aria-labelledby` del dialog que envuelve
+   * este componente en mobile (`MobileFilterSheet`, TASK-055). `undefined` en
+   * desktop, donde `FilterSidebar` vive suelto dentro del `<aside>` sticky sin
+   * semántica de dialog — evita un `id` duplicado si ambas instancias llegaran
+   * a montarse a la vez.
+   */
+  titleId?: string
 }
 
 /**
@@ -82,6 +90,7 @@ export function FilterSidebar({
   gameFacetCounts,
   onToggleGameFilterValue,
   onSetGameFilterValue,
+  titleId,
 }: FilterSidebarProps) {
   const t = useTranslations('catalog')
   const tCondition = useTranslations('condition')
@@ -90,13 +99,22 @@ export function FilterSidebar({
 
   return (
     <div
-      className="flex max-h-[calc(100vh-2rem)] flex-col border border-line-soft bg-panel-2 shadow-[0_18px_60px_rgba(0,0,0,0.35)] md:max-h-none md:shadow-none"
+      // `flex-1 min-h-0` solo aplica cuando el padre es flex (el wrapper de
+      // `MobileFilterSheet`, TASK-055): deja que el `max-h-[88%]` de ese
+      // wrapper sea el límite real de altura y que este flex-col interno se
+      // reparta el espacio sobrante. En desktop el `<aside>` no es flex, así
+      // que ambas clases son un no-op y `max-h-[calc(100vh-2rem)]` (mobile) /
+      // `md:max-h-none` (desktop) siguen gobernando como antes.
+      className="flex max-h-[calc(100vh-2rem)] min-h-0 flex-1 flex-col border border-line-soft bg-panel-2 shadow-[0_18px_60px_rgba(0,0,0,0.35)] md:max-h-none md:shadow-none"
       style={accent ? ({ '--game-accent': accent } as React.CSSProperties) : undefined}
     >
       <div className="flex items-center justify-between gap-3 border-b border-line-soft px-4 py-3.5">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
-            <span className="font-display text-[15px] font-bold uppercase tracking-[0.08em] text-white">
+            <span
+              id={titleId}
+              className="font-display text-[15px] font-bold uppercase tracking-[0.08em] text-white"
+            >
               {t('filters')}
             </span>
             {hasFilters && (
