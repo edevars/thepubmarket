@@ -7,6 +7,7 @@ status: To Do
 assignee:
   - '@claude'
 created_date: '2026-08-07 00:02'
+updated_date: '2026-08-07 00:04'
 labels:
   - 'epic:catalog-visual-refactor'
   - web
@@ -40,7 +41,7 @@ Scope — new `apps/web/src/lib/catalog/facet-presentation.ts`:
 - Helpers `presentationFor(tcg, param, value)` and `accentFor(tcg)` — never throw; missing entry → undefined → plain tile. Condition hexes stay in `display.ts` (already exist); this module is facet-value-scoped only.
 - Unit tests: every multiValue facet value in GAME_FACETS for mtg/riftbound has a presentation entry or an explicitly documented gap (supertype/energy/might are intentionally icon-less); all hexes are valid 6-digit colors; accentFor returns undefined for the 4 accent-less games.
 
-Depends on TASK-048 (icon files must exist at the referenced paths) and TASK-051 (GAME_FACETS.mtg exists for the coverage test). Runs parallel with TASK-052. Subagent: nextjs-frontend.
+Depends on TASK-048 (icon files must exist at the referenced paths) and TASK-051 (GAME_FACETS.mtg exists for the coverage test). Runs parallel with TASK-053 (URL/sort/counts). Subagent: nextjs-frontend.
 <!-- SECTION:DESCRIPTION:END -->
 
 ## Acceptance Criteria
