@@ -3,10 +3,10 @@ id: TASK-046
 title: >-
   Stale-shaped KV cache entries silently create inventory rows without a
   catalogId
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-08-06 14:24'
-updated_date: '2026-08-07 01:00'
+updated_date: '2026-08-07 01:05'
 labels:
   - api
   - catalog
@@ -52,3 +52,9 @@ Prod cleanup (AC#4): audited all 7 rows with catalog_id IS NULL via `wrangler d1
 
 Fix: apps/api/src/lib/scryfall.ts adds isValidCardSnapshot() gating getCardById and searchCards KV reads — a shape mismatch (e.g. legacy scryfallId-only entries) is treated as a cache miss and refetched. apps/api/src/lib/inventory.ts createListing now returns a typed error (invalid_catalog_snapshot, 502) instead of inserting when catalogId is missing. Tests in scryfall.test.ts and inventory.test.ts cover both cases. Verified via task-verifier: typecheck/lint/vitest all green, no fund-flow code touched.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Fixed the stale-shaped KV cache bug: getCardById and searchCards in apps/api/src/lib/scryfall.ts now validate cached CardSnapshot shape via isValidCardSnapshot() and treat mismatches (legacy scryfallId-only entries) as cache misses, refetching from source. createListing in apps/api/src/lib/inventory.ts rejects snapshots missing catalogId with a typed error (invalid_catalog_snapshot, 502) instead of inserting a NULL catalog_id row. Added vitest coverage for both the legacy-cache-miss path and the missing-catalogId rejection. Audited the 7 pre-existing prod inventory rows with catalog_id IS NULL: all were legacy rows predating the catalog_id column (not fresh KV-bug writes); backfilled each via scryfall_id after confirming set/collector_number match. Merged to main and deployed to production (thepubmarket-api, version ab83e56f-a3ea-491a-8d16-a56b7cb7bf5a).
+<!-- SECTION:FINAL_SUMMARY:END -->
