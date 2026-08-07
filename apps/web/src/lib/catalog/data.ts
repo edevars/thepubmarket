@@ -15,7 +15,18 @@ import { fetchCatalog, fetchCatalogGameCounts, fetchCatalogItem } from '@/lib/ap
 import { matchesGameFilters } from './game-filters'
 import { MOCK_LISTINGS } from './mock-data'
 
-/** Trae todo el inventario activo en una sola página (tope alto de la API). */
+/**
+ * Trae todo el inventario activo en una sola página (tope alto de la API).
+ * TASK-053: las facetas de juego (domain/color/rarity/…) y el conteo por
+ * valor de `facet-counts.ts` ahora se calculan en CLIENTE sobre este mismo
+ * set (ver `catalog/page.tsx`, que ya no manda `game` a `getCatalog`), para
+ * que los conteos de valores NO seleccionados sean computables. CAVEAT: si un
+ * juego supera `FETCH_LIMIT` items, tanto el filtrado de facetas en cliente
+ * como sus conteos quedan truncados a esta página — los filtros de faceta del
+ * lado API (`catalog-filters.ts` en el Worker) siguen siendo el contrato real
+ * y se mantienen probados ahí; esto solo deja de ejercitarlos desde el
+ * catálogo web hasta que llegue paginación real (Fase 5).
+ */
 const FETCH_LIMIT = 200
 const USE_MOCKS = process.env.NEXT_PUBLIC_USE_MOCKS === 'true'
 
