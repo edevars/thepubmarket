@@ -1,10 +1,11 @@
 ---
 id: TASK-051
 title: 'Web facet registry: GAME_FACETS.mtg + cross-game facet scoping fix + i18n'
-status: To Do
+status: In Progress
 assignee:
   - '@claude'
 created_date: '2026-08-07 00:01'
+updated_date: '2026-08-07 00:18'
 labels:
   - 'epic:catalog-visual-refactor'
   - web
@@ -45,3 +46,16 @@ Depends on TASK-049 (shared MTG consts/types). Subagent: nextjs-frontend.
 - [ ] #3 es/en parity for every new message key; facet values keep translate="no"
 - [ ] #4 pnpm typecheck, vitest, and biome are green
 <!-- AC:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+## Plan (from approved epic plan; TASK-049 merged to main, provides MtgAttributes/MTG_COLORS/MTG_RARITIES/MTG_CARD_TYPES in packages/shared)
+
+1. `apps/web/src/lib/catalog/game-filters.ts`: add `GAME_FACETS.mtg = [color (multiValue, MTG_COLORS, labelKey 'fColor'), type (multiValue, MTG_CARD_TYPES, reuse 'fType'), rarity (multiValue, MTG_RARITIES, reuse 'fRarity'), set (freeText, reuse 'fSet')]`. `valuesOf` narrows `item.card.gameAttributes` to `tcg === 'mtg'` (mirror the existing riftbound narrowing helper); rarity/set read the shared card columns exactly as riftbound does.
+2. Fix `facetByParam` (~line 129): currently searches ALL games and returns first match. Scope it to `facetsFor(item.tcg)` so `matchesGameFilters` never applies the wrong game's `valuesOf` once mtg also registers type/rarity/set.
+3. i18n: add `catalog.fColor` to both `messages/es.json` and `messages/en.json`.
+4. Tests: assert mtg ordered param list `['color','type','rarity','set']`; the riftbound assertion `['domain','type','supertype','rarity','energy','might','set']` stays frozen — mtg is appended as a new registry key, never interleaved; parse/serialize/match cases incl. case-insensitivity; cross-game isolation (mtg item never matches via riftbound's type facet and vice versa).
+
+Executed by nextjs-frontend subagent in an isolated worktree on branch task/TASK-051; verified by task-verifier before merge.
+<!-- SECTION:PLAN:END -->
