@@ -3,11 +3,11 @@ id: TASK-058.02
 title: >-
   Add 10%-flat variant, explicit Stripe account types and IVA obligations to
   /fees next steps
-status: In Progress
+status: Done
 assignee:
   - claude
 created_date: '2026-08-07 22:47'
-updated_date: '2026-08-07 22:47'
+updated_date: '2026-08-07 22:54'
 labels:
   - 'epic:pricing'
   - pitch
@@ -51,12 +51,12 @@ Extend the /fees analysis page with three additions requested by the operator.
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 P5 (10% flat, config B) appears as a sixth option in the cards and scenario table with correct model values, plus an explicit note on the sealed retail-price risk
-- [ ] #2 Model script gains config C (Standard accounts, no Connect fees) and the new bundles; page reproduces script output at defaults
-- [ ] #3 A next-steps section states explicitly what Stripe account the owner/platform needs and what account type each seller needs, comparing Standard vs Express-legacy vs current Express-controller with their economic and risk trade-offs
-- [ ] #4 An IVA/fiscal section explains: platform must show 'IVA incluido' or IVA separately (Art. 18-J-I), why direct charges avoid the retention obligation (18-J-II), the monthly SAT reporting that applies anyway including the CLABE data gap (18-J-III), seller obligations (18-K), and CFDI duties on both sides
-- [ ] #5 Fiscal content is marked as analysis and not formal tax advice, with the 2026 reform flagged for re-verification
-- [ ] #6 Plain language maintained throughout; build, curl smoke and deploy pass; deck routes untouched
+- [x] #1 P5 (10% flat, config B) appears as a sixth option in the cards and scenario table with correct model values, plus an explicit note on the sealed retail-price risk
+- [x] #2 Model script gains config C (Standard accounts, no Connect fees) and the new bundles; page reproduces script output at defaults
+- [x] #3 A next-steps section states explicitly what Stripe account the owner/platform needs and what account type each seller needs, comparing Standard vs Express-legacy vs current Express-controller with their economic and risk trade-offs
+- [x] #4 An IVA/fiscal section explains: platform must show 'IVA incluido' or IVA separately (Art. 18-J-I), why direct charges avoid the retention obligation (18-J-II), the monthly SAT reporting that applies anyway including the CLABE data gap (18-J-III), seller obligations (18-K), and CFDI duties on both sides
+- [x] #5 Fiscal content is marked as analysis and not formal tax advice, with the 2026 reform flagged for re-verification
+- [x] #6 Plain language maintained throughout; build, curl smoke and deploy pass; deck routes untouched
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -69,3 +69,27 @@ Branch task/TASK-058.02-accounts-iva.
 4. fees.css: styles for the account-type table and the fiscal block, reusing existing tokens.
 5. Verify script/page parity in node, dry-run build, curl smoke dev, commit → merge → deploy → prod smoke, close.
 <!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Legal basis read directly from the statute PDF (diputados.gob.mx LIVA, texto consolidado DOF 12-11-2021), not from secondary sources: Art. 1-A BIS confirms Mexican-resident intermediation platforms must comply with 18-J; 18-J-I gives the 'IVA incluido' legend option; 18-J-II conditions retention on 'Cuando cobren el precio y el impuesto al valor agregado... por cuenta del enajenante'; 18-J-III requires monthly SAT reporting 'aun cuando no hayan efectuado el cobro', listing RFC/CURP/domicilio/institución financiera y CLABE/monto; 18-K obliges sellers to show IVA. 2026 reform (8% IVA / 4% ISR withholding extended to personas morales) flagged on the page for re-verification.
+
+Model verification: page JS reproduces script output exactly — P5 $26,253/7.9%, and T7 account-type table $27,373 (Standard) / $26,253 (Express legacy) / $12,431 (current) at 10% flat, break-evens $490k/$510k/$1.04M. Hero now reads 3.74% vs 7.91% (same 10% pricing both sides). Dry-run build passes; curl smoke dev+prod 200 with fx-ivas/fx-table--accounts/fx-good/config C present; deck route intact. Deployed version ef9283bd.
+
+Finding worth carrying forward: Standard accounts also remove the negative-balance liability that TASK-007 flagged as needing business sign-off — choosing Standard resolves that open item rather than just improving margin.
+<!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Three additions to /fees, all requested by the operator.
+
+1. P5 — 10% flat on singles and sealed (config B, min $15): $26,253/mo at Base vs $21,844 for 10/6, salary break-even $510k vs $610k. Shipped as a sixth card plus a callout stating the real risk honestly: sealed passes TCGplayer parity (seller nets 87.4–87.7%) but competes on retail price, so the recommendation is to start at 10% flat and drop sealed to 6% only if an anchor seller pushes back.
+
+2. Explicit Stripe account configuration for both sides. Owner: Mexican Stripe account with Connect enabled, RFC + Constancia de Situación Fiscal uploaded (else no CFDI for Stripe's fees), platform holds the API keys and never the funds, negative-balance acknowledgment only if Express. Seller: comparison table of Standard (type:'standard') vs Express legacy (type:'express') vs the current Express-via-controller-properties, across who pays Stripe, Connect fees, negative-balance liability, chargebacks/intl, dashboard, onboarding friction, and monthly profit. Recommendation is Standard — best economics ($27,373/mo) and it moves negative-balance risk to Stripe, which also closes the open concern from TASK-007. Model gained config C to make that numeric.
+
+3. IVA section. Splits the three IVAs (the card's, the platform commission's, Stripe's) and lists concrete duties: show "IVA incluido" or IVA separately (18-J-I, currently missing from the product), issue CFDI to sellers, report to SAT monthly even without collecting (18-J-III) — flagging that the required CLABE is data the platform does not currently hold under Connect — and require RFC from every seller (18-K). Plus the favorable finding: retention duties trigger only when the platform collects the price, so direct charges avoid them, the same design that avoids IFPE. Marked as analysis, not formal tax advice, with the 2026 reform flagged.
+
+Hero reworked to compare both configs at identical 10% pricing (3.74% vs 7.91%) so it isolates the variable it claims to. Verified script/page parity, build, dev+prod smoke; deployed.
+<!-- SECTION:FINAL_SUMMARY:END -->
