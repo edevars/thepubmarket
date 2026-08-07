@@ -3,11 +3,11 @@ id: TASK-053
 title: >-
   Catalog URL unification (all filters shareable), functional sort, and
   facet-count engine
-status: In Progress
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-08-07 00:02'
-updated_date: '2026-08-07 01:14'
+updated_date: '2026-08-07 01:28'
 labels:
   - 'epic:catalog-visual-refactor'
   - web
@@ -20,6 +20,16 @@ references:
   - 'apps/web/src/app/[locale]/catalog/page.tsx'
   - apps/web/src/lib/catalog/data.ts
   - apps/web/src/components/catalog/ActiveChips.tsx
+modified_files:
+  - apps/web/messages/en.json
+  - apps/web/messages/es.json
+  - 'apps/web/src/app/[locale]/catalog/page.tsx'
+  - apps/web/src/components/catalog/CatalogView.tsx
+  - apps/web/src/lib/catalog/data.ts
+  - apps/web/src/lib/catalog/facet-counts.ts
+  - apps/web/src/lib/catalog/facet-counts.test.ts
+  - apps/web/src/lib/catalog/local-filters.ts
+  - apps/web/src/lib/catalog/local-filters.test.ts
 priority: high
 type: feature
 ordinal: 55000
@@ -45,12 +55,12 @@ Depends on TASK-049 (createdAt) and TASK-051 (mtg facets exist so counts cover b
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Set condition + language + max price + foil, then toggle a facet or switch game: local filters persist in URL and UI; back/forward restores every filter; a hard refresh of the URL reproduces the exact view
-- [ ] #2 Sort options reorder the grid correctly (relevance with and without q, price asc/desc, newest) and sort persists in the URL
-- [ ] #3 Local-filter changes cause no remount — verifiable: input focus in the price field survives toggling a condition tile
-- [ ] #4 local-filters and facet-counts unit tests cover parse/serialize round-trips and self-exclusion counting; all existing tests stay green
-- [ ] #5 clearAll clears both URL-local params and facets in one action
-- [ ] #6 pnpm typecheck, pnpm build, vitest, and biome are green
+- [x] #1 Set condition + language + max price + foil, then toggle a facet or switch game: local filters persist in URL and UI; back/forward restores every filter; a hard refresh of the URL reproduces the exact view
+- [x] #2 Sort options reorder the grid correctly (relevance with and without q, price asc/desc, newest) and sort persists in the URL
+- [x] #3 Local-filter changes cause no remount — verifiable: input focus in the price field survives toggling a condition tile
+- [x] #4 local-filters and facet-counts unit tests cover parse/serialize round-trips and self-exclusion counting; all existing tests stay green
+- [x] #5 clearAll clears both URL-local params and facets in one action
+- [x] #6 pnpm typecheck, pnpm build, vitest, and biome are green
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -77,3 +87,29 @@ Implementation:
 
 Executed by nextjs-frontend subagent in an isolated worktree on branch task/TASK-053; verified by task-verifier before merge (this is a state-architecture task — verifier must specifically check AC#1 URL round-trip on hard refresh and AC#3 no-remount-on-local-change, not just typecheck/tests).
 <!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Dos canales de navegación confirmados por task-verifier con lectura línea a línea: `navigate()` (CatalogView.tsx) lleva los local-filters actuales a cada `router.push` de q/game/facets vía `applyLocalFiltersToSearchParams`; `writeLocalFilters()` usa `window.history.replaceState` (fallback `router.replace({scroll:false})` en try/catch) para cond/lang/foil/min/max/sort — nunca toca `router.push` ni cambia el `key` de la página, que sigue siendo exactamente `q|game|serializedFacets`. `page.tsx` ya no manda facets a la API (`getCatalog({tcg: activeGame})` solamente) y parsea local-filters server-side para el primer paint.
+
+`facet-counts.ts`: conteo con auto-exclusión (una faceta seleccionada reporta el conteo considerando el resto de filtros activos, nunca a sí misma) — verificado con casos concretos por el verifier, no tautológico.
+
+Sort funcional: relevance/price_asc/price_desc/newest reemplazando el `<span>` decorativo por un `<select>` real. `sortRelevance` ya existía; se agregaron `sortPriceAsc/sortPriceDesc/sortNewest` en ambos locales.
+
+`clearAll()` corregido: antes solo pusheaba a `/catalog` si había juego activo (bug), ahora limpia incondicionalmente URL + estado local.
+
+Verificado por task-verifier: PASS en las 6 AC, incluyendo confirmación de fast-forward limpio del merge-base contra main real (sin divergencia) y diff exacto a los 9 archivos esperados. typecheck/build/vitest (115/115)/biome verdes; los 29 errores de biome preexistentes en SVGs de riftbound/rarity son idénticos pre-cambio (confirmado con git stash). Mergeado a main en 599c927 (merge commit posterior).
+<!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+El catálogo deja de perder filtros silenciosamente: condición, idioma, foil, precio y orden ahora viven en la URL, sobreviven a recarga, back/forward, y a cambiar de faceta o de juego — antes se borraban cada vez que el componente remontaba.
+
+Arquitectura de dos canales: cambios que afectan al servidor (q/game/facets) siguen usando `router.push` pero ahora arrastran los filtros locales en vez de tirarlos; cambios puramente locales (cond/lang/foil/precio/orden) usan `history.replaceState` — sin round-trip al servidor, sin remount, sin salto de scroll. El `key` de la página deliberadamente excluye los params locales para que tocar un filtro de precio no reinicie el árbol de React (el foco del input sobrevive).
+
+El orden pasó de un `<span>` decorativo a un `<select>` funcional (relevancia/precio asc/desc/más recientes). Nuevo motor de conteos con auto-exclusión por faceta (`facet-counts.ts`), que consumirá el refactor del sidebar (TASK-054). `clearAll` corrigió un bug donde solo limpiaba la URL si había un juego activo.
+
+Verificado por task-verifier con PASS explícito y riguroso en las 6 AC (especial atención al criterio de no-remount, el más riesgoso). Mergeado a main en 599c927.
+<!-- SECTION:FINAL_SUMMARY:END -->
