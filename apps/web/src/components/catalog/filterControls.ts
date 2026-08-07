@@ -1,12 +1,15 @@
 /**
- * Constantes de estilo compartidas entre `FilterSidebar` y sus subcomponentes
- * (TASK-054: `CollapsibleSection`, `PipRow`, `FacetTile`, `GameFacetSection`).
- * Módulo puro (sin JSX) para que todos puedan importarlo sin ciclos —
- * `FilterSidebar` también lo usa, pero nunca lo define localmente para que
- * nadie tenga que importar DESDE `FilterSidebar` (evita ciclos de módulos).
+ * Constantes de estilo compartidas por todos los controles de filtro del
+ * catálogo: la consola horizontal (`FilterConsole`), la pila vertical del
+ * sheet mobile (`FilterStack`) y las primitivas que ambas montan
+ * (`CollapsibleSection`, `PipRow`, `FacetTile`, `controls/*`).
+ *
+ * Módulo puro (sin JSX) para que cualquiera pueda importarlo sin ciclos: las
+ * clases viven aquí y no dentro de un componente concreto, así que nadie
+ * necesita importar DESDE un componente para reutilizar su look.
  */
 
-/** Título de sección: mono, minúscula-caps, tenue — igual en todo el sidebar. */
+/** Título de sección: mono, minúscula-caps, tenue — igual en todo el panel. */
 export const SECTION_LABEL = 'font-mono text-[9px] uppercase tracking-[0.14em] text-faint'
 
 /**
@@ -14,9 +17,13 @@ export const SECTION_LABEL = 'font-mono text-[9px] uppercase tracking-[0.14em] t
  * tokens de movimiento (`duration-fast`/`ease-standard`, ver globals.css) y
  * un scale-down en `:active` para que tocar un filtro se sienta táctil, sin
  * bloquear el foco de teclado.
+ *
+ * `touch-manipulation` mata el retardo de ~300ms del doble-tap-para-zoom en
+ * móviles: filtrar es tocar muchos controles seguidos, y ese retardo hacía
+ * que el panel entero se sintiera lento sin que nada estuviera lento.
  */
 export const CONTROL_BASE =
-  'transition duration-fast ease-standard active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/70'
+  'touch-manipulation transition duration-fast ease-standard active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/70'
 
 /**
  * Clase para tiles/botones deshabilitados por conteo cero (TASK-053/054):

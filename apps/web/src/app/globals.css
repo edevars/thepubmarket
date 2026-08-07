@@ -61,6 +61,15 @@
     0.64,
     1
   ); /* slight overshoot, used for reveals/entrances */
+
+  /*
+   * Altura real del `SiteHeader` (sticky top-0): 34px de contenido (el Logo,
+   * el hijo más alto) + 28px de `py-3.5` + 1px de `border-b`. Idéntica en
+   * mobile y desktop. Cualquier elemento que se pegue justo debajo del header
+   * usa `top-[var(--header-h)]` en vez de un número a ojo — antes había tres
+   * offsets distintos y ninguno coincidía con el header real (TASK-057).
+   */
+  --header-h: 63px;
 }
 
 html {
@@ -167,8 +176,8 @@ input::placeholder {
  *   `transition duration-fast ease-standard active:scale-[0.97]` (or
  *   `duration-base` for larger surfaces like cards) directly on the
  *   interactive element. See ProductCard, `catalog/filterControls.ts`'s
- *   `CONTROL_BASE` (shared by FilterSidebar and its subcomponents),
- *   ActiveChips and SiteHeader for reference usage.
+ *   `CONTROL_BASE` (shared by FilterConsole, FilterStack and the filter
+ *   control primitives), ActiveChips and SiteHeader for reference usage.
  * - .tpm-chip / .tpm-chip-exit: filter chip add/remove (ActiveChips). New
  *   chips scale+fade in on mount; removed chips play a quick shrink+fade
  *   before the parent actually drops them from state.
@@ -179,12 +188,13 @@ input::placeholder {
  *   overlay reveal. `.tpm-reveal` is the generic dropdown/sheet entrance
  *   (mobile filter overlay); `.tpm-scrim` fades a backdrop in;
  *   `.tpm-drawer-panel` is the cart drawer's own slide-in (see above).
- * - .tpm-collapse: collapsible section body (FilterSidebar's
- *   `CollapsibleSection`, TASK-054) — grid-template-rows 0fr/1fr set inline
+ * - .tpm-collapse: collapsible section body (`CollapsibleSection`, used by
+ *   FilterStack and the console's overflow popover, TASK-054) —
+ *   grid-template-rows 0fr/1fr set inline
  *   per instance, this class only owns the transition. The inner wrapper
  *   needs `overflow: hidden` for the 0fr collapse to actually clip content
  *   (grid item min-height defaults to 0 once overflow isn't visible).
- * - .tpm-tick: result-count re-key (CatalogView, FilterSidebar) — quick
+ * - .tpm-tick: result-count re-key (CatalogView, MobileFilterSheet) — quick
  *   fade+rise played by giving the count text a new `key` every time it
  *   changes, so filtering reads as a live readout instead of a silent swap.
  * ============================================================ */

@@ -5,6 +5,13 @@ interface GameWordmarkProps {
   tcg: Tcg
   /** Estado seleccionado (lo controla el padre, p.ej. un botón de filtro). */
   active?: boolean
+  /**
+   * `plate`: placa angular con borde y glow, para superficies donde el
+   * wordmark es el control entero. `bare`: emblema + nombre sin placa, para la
+   * tira de pestañas de juego, donde el estado activo ya lo comunica el
+   * subrayado y una segunda caja alrededor sería ruido (TASK-057).
+   */
+  variant?: 'plate' | 'bare'
 }
 
 /**
@@ -17,8 +24,21 @@ interface GameWordmarkProps {
  * Puramente presentacional: sin estado ni handlers propios, el padre decide
  * `active` (p.ej. un `<button>` de filtro con `aria-pressed`).
  */
-export function GameWordmark({ tcg, active = false }: GameWordmarkProps) {
+export function GameWordmark({ tcg, active = false, variant = 'plate' }: GameWordmarkProps) {
   const meta = TCG_META[tcg]
+
+  if (variant === 'bare') {
+    return (
+      <span
+        className={`inline-flex items-center gap-2 transition duration-fast ease-standard ${
+          active ? bareActive : bareInactive
+        }`}
+      >
+        <Emblem tcg={tcg} short={meta.short} />
+        <span className={nameClass}>{meta.name}</span>
+      </span>
+    )
+  }
 
   return (
     <span className={`${plateBase} ${active ? plateActive : plateInactive}`}>
@@ -102,5 +122,9 @@ const plateBase =
 const plateActive =
   'border-[color:var(--game-accent,var(--color-primary))] text-[color:var(--game-accent,var(--color-primary))] shadow-[0_0_22px_color-mix(in_srgb,var(--game-accent,var(--color-primary))_26%,transparent)]'
 const plateInactive = 'border-line-soft text-muted hover:border-line-strong hover:text-ink-2'
+/** Variante `bare`: solo color, sin caja. El subrayado de la pestaña activa
+ * hace el trabajo que en la placa hacían borde y glow. */
+const bareActive = 'text-[color:var(--game-accent,var(--color-primary))]'
+const bareInactive = 'text-muted-2 hover:text-ink-2'
 const nameClass = 'font-display text-[13px] font-bold uppercase tracking-[0.08em]'
 const shortClass = 'font-mono text-[9px] uppercase tracking-[0.14em] opacity-70'

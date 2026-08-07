@@ -61,28 +61,34 @@ export function ActiveChips({ chips, onClearAll }: ActiveChipsProps) {
   if (chips.length === 0) return null
 
   return (
-    <div className="mb-4 flex flex-wrap items-center gap-2">
+    // Lista de verdad, no un `div` con `role="group"`: los chips son un
+    // conjunto homogéneo y enumerable, así que un lector de pantalla debe
+    // poder anunciar cuántos filtros hay puestos antes de recorrerlos.
+    <ul aria-label={t('activeFilters')} className="mb-4 flex flex-wrap items-center gap-2">
       {chips.map((chip) => {
         const exiting = exitingKeys.has(chip.key)
         return (
-          <button
-            key={chip.key}
-            type="button"
-            onClick={() => handleRemove(chip)}
-            className={`tpm-chip ${exiting ? 'tpm-chip-exit' : ''} clip-btn flex min-h-8 items-center gap-2 border border-primary/45 bg-primary/12 px-3 py-1 text-xs text-[#cfe0ff] transition-colors duration-fast ease-standard hover:border-primary hover:bg-primary/18 ${focusRing}`}
-          >
-            <span>{chip.label}</span>
-            <span className="font-mono text-[12px] text-[#7fa8ff]">x</span>
-          </button>
+          <li key={chip.key}>
+            <button
+              type="button"
+              onClick={() => handleRemove(chip)}
+              className={`tpm-chip ${exiting ? 'tpm-chip-exit' : ''} clip-btn flex min-h-8 items-center gap-2 border border-primary/45 bg-primary/12 px-3 py-1 text-xs text-[#cfe0ff] transition-colors duration-fast ease-standard hover:border-primary hover:bg-primary/18 ${focusRing}`}
+            >
+              <span>{chip.label}</span>
+              <span className="font-mono text-[12px] text-[#7fa8ff]">x</span>
+            </button>
+          </li>
         )
       })}
-      <button
-        type="button"
-        onClick={onClearAll}
-        className={`min-h-8 px-1 text-[11px] text-muted-2 underline underline-offset-4 transition-colors duration-fast ease-standard hover:text-ink ${focusRing}`}
-      >
-        {t('clearAll')}
-      </button>
-    </div>
+      <li>
+        <button
+          type="button"
+          onClick={onClearAll}
+          className={`min-h-8 px-1 text-[11px] text-muted-2 underline underline-offset-4 transition-colors duration-fast ease-standard hover:text-ink ${focusRing}`}
+        >
+          {t('clearAll')}
+        </button>
+      </li>
+    </ul>
   )
 }
