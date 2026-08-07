@@ -64,6 +64,8 @@ export function FacetTile({
           src={presentation.icon}
           alt=""
           aria-hidden="true"
+          width={18}
+          height={18}
           className="h-[18px] w-[18px] shrink-0"
         />
       ) : (
