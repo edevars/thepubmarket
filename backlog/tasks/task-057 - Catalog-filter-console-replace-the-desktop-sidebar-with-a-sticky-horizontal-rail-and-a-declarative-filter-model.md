@@ -3,7 +3,7 @@ id: TASK-057
 title: >-
   Catalog filter console: replace the desktop sidebar with a sticky horizontal
   rail and a declarative filter model
-status: In Progress
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-08-07 03:13'
@@ -26,6 +26,31 @@ references:
   - apps/web/src/lib/catalog/facet-counts.ts
   - 'apps/web/src/app/[locale]/catalog/page.tsx'
   - apps/web/src/components/layout/GamesMenu.tsx
+  - docs/ingenieria/catalogo-multijuego.md
+modified_files:
+  - apps/web/src/lib/catalog/filter-model.ts
+  - apps/web/src/lib/catalog/filter-model.test.ts
+  - apps/web/src/lib/catalog/facet-presentation.ts
+  - apps/web/src/components/catalog/FilterConsole.tsx
+  - apps/web/src/components/catalog/FilterStack.tsx
+  - apps/web/src/components/catalog/GameTabs.tsx
+  - apps/web/src/components/catalog/MobileFilterSheet.tsx
+  - apps/web/src/components/catalog/CatalogView.tsx
+  - apps/web/src/components/catalog/FacetTile.tsx
+  - apps/web/src/components/catalog/PipRow.tsx
+  - apps/web/src/components/catalog/GameWordmark.tsx
+  - apps/web/src/components/catalog/ActiveChips.tsx
+  - apps/web/src/components/catalog/filterControls.ts
+  - apps/web/src/components/catalog/controls/FilterControl.tsx
+  - apps/web/src/components/catalog/controls/FoilToggle.tsx
+  - apps/web/src/components/catalog/controls/PriceRange.tsx
+  - apps/web/src/components/ui/Popover.tsx
+  - apps/web/src/components/cart/OrderSummary.tsx
+  - apps/web/src/components/checkout/DeliveryStep.tsx
+  - 'apps/web/src/app/[locale]/catalog/page.tsx'
+  - apps/web/src/app/globals.css
+  - apps/web/messages/es.json
+  - apps/web/messages/en.json
   - docs/ingenieria/catalogo-multijuego.md
 priority: high
 type: feature
@@ -149,3 +174,34 @@ Paridad i18n verificada por script sobre los 14 namespaces.
 
 Sin pruebas de navegador, según la preferencia del proyecto.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Mergeado a `main` en `feab3ad` (commit `97bd5c2`). 26 archivos, +2033/-767.
+
+El sidebar de filtros de 232px desapareció del desktop. En su lugar hay una
+consola horizontal sticky bajo el header: el grid de cartas recupera los 1232px
+completos (6 columnas de 192px, contra 5 de 182px) y los filtros pasan de una
+columna de ~1900px de alto con Riftbound a un riel de ~48px.
+
+Toda la audacia visual se gasta en un solo sitio: la zona de identidad, donde
+los pips de maná (MTG) y las runas de dominio (Riftbound) van inline y a todo
+color. El resto del riel es cromo callado — triggers en mono, hairlines en vez
+de cajas, y los conteos por valor solo dentro del popover.
+
+Por debajo, `lib/catalog/filter-model.ts` es ahora el centro: un módulo puro
+que decide qué filtros existen, con qué control se pintan y cuáles caben
+inline. La consola y el sheet mobile consumen los mismos descriptores y las
+mismas primitivas, así que `FilterSidebar.tsx` (377 líneas) y
+`GameFacetSection.tsx` se borraron enteros. Agregar una faceta vuelve a ser
+declararla, no editar un monolito.
+
+De paso se arregló un bug latente que este trabajo habría vuelto fatal:
+`catalog/page.tsx` seguía remontando toda la vista en cada clic de faceta por
+una `key` que TASK-053 había dejado obsoleta.
+
+Gate completo verde: typecheck, lint, 346 tests (desde 322) y build. Auditado
+con `web-design-guidelines`; los cinco hallazgos se corrigieron dentro de la
+misma task.
+<!-- SECTION:FINAL_SUMMARY:END -->
