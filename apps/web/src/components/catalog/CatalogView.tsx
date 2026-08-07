@@ -7,6 +7,14 @@ import { NoResultsState } from '@/components/states/NoResultsState'
 import { useRouter } from '@/i18n/navigation'
 import { applyFilters, type CatalogFilters } from '@/lib/catalog/data'
 import { TCG_META } from '@/lib/catalog/display'
+import {
+  countConditions,
+  countFoil,
+  countGameFacetValues,
+  countLanguages,
+  type FacetCountFilters,
+} from '@/lib/catalog/facet-counts'
+import { accentFor } from '@/lib/catalog/facet-presentation'
 import { facetsFor, type GameFacet } from '@/lib/catalog/game-filters'
 import {
   applyLocalFiltersToSearchParams,
@@ -247,29 +255,14 @@ export function CatalogView({
     updateGameFilterValues(param, value ? [value] : [])
   }
 
-  const conditionCounts = useMemo(() => {
-    const counts = Object.fromEntries(['NM', 'LP', 'MP', 'HP', 'DMG'].map((c) => [c, 0])) as Record<
-      Condition,
-      number
-    >
-    for (const item of items) counts[item.condition] += 1
-    return counts
-  }, [items])
-
-  const languageCounts = useMemo(() => {
-    const counts: Record<string, number> = {}
-    for (const item of items) counts[item.language] = (counts[item.language] ?? 0) + 1
-    return counts
-  }, [items])
-
-  const foilCount = useMemo(() => items.filter((item) => item.finish === 'foil').length, [items])
-
-  const visible = useMemo(() => {
-    // Las facetas de juego (TASK-053) ya no llegan filtradas del servidor —
-    // `items` trae TODO el inventario del `tcg` activo — así que se aplican
-    // aquí igual que el resto de filtros locales (ver comentario de cabecera
-    // de `applyFilters` en `catalog/data.ts`).
-    const assembled: CatalogFilters = {
+  /**
+   * Set de filtros activos compartido por el filtrado real (`visible`) y por
+   * el motor de conteo con autoexclusión (`facet-counts.ts`, TASK-053/054):
+   * un mismo shape (`FacetCountFilters` es compatible con `CatalogFilters`)
+   * para que ambos caminos nunca diverjan en qué cuenta como "filtro activo".
+   */
+  const countFilters: FacetCountFilters = useMemo(
+    () => ({
       q,
       conditions: localFilters.conditions,
       languages: localFilters.languages,
@@ -277,10 +270,42 @@ export function CatalogView({
       minCents: pesosToCents(localFilters.minPesos),
       maxCents: pesosToCents(localFilters.maxPesos),
       game: gameFilters,
+    }),
+    [q, localFilters, gameFilters],
+  )
+
+  /**
+   * Conteos por valor CON AUTOEXCLUSIÓN (TASK-053): el conteo de un valor de
+   * `conditionCounts`/`languageCounts`/`foilCount` ignora el propio filtro de
+   * esa faceta, así que marcar "NM" no colapsa a 0 el conteo de "LP" — sigue
+   * reflejando cuántos items habría SI cambiaras la selección, no cuántos hay
+   * ya filtrados por ella misma. Alimenta el disabled-state del sidebar
+   * (TASK-054): conteo 0 en un valor NO seleccionado = tile inhabilitada.
+   */
+  const conditionCounts = useMemo(() => countConditions(items, countFilters), [items, countFilters])
+
+  const languageCounts = useMemo(() => countLanguages(items, countFilters), [items, countFilters])
+
+  const foilCount = useMemo(() => countFoil(items, countFilters), [items, countFilters])
+
+  /** Conteo por valor de cada faceta propia del juego activo (domain/color/rarity/…),
+   * también con autoexclusión — mismo motor, una entrada por faceta registrada. */
+  const gameFacetCounts = useMemo(() => {
+    const byParam: Record<string, Record<string, number>> = {}
+    for (const facet of activeFacets) {
+      byParam[facet.param] = countGameFacetValues(items, countFilters, facet)
     }
-    const filtered = applyFilters(items, assembled)
+    return byParam
+  }, [items, countFilters, activeFacets])
+
+  const visible = useMemo(() => {
+    // Las facetas de juego (TASK-053) ya no llegan filtradas del servidor —
+    // `items` trae TODO el inventario del `tcg` activo — así que se aplican
+    // aquí igual que el resto de filtros locales (ver comentario de cabecera
+    // de `applyFilters` en `catalog/data.ts`).
+    const filtered = applyFilters(items, countFilters as CatalogFilters)
     return sortItems(filtered, localFilters.sort, q)
-  }, [items, q, gameFilters, localFilters])
+  }, [items, countFilters, localFilters.sort, q])
 
   const gameFilterCount = Object.values(gameFilters).reduce((n, values) => n + values.length, 0)
 
@@ -361,6 +386,10 @@ export function CatalogView({
     t('resultsCount', { count: visible.length }) +
     (q ? '' : ` · ${t('onlineCount', { count: items.length })}`)
 
+  /** Acento del juego activo (TASK-052/054) — con fallback al cian de marca
+   * cuando no hay juego activo o no tiene identidad propia (`accentFor`). */
+  const accent = accentFor(activeGame)
+
   const filterState: FilterState = {
     conditions: localFilters.conditions,
     languages: localFilters.languages,
@@ -373,15 +402,17 @@ export function CatalogView({
   return (
     <>
       <div className="mb-4.5 flex flex-wrap items-end justify-between gap-3.5">
-        <div>
-          <div className="mb-2 font-mono text-[10px] uppercase tracking-[0.2em] text-cyan">
+        <div style={accent ? ({ '--game-accent': accent } as React.CSSProperties) : undefined}>
+          <div className="mb-2 font-mono text-[10px] uppercase tracking-[0.2em] text-[color:var(--game-accent,var(--color-cyan))]">
             {t('eyebrow')}
           </div>
           <h1 className="font-display text-3xl font-bold tracking-[0.02em] text-white">
             {q ? `"${q}"` : t('title')}
           </h1>
           <div className="mt-1.5 text-[12.5px] text-muted-2" aria-live="polite">
-            {resultLine}
+            <span key={visible.length} className="tpm-tick inline-block">
+              {resultLine}
+            </span>
           </div>
         </div>
         <div className="flex items-center gap-2.5">
@@ -442,6 +473,7 @@ export function CatalogView({
             gameFacets={activeFacets}
             gameFilterState={gameFilters}
             freeTextOptions={freeTextOptions}
+            gameFacetCounts={gameFacetCounts}
             onToggleGameFilterValue={toggleGameFilterValue}
             onSetGameFilterValue={setGameFilterValue}
             onClear={clearAll}
