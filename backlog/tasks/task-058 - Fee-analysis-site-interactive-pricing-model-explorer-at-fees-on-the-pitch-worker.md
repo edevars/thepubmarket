@@ -3,11 +3,11 @@ id: TASK-058
 title: >-
   Fee-analysis site: interactive pricing model explorer at /fees on the pitch
   worker
-status: In Progress
+status: Done
 assignee:
   - claude
 created_date: '2026-08-07 04:52'
-updated_date: '2026-08-07 04:53'
+updated_date: '2026-08-07 05:03'
 labels:
   - 'epic:pricing'
   - pitch
@@ -43,12 +43,12 @@ The page lives in apps/pitch/public/fees/ (assets-only Worker, vanilla HTML/CSS/
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 /fees/ page served by the pitch worker (wrangler dev + dry-run build pass) without touching the existing deck routes
-- [ ] #2 Shows the 5 policy bundles with platform net take, monthly net per GMV scenario, and salary break-even GMV, matching the committed model script output at default assumptions
-- [ ] #3 Interactive controls for at least: singles/sealed fee levels, fees.payer config A/B, mix, refund rate, and GMV — results recompute live without page reload
-- [ ] #4 States assumptions and caveats visibly: ex-IVA treatment, illustrative distributions, no demand-elasticity data, not formal tax advice
-- [ ] #5 Spanish UI; visual quality per frontend-design skill and audited against web-design-guidelines (micro-interactions, prefers-reduced-motion respected)
-- [ ] #6 Model logic committed as scripts/fee-model.mjs and referenced from the page/docs so numbers are reproducible
+- [x] #1 /fees/ page served by the pitch worker (wrangler dev + dry-run build pass) without touching the existing deck routes
+- [x] #2 Shows the 5 policy bundles with platform net take, monthly net per GMV scenario, and salary break-even GMV, matching the committed model script output at default assumptions
+- [x] #3 Interactive controls for at least: singles/sealed fee levels, fees.payer config A/B, mix, refund rate, and GMV — results recompute live without page reload
+- [x] #4 States assumptions and caveats visibly: ex-IVA treatment, illustrative distributions, no demand-elasticity data, not formal tax advice
+- [x] #5 Spanish UI; visual quality per frontend-design skill and audited against web-design-guidelines (micro-interactions, prefers-reduced-motion respected)
+- [x] #6 Model logic committed as scripts/fee-model.mjs and referenced from the page/docs so numbers are reproducible
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -62,3 +62,25 @@ The page lives in apps/pitch/public/fees/ (assets-only Worker, vanilla HTML/CSS/
 6. Verify: node script output matches page defaults; wrangler dev smoke (curl /fees/) + dry-run build; deck routes untouched.
 7. Commit → merge to main → deploy pitch worker.
 <!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Verification evidence: (1) wrangler dev + curl — /fees/, /fees/fees.css, /fees/fees.js and / (deck) all 200, deck untouched; dry-run build passes (7 assets). (2) Model parity — extracted the model section of fees.js and ran it in node: all five bundles reproduce scripts/fee-model.mjs T4 exactly (P0 $12,034/3.6% … P4 $21,844/6.6% at Base, break-evens $1.08M–$610k). (3) Interactivity verified at logic level (renderExplorer pure recompute + input/change listeners) per project no-browser-testing policy. (4) web-design-guidelines audit run; fixes applied: skip link, theme-color meta, scroll-margin-top, text-wrap balance, tabular-nums coverage, touch-action, curly quotes, radio change listener. (5) Allocation-bar palette validated with dataviz validator (dark, #0c1322): seller #2fae74 / platform #3b7bff / stripe #b8862e, all checks PASS. Deployed: https://thepubmarket-pitch.enrique-devars-cee.workers.dev/fees/ (prod 200).
+<!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Interactive fee-analysis explorer shipped at /fees/ on the pitch worker (assets-only, vanilla HTML/CSS/JS, zero build).
+
+What changed:
+- scripts/fee-model.mjs — the deterministic cost model from the pricing analysis (ex-IVA, Stripe MX Aug-2026 rates, configs A/B), now the reproducible source of truth (`node scripts/fee-model.mjs`).
+- apps/pitch/public/fees/{index.html,fees.css,fees.js} — Spanish dashboard extending the deck's Mística TCG tokens. Signature: the five pricing bundles rendered as cards graded by condition (P1=DMG "los docs tal cual" → P4=NM foil "la recomendada"), rank = the model's real verdict. Sections: thesis hero (config A vs B take), assumptions strip, hand of cards, three-scenario table, live explorer (config toggle, fee/mix/refund/intl/GMV sliders, parity chip vs TCGplayer 87%, $400-order allocation bar), sensitivity table, MSI note, three pending decisions, caveats + sources.
+
+Why: pricing decision support — the analysis showed who pays Stripe (fees.payer) matters ~3 GMV points vs ~0.8 per fee point; the page makes that legible and shareable with partners.
+
+Verification: page JS reproduces the committed script's tables exactly at defaults (node eval check); curl smoke on dev and prod (all 200, deck intact); dry-run build passes; web-design-guidelines audit applied; allocation palette CVD-validated. Deployed to https://thepubmarket-pitch.enrique-devars-cee.workers.dev/fees/.
+
+Risks/follow-ups: distributions and mix remain illustrative until real store data lands; the three decision tasks (migrate fees.payer, per-category fee + minimum, IVA-inclusive pricing) are not yet created in Backlog.
+<!-- SECTION:FINAL_SUMMARY:END -->
