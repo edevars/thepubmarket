@@ -166,7 +166,8 @@ input::placeholder {
  * - Hover/press feedback: no dedicated class — compose Tailwind's own
  *   `transition duration-fast ease-standard active:scale-[0.97]` (or
  *   `duration-base` for larger surfaces like cards) directly on the
- *   interactive element. See ProductCard, FilterSidebar's `controlBase`,
+ *   interactive element. See ProductCard, `catalog/filterControls.ts`'s
+ *   `CONTROL_BASE` (shared by FilterSidebar and its subcomponents),
  *   ActiveChips and SiteHeader for reference usage.
  * - .tpm-chip / .tpm-chip-exit: filter chip add/remove (ActiveChips). New
  *   chips scale+fade in on mount; removed chips play a quick shrink+fade
@@ -178,6 +179,14 @@ input::placeholder {
  *   overlay reveal. `.tpm-reveal` is the generic dropdown/sheet entrance
  *   (mobile filter overlay); `.tpm-scrim` fades a backdrop in;
  *   `.tpm-drawer-panel` is the cart drawer's own slide-in (see above).
+ * - .tpm-collapse: collapsible section body (FilterSidebar's
+ *   `CollapsibleSection`, TASK-054) — grid-template-rows 0fr/1fr set inline
+ *   per instance, this class only owns the transition. The inner wrapper
+ *   needs `overflow: hidden` for the 0fr collapse to actually clip content
+ *   (grid item min-height defaults to 0 once overflow isn't visible).
+ * - .tpm-tick: result-count re-key (CatalogView, FilterSidebar) — quick
+ *   fade+rise played by giving the count text a new `key` every time it
+ *   changes, so filtering reads as a live readout instead of a silent swap.
  * ============================================================ */
 
 @keyframes tpmChipIn {
@@ -247,6 +256,32 @@ input::placeholder {
 }
 .tpm-scrim {
   animation: tpmScrimIn var(--duration-base) var(--ease-standard);
+}
+
+/* Acordeón de secciones del sidebar de filtros ("panel de instrumentos",
+ * TASK-054). El valor de `grid-template-rows` (0fr cerrado / 1fr abierto) lo
+ * pone el componente inline por instancia; esta clase solo declara la
+ * transición para que abrir/cerrar anime la altura sin saltos. */
+.tpm-collapse {
+  display: grid;
+  transition: grid-template-rows var(--duration-base) var(--ease-emphasized);
+}
+
+@keyframes tpmTickIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+/* Re-key del conteo de resultados (CatalogView/FilterSidebar, TASK-054):
+ * se aplica a un `<span key={count}>`, así que cada cambio de valor remonta
+ * el nodo y vuelve a disparar esta animación. */
+.tpm-tick {
+  animation: tpmTickIn var(--duration-fast) var(--ease-standard);
 }
 
 /* ----- skeleton shimmer ----- */
