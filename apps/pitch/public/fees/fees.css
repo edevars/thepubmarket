@@ -123,6 +123,9 @@
   font-weight: 600;
 }
 .fx-hero__proof {
+  /* ul semántico (antes div[role=group]): sin marcador ni sangría. */
+  list-style: none;
+  padding-left: 0;
   margin-top: 34px;
   display: flex;
   align-items: stretch;
@@ -219,6 +222,9 @@
 
 /* ---------- la mano de cartas ---------- */
 .fx-hand {
+  /* ul semántico (antes div[role=list]): sin marcador ni sangría. */
+  list-style: none;
+  padding-left: 0;
   margin-top: 44px;
   display: grid;
   grid-template-columns: repeat(5, 1fr);

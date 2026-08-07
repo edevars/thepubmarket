@@ -38,19 +38,19 @@
           La palanca no es el porcentaje: es <strong>quién paga a Stripe</strong>. Migrar la config
           de Connect vale ~3 puntos de GMV; cada punto de fee vale ~0.8.
         </p>
-        <div class="fx-hero__proof" data-reveal style="--delay: 260ms" role="group" aria-label="Comparación de configuraciones">
-          <div class="fx-proof">
+        <ul class="fx-hero__proof" data-reveal style="--delay: 260ms" aria-label="Comparación de configuraciones">
+          <li class="fx-proof">
             <span class="fx-proof__tag fx-proof__tag--a">Config A · hoy</span>
             <span class="fx-proof__num" id="proof-a">—</span>
             <span class="fx-proof__cap">take neto con 10% flat (la plataforma paga Stripe)</span>
-          </div>
-          <span class="fx-proof__vs" aria-hidden="true">vs</span>
-          <div class="fx-proof">
+          </li>
+          <li class="fx-proof__vs" aria-hidden="true">vs</li>
+          <li class="fx-proof">
             <span class="fx-proof__tag fx-proof__tag--b">Config B · propuesta</span>
             <span class="fx-proof__num" id="proof-b">—</span>
             <span class="fx-proof__cap">take neto con 10/6 (el seller paga Stripe)</span>
-          </div>
-        </div>
+          </li>
+        </ul>
       </section>
 
       <!-- ═══ Supuestos ═══ -->
@@ -73,14 +73,18 @@
           recomendada. Neto mensual en el escenario Base ($332k GMV) y el GMV necesario para
           pagar un sueldo de $40k.
         </p>
-        <div class="fx-hand" id="hand" role="list"></div>
+        <ul class="fx-hand" id="hand"></ul>
       </section>
 
       <!-- ═══ Tabla completa ═══ -->
       <section class="fx-section" aria-labelledby="tabla-t">
         <p class="kicker">Los tres escenarios</p>
         <h2 class="headline" id="tabla-t">Neto mensual por escenario</h2>
-        <div class="fx-scroll" role="region" aria-label="Tabla comparativa de propuestas" tabindex="0">
+        <!-- biome-ignore lint/a11y/noNoninteractiveTabindex: un contenedor con scroll
+           horizontal DEBE ser enfocable o el teclado no puede recorrerlo
+           (WCAG 2.1.1). La regla asume que nada no-interactivo necesita foco;
+           aquí sí. El `:focus-visible` de .fx-scroll lo hace visible. -->
+        <section class="fx-scroll" aria-label="Tabla comparativa de propuestas" tabindex="0">
           <table class="table fx-table" id="bundles-table">
             <thead>
               <tr>
@@ -95,7 +99,7 @@
             </thead>
             <tbody></tbody>
           </table>
-        </div>
+        </section>
         <p class="fx-note">
           Config A = <code>fees.payer 'application'</code> (la plataforma absorbe processing,
           disputas e internacional). Config B = <code>application_express</code> (los paga el
@@ -205,7 +209,11 @@
           Neto mensual en Base ($332k) al mover un supuesto a la vez. P2 es la mejor jugada
           posible sin migrar; P4 es la recomendada.
         </p>
-        <div class="fx-scroll" role="region" aria-label="Tabla de sensibilidad" tabindex="0">
+        <!-- biome-ignore lint/a11y/noNoninteractiveTabindex: un contenedor con scroll
+           horizontal DEBE ser enfocable o el teclado no puede recorrerlo
+           (WCAG 2.1.1). La regla asume que nada no-interactivo necesita foco;
+           aquí sí. El `:focus-visible` de .fx-scroll lo hace visible. -->
+        <section class="fx-scroll" aria-label="Tabla de sensibilidad" tabindex="0">
           <table class="table fx-table" id="sens-table">
             <thead>
               <tr>
@@ -217,7 +225,7 @@
             </thead>
             <tbody></tbody>
           </table>
-        </div>
+        </section>
         <div class="fx-msi" id="msi-note">
           <h3>El caso MSI</h3>
           <p id="msi-text">—</p>

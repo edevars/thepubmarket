@@ -10,8 +10,21 @@ const S = { proc: 0.036, fix: 3, intl: 0.005, poutPct: 0.0025, poutFix: 12, acct
 const FIXED = 500
 const SALARY = 40000
 
-const SINGLES = [[80, 0.15], [150, 0.2], [250, 0.2], [400, 0.2], [700, 0.15], [1200, 0.07], [2500, 0.03]]
-const SEALED = [[800, 0.2], [1500, 0.3], [2500, 0.3], [6000, 0.2]]
+const SINGLES = [
+  [80, 0.15],
+  [150, 0.2],
+  [250, 0.2],
+  [400, 0.2],
+  [700, 0.15],
+  [1200, 0.07],
+  [2500, 0.03],
+]
+const SEALED = [
+  [800, 0.2],
+  [1500, 0.3],
+  [2500, 0.3],
+  [6000, 0.2],
+]
 const mean = (d) => d.reduce((s, [x, w]) => s + x * w, 0)
 
 const BASE = { refund: 0.04, intlShare: 0.05, disputeRate: 0.003 }
@@ -66,7 +79,11 @@ function minViableOrder(f, cfg, a = BASE) {
 }
 
 // ---------- formato ----------
-const fmtMXN = new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN', maximumFractionDigits: 0 })
+const fmtMXN = new Intl.NumberFormat('es-MX', {
+  style: 'currency',
+  currency: 'MXN',
+  maximumFractionDigits: 0,
+})
 const mxn = (x) => fmtMXN.format(Math.round(x))
 const pct = (x, d = 1) => `${x.toFixed(d)}%`
 
@@ -147,9 +164,11 @@ const BUNDLES = [
   BUNDLES.forEach((bd, i) => {
     const base = month(332000, 0.6, bd.fS, bd.fP, bd.cfg, 5, POUTS, bd.mf)
     const be = salaryBreakeven(0.6, bd.fS, bd.fP, bd.cfg, bd.mf)
-    const el = document.createElement('article')
+    // `li` real dentro del `ul#hand`: antes era un `article` con
+    // `role="listitem"` calzado encima. `.fx-card` es `display:flex`, así que
+    // no aparece marcador de lista.
+    const el = document.createElement('li')
     el.className = `fx-card fx-deal${bd.foil ? ' fx-card--foil' : ''}`
-    el.setAttribute('role', 'listitem')
     el.style.setProperty('--cond', bd.cond[1])
     el.style.setProperty('--delay', `${i * 110}ms`)
     el.style.setProperty('--tilt', `${(i - 2) * 1.4}deg`)
@@ -159,7 +178,7 @@ const BUNDLES = [
         <span class="fx-card__cond">${bd.cond[0]}</span>
       </div>
       <h3>${bd.name}</h3>
-      <p class="fx-card__fees">${pct(bd.fS * 100, bd.fS * 100 % 1 ? 1 : 0)} singles <span>·</span> ${pct(bd.fP * 100, 0)} sellado <span>·</span> mín ${bd.mf ? mxn(bd.mf) : '—'}</p>
+      <p class="fx-card__fees">${pct(bd.fS * 100, (bd.fS * 100) % 1 ? 1 : 0)} singles <span>·</span> ${pct(bd.fP * 100, 0)} sellado <span>·</span> mín ${bd.mf ? mxn(bd.mf) : '—'}</p>
       <p class="fx-card__note">${bd.note}</p>
       <div class="fx-card__stats">
         <span class="fx-card__stat">neto Base <b>${mxn(base.net)}</b></span>
@@ -170,13 +189,17 @@ const BUNDLES = [
   })
 
   if (reduced) {
-    hand.querySelectorAll('.fx-deal').forEach((c) => c.classList.add('is-in'))
+    hand.querySelectorAll('.fx-deal').forEach((c) => {
+      c.classList.add('is-in')
+    })
   } else {
     const io = new IntersectionObserver(
       (entries) => {
         entries.forEach((e) => {
           if (e.isIntersecting) {
-            e.target.querySelectorAll('.fx-deal').forEach((c) => c.classList.add('is-in'))
+            e.target.querySelectorAll('.fx-deal').forEach((c) => {
+              c.classList.add('is-in')
+            })
             io.disconnect()
           }
         })
@@ -201,7 +224,7 @@ const BUNDLES = [
     tr.innerHTML = `
       <td>${bd.id} · ${bd.name}</td>
       <td>${bd.cfg}</td>
-      <td>${(bd.fS * 100).toFixed(0)}/${(bd.fP * 100).toFixed(0)} · mín ${bd.mf ? '$' + bd.mf : '—'}</td>
+      <td>${(bd.fS * 100).toFixed(0)}/${(bd.fP * 100).toFixed(0)} · mín ${bd.mf ? `$${bd.mf}` : '—'}</td>
       ${cells}
       <td>${be === null ? '—' : mxn(be)}</td>`
     tbody.appendChild(tr)
@@ -251,7 +274,8 @@ function renderExplorer() {
   $('v-refund').textContent = pct(st.a.refund * 100, 0)
   $('v-intl').textContent = pct(st.a.intlShare * 100, 0)
   $('v-gmv').textContent = mxn(st.gmv)
-  $('sellers-note').textContent = `sellers activos: ${sellers} (≈1 por cada $70k de GMV, mín 2) · payout semanal · disputas 0.3% fijas`
+  $('sellers-note').textContent =
+    `sellers activos: ${sellers} (≈1 por cada $70k de GMV, mín 2) · payout semanal · disputas 0.3% fijas`
 
   // tiles
   $('r-take').textContent = pct(m.pct)
@@ -269,7 +293,8 @@ function renderExplorer() {
   parity.classList.toggle('fx-parity--ok', ok)
   parity.classList.toggle('fx-parity--bad', !ok)
   $('parity-chip').textContent = ok ? '✓ paridad TCGplayer' : '✗ pierde paridad'
-  $('parity-text').innerHTML = `Seller con RFC netea <b>${pct(sellerEff * 100)}</b> efectivo en singles (umbral: 87.0%, lo que netea en TCGplayer).`
+  $('parity-text').innerHTML =
+    `Seller con RFC netea <b>${pct(sellerEff * 100)}</b> efectivo en singles (umbral: 87.0%, lo que netea en TCGplayer).`
 
   // barra de asignación: orden de $400 en singles, tarjeta nacional, vista bruta
   const X = 400
@@ -283,7 +308,10 @@ function renderExplorer() {
     ['stripe', 'Stripe (con IVA)', stripeFee],
   ]
   $('alloc-bar').innerHTML = segs
-    .map(([k, , v]) => `<div class="fx-alloc__seg fx-alloc__seg--${k}" style="flex-grow:${v.toFixed(2)}"></div>`)
+    .map(
+      ([k, , v]) =>
+        `<div class="fx-alloc__seg fx-alloc__seg--${k}" style="flex-grow:${v.toFixed(2)}"></div>`,
+    )
     .join('')
   $('alloc-legend').innerHTML = segs
     .map(
