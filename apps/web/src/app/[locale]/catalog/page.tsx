@@ -5,6 +5,7 @@ import { CatalogView } from '@/components/catalog/CatalogView'
 import { EmptyState } from '@/components/states/EmptyState'
 import { getCatalog, getGameCounts } from '@/lib/catalog/data'
 import { parseGameFiltersFromSearchParams, serializeGameFilters } from '@/lib/catalog/game-filters'
+import { parseLocalFiltersFromSearchParams } from '@/lib/catalog/local-filters'
 
 interface CatalogPageProps {
   params: Promise<{ locale: string }>
@@ -30,12 +31,19 @@ export default async function CatalogPage({ params, searchParams }: CatalogPageP
   // nunca llegan a `getCatalog` sin el `tcg` que la API exige.
   const gameFilters = parseGameFiltersFromSearchParams(activeGame, sp)
 
-  // El juego y sus filtros propios los filtra la API; los conteos son de TODO
-  // el inventario para que la barra lateral pueda ofrecer los otros juegos.
-  const [items, gameCounts] = await Promise.all([
-    getCatalog({ tcg: activeGame, game: gameFilters }),
-    getGameCounts(),
-  ])
+  // Filtros locales (condición/idioma/foil/precio/orden, TASK-053): se
+  // parsean también en el servidor y se pasan como props iniciales para que
+  // el primer render coincida con la URL sin parpadeo — el cliente los
+  // vuelve a leer de `location.search` al montar, pero este valor evita un
+  // flash sin filtros mientras hidrata.
+  const initialLocalFilters = parseLocalFiltersFromSearchParams(sp)
+
+  // TASK-053: `game` YA NO se manda a la API — las facetas de juego se
+  // aplican en cliente (`CatalogView`, vía `matchesGameFilters`) sobre el
+  // mismo inventario ya filtrado por `tcg`. Es lo que hace computable el
+  // conteo por valor de facet-counts.ts: si el servidor filtrara por
+  // facetas, los items de los valores NO seleccionados nunca llegarían.
+  const [items, gameCounts] = await Promise.all([getCatalog({ tcg: activeGame }), getGameCounts()])
 
   const empty = items.length === 0 && !activeGame
 
@@ -44,8 +52,11 @@ export default async function CatalogPage({ params, searchParams }: CatalogPageP
       {empty ? (
         <EmptyState />
       ) : (
-        // `key` por query+juego+facetas: el componente cliente re-inicializa
-        // su estado de filtros cuando la navegación cambia la URL.
+        // `key` por query+juego+facetas de juego SOLAMENTE: los filtros
+        // locales (cond/lang/foil/precio/orden) NO forman parte de la key a
+        // propósito — incluirlos remontaría `CatalogView` en cada tap de un
+        // chip de condición, perdiendo foco/animación (TASK-053 AC#3). Solo
+        // lo que cambia el fetch del servidor debe remontar el componente.
         <CatalogView
           key={`${q ?? ''}|${activeGame ?? ''}|${serializeGameFilters(gameFilters)}`}
           items={items}
@@ -53,6 +64,7 @@ export default async function CatalogPage({ params, searchParams }: CatalogPageP
           activeGame={activeGame}
           gameCounts={gameCounts}
           initialGameFilters={gameFilters}
+          initialLocalFilters={initialLocalFilters}
         />
       )}
     </main>

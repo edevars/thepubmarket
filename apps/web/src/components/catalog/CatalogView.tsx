@@ -8,18 +8,15 @@ import { useRouter } from '@/i18n/navigation'
 import { applyFilters, type CatalogFilters } from '@/lib/catalog/data'
 import { TCG_META } from '@/lib/catalog/display'
 import { facetsFor, type GameFacet } from '@/lib/catalog/game-filters'
+import {
+  applyLocalFiltersToSearchParams,
+  EMPTY_LOCAL_FILTERS,
+  type LocalFilters,
+  type SortOrder,
+} from '@/lib/catalog/local-filters'
 import { type ActiveChip, ActiveChips } from './ActiveChips'
 import { CardGrid } from './CardGrid'
 import { FilterSidebar, type FilterState } from './FilterSidebar'
-
-const EMPTY: FilterState = {
-  conditions: [],
-  languages: [],
-  foilOnly: false,
-  minPesos: '',
-  maxPesos: '',
-  game: {},
-}
 
 function toggle<T>(arr: T[], value: T): T[] {
   return arr.includes(value) ? arr.filter((x) => x !== value) : [...arr, value]
@@ -45,6 +42,40 @@ function priceLabel(minPesos: string, maxPesos: string): string {
   return `$0-$${maxPesos}`
 }
 
+/**
+ * Orden de un item para `sort=relevance` cuando hay `q`: coincidencias que
+ * EMPIEZAN con el término rankean antes que las que solo lo contienen — el
+ * resto del orden (API, título ASC) se conserva dentro de cada bucket
+ * (`Array.prototype.sort` es estable).
+ */
+function relevanceRank(name: string, q: string): number {
+  const lower = name.toLowerCase()
+  if (lower.startsWith(q)) return 0
+  if (lower.includes(q)) return 1
+  return 2
+}
+
+/**
+ * Ordena `items` según `sort`. Cliente-side: en Fase 1 el server component ya
+ * trae el set completo (≤`FETCH_LIMIT`, ver `lib/catalog/data.ts`) y se
+ * filtra/ordena aquí. Cuando llegue paginación real (Fase 5) esto se vuelve
+ * un param de la API (`sort=`) en vez de un `.sort()` en cliente.
+ */
+function sortItems(items: InventoryItem[], sort: SortOrder, q: string): InventoryItem[] {
+  if (sort === 'relevance') {
+    if (!q) return items // orden de la API (título ASC), sin tocar
+    const needle = q.trim().toLowerCase()
+    return [...items].sort(
+      (a, b) => relevanceRank(a.card.name, needle) - relevanceRank(b.card.name, needle),
+    )
+  }
+  if (sort === 'price_asc') return [...items].sort((a, b) => a.priceCents - b.priceCents)
+  if (sort === 'price_desc') return [...items].sort((a, b) => b.priceCents - a.priceCents)
+  // 'newest': items sin `createdAt` (snapshots viejos, TASK-049 es aditivo)
+  // se tratan como los más antiguos, no se descartan.
+  return [...items].sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0))
+}
+
 interface CatalogViewProps {
   items: InventoryItem[]
   initialQuery?: string
@@ -58,6 +89,15 @@ interface CatalogViewProps {
    * `activeGame` — ver `lib/catalog/game-filters.ts`.
    */
   initialGameFilters?: Record<string, string[]>
+  /**
+   * Filtros locales (condición/idioma/foil/precio/orden, TASK-053) ya
+   * parseados por el server component desde la URL, para que el primer
+   * render coincida sin parpadeo. Viven SOLO en cliente después del montaje
+   * (`history.replaceState`, ver `writeLocalFilters` abajo) — no disparan
+   * fetch al servidor y por eso NO forman parte del `key` que remonta este
+   * componente en `catalog/page.tsx`.
+   */
+  initialLocalFilters?: LocalFilters
 }
 
 export function CatalogView({
@@ -66,15 +106,18 @@ export function CatalogView({
   activeGame,
   gameCounts,
   initialGameFilters,
+  initialLocalFilters,
 }: CatalogViewProps) {
   const t = useTranslations('catalog')
   const tDetail = useTranslations('detail')
   const router = useRouter()
   const [q, setQ] = useState(initialQuery)
-  const [filters, setFilters] = useState<FilterState>(() => ({
-    ...EMPTY,
-    game: initialGameFilters ?? {},
-  }))
+  const [gameFilters, setGameFilters] = useState<Record<string, string[]>>(
+    () => initialGameFilters ?? {},
+  )
+  const [localFilters, setLocalFilters] = useState<LocalFilters>(
+    () => initialLocalFilters ?? EMPTY_LOCAL_FILTERS,
+  )
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false)
 
   const tcgCounts = useMemo(
@@ -106,7 +149,7 @@ export function CatalogView({
           }
         }
       }
-      for (const value of filters.game[facet.param] ?? []) {
+      for (const value of gameFilters[facet.param] ?? []) {
         if (!seen.has(value)) seen.set(value, value.toUpperCase())
       }
       byParam[facet.param] = [...seen.entries()]
@@ -114,13 +157,18 @@ export function CatalogView({
         .sort((a, b) => a.label.localeCompare(b.label))
     }
     return byParam
-  }, [items, activeFacets, filters.game])
+  }, [items, activeFacets, gameFilters])
 
   /**
    * Navega reconstruyendo la URL desde cero (q + game + facetas del juego
-   * DESTINO). Al no copiar params existentes, cambiar o quitar el juego purga
-   * cualquier faceta propia de Riftbound automáticamente (AC#3) — nunca hay
-   * params "huérfanos" que la API pueda rechazar con 400.
+   * DESTINO + filtros locales actuales). Al no copiar params de facetas de
+   * juego existentes, cambiar o quitar el juego purga cualquier faceta
+   * propia de Riftbound automáticamente (AC#3) — nunca hay params
+   * "huérfanos" que la API pueda rechazar con 400. Los filtros LOCALES
+   * (cond/lang/foil/precio/orden) SÍ se conservan (TASK-053): se leen del
+   * estado de React, nunca de `useSearchParams()`, así que no dependen de que
+   * el router interno de Next esté sincronizado con mutaciones directas de
+   * `history` hechas por `writeLocalFilters`.
    */
   function navigate(nextGame: Tcg | undefined, nextGameFilters: Record<string, string[]>) {
     const params = new URLSearchParams()
@@ -131,8 +179,42 @@ export function CatalogView({
         for (const value of nextGameFilters[facet.param] ?? []) params.append(facet.param, value)
       }
     }
+    applyLocalFiltersToSearchParams(params, localFilters)
     const qs = params.toString()
     router.push(qs ? `/catalog?${qs}` : '/catalog')
+  }
+
+  /**
+   * Aplica un cambio de filtro LOCAL (condición/idioma/foil/precio/orden):
+   * actualiza el estado de React (fuente de verdad, sobrevive a la
+   * navegación de facetas/juego porque este componente no remonta) y refleja
+   * el cambio en la URL vía `history.replaceState` — sin round-trip al
+   * servidor, sin remount, sin perder foco ni scroll (TASK-053 AC#3).
+   *
+   * Riesgo documentado (ver plan de TASK-053): si el router de next-intl
+   * quedó desincronizado de la barra de direcciones real por mutaciones
+   * directas de `history`, `replaceState` podría fallar o quedar
+   * inconsistente. Como no hay API pública para *detectar* esa
+   * desincronización, el fallback es un `try/catch`: si `replaceState`
+   * lanza, `router.replace({ scroll: false })` fuerza a Next a
+   * re-sincronizar su estado interno (a costa de un round-trip; sigue sin
+   * remontar `CatalogView` porque el `key` de la página no incluye estos
+   * params).
+   */
+  function writeLocalFilters(next: LocalFilters) {
+    setLocalFilters(next)
+    if (typeof window === 'undefined') return
+    const params = new URLSearchParams(window.location.search)
+    applyLocalFiltersToSearchParams(params, next)
+    const qs = params.toString()
+    const nextUrl = `${window.location.pathname}${qs ? `?${qs}` : ''}`
+    const currentUrl = `${window.location.pathname}${window.location.search}`
+    if (nextUrl === currentUrl) return
+    try {
+      window.history.replaceState(window.history.state, '', nextUrl)
+    } catch {
+      router.replace(nextUrl, { scroll: false })
+    }
   }
 
   /**
@@ -142,20 +224,22 @@ export function CatalogView({
    * NO se conservan (AC#3): un dominio de Riftbound no significa nada en MTG.
    */
   function goToGame(tcg: Tcg) {
+    setGameFilters({})
     navigate(tcg === activeGame ? undefined : tcg, {})
   }
 
   /** Reemplaza los valores seleccionados de una faceta y navega. */
   function updateGameFilterValues(param: string, values: string[]) {
-    const nextGame = { ...filters.game }
-    if (values.length > 0) nextGame[param] = values
-    else delete nextGame[param]
-    navigate(activeGame, nextGame)
+    const next = { ...gameFilters }
+    if (values.length > 0) next[param] = values
+    else delete next[param]
+    setGameFilters(next)
+    navigate(activeGame, next)
   }
 
   /** Selección múltiple (checkboxes de domain/type/supertype/rarity/energy/might). */
   function toggleGameFilterValue(param: string, value: string) {
-    updateGameFilterValues(param, toggle(filters.game[param] ?? [], value))
+    updateGameFilterValues(param, toggle(gameFilters[param] ?? [], value))
   }
 
   /** Selección única (el `<select>` de set): un valor nuevo reemplaza al anterior. */
@@ -181,38 +265,45 @@ export function CatalogView({
   const foilCount = useMemo(() => items.filter((item) => item.finish === 'foil').length, [items])
 
   const visible = useMemo(() => {
-    // Sin `tcg`/`game`: los items ya vienen filtrados por juego y por sus
-    // facetas propias desde la API; se re-evalúan igual (ver `applyFilters`)
-    // para que los mocks se comporten como producción.
+    // Las facetas de juego (TASK-053) ya no llegan filtradas del servidor —
+    // `items` trae TODO el inventario del `tcg` activo — así que se aplican
+    // aquí igual que el resto de filtros locales (ver comentario de cabecera
+    // de `applyFilters` en `catalog/data.ts`).
     const assembled: CatalogFilters = {
       q,
-      conditions: filters.conditions,
-      languages: filters.languages,
-      foilOnly: filters.foilOnly,
-      minCents: pesosToCents(filters.minPesos),
-      maxCents: pesosToCents(filters.maxPesos),
-      game: filters.game,
+      conditions: localFilters.conditions,
+      languages: localFilters.languages,
+      foilOnly: localFilters.foilOnly,
+      minCents: pesosToCents(localFilters.minPesos),
+      maxCents: pesosToCents(localFilters.maxPesos),
+      game: gameFilters,
     }
-    return applyFilters(items, assembled)
-  }, [items, q, filters])
+    const filtered = applyFilters(items, assembled)
+    return sortItems(filtered, localFilters.sort, q)
+  }, [items, q, gameFilters, localFilters])
 
-  const gameFilterCount = Object.values(filters.game).reduce((n, values) => n + values.length, 0)
+  const gameFilterCount = Object.values(gameFilters).reduce((n, values) => n + values.length, 0)
 
   const activeFilterCount =
     (activeGame ? 1 : 0) +
-    filters.conditions.length +
-    filters.languages.length +
-    (filters.foilOnly ? 1 : 0) +
-    (filters.minPesos || filters.maxPesos ? 1 : 0) +
+    localFilters.conditions.length +
+    localFilters.languages.length +
+    (localFilters.foilOnly ? 1 : 0) +
+    (localFilters.minPesos || localFilters.maxPesos ? 1 : 0) +
     gameFilterCount +
     (q ? 1 : 0)
 
+  /**
+   * Limpia TODO en un solo paso (AC#5): estado local (búsqueda, filtros
+   * locales, facetas de juego) y la URL — siempre navega a `/catalog`
+   * (antes solo lo hacía si había un juego activo, dejando `cond`/`lang`/…
+   * huérfanos en la barra de direcciones cuando no lo había).
+   */
   function clearAll() {
     setQ('')
-    setFilters(EMPTY)
-    // Limpiar también saca el juego (y sus facetas) de la URL, o el catálogo
-    // seguiría acotado.
-    if (activeGame) router.push('/catalog')
+    setGameFilters({})
+    setLocalFilters(EMPTY_LOCAL_FILTERS)
+    router.push('/catalog')
   }
 
   const chips: ActiveChip[] = [
@@ -225,36 +316,38 @@ export function CatalogView({
           },
         ]
       : []),
-    ...filters.conditions.map((c) => ({
+    ...localFilters.conditions.map((c) => ({
       key: `cond-${c}`,
       label: c,
-      onRemove: () => setFilters((f) => ({ ...f, conditions: toggle(f.conditions, c) })),
+      onRemove: () =>
+        writeLocalFilters({ ...localFilters, conditions: toggle(localFilters.conditions, c) }),
     })),
-    ...filters.languages.map((l) => ({
+    ...localFilters.languages.map((l) => ({
       key: `lang-${l}`,
       label: l.toUpperCase(),
-      onRemove: () => setFilters((f) => ({ ...f, languages: toggle(f.languages, l) })),
+      onRemove: () =>
+        writeLocalFilters({ ...localFilters, languages: toggle(localFilters.languages, l) }),
     })),
-    ...(filters.foilOnly
+    ...(localFilters.foilOnly
       ? [
           {
             key: 'foil',
             label: tDetail('foil'),
-            onRemove: () => setFilters((f) => ({ ...f, foilOnly: false })),
+            onRemove: () => writeLocalFilters({ ...localFilters, foilOnly: false }),
           },
         ]
       : []),
-    ...(filters.minPesos || filters.maxPesos
+    ...(localFilters.minPesos || localFilters.maxPesos
       ? [
           {
             key: 'price',
-            label: priceLabel(filters.minPesos, filters.maxPesos),
-            onRemove: () => setFilters((f) => ({ ...f, minPesos: '', maxPesos: '' })),
+            label: priceLabel(localFilters.minPesos, localFilters.maxPesos),
+            onRemove: () => writeLocalFilters({ ...localFilters, minPesos: '', maxPesos: '' }),
           },
         ]
       : []),
     ...activeFacets.flatMap((facet) =>
-      (filters.game[facet.param] ?? []).map((value) => ({
+      (gameFilters[facet.param] ?? []).map((value) => ({
         key: `${facet.param}-${value}`,
         label: facetChipLabel(facet, value, t),
         onRemove: () =>
@@ -267,6 +360,15 @@ export function CatalogView({
   const resultLine =
     t('resultsCount', { count: visible.length }) +
     (q ? '' : ` · ${t('onlineCount', { count: items.length })}`)
+
+  const filterState: FilterState = {
+    conditions: localFilters.conditions,
+    languages: localFilters.languages,
+    foilOnly: localFilters.foilOnly,
+    minPesos: localFilters.minPesos,
+    maxPesos: localFilters.maxPesos,
+    game: gameFilters,
+  }
 
   return (
     <>
@@ -290,10 +392,22 @@ export function CatalogView({
           >
             {t('filters')} ({activeFilterCount})
           </button>
-          <div className="flex items-center gap-2 border border-line bg-input px-3 py-2">
+          <label className="flex items-center gap-2 border border-line bg-input px-3 py-2 transition-colors duration-fast ease-standard focus-within:border-primary">
             <span className="font-mono text-[9px] tracking-[0.1em] text-faint">{t('sort')}</span>
-            <span className="text-[12.5px] text-ink-2">{t('sortRelevance')} ▾</span>
-          </div>
+            <select
+              value={localFilters.sort}
+              onChange={(e) =>
+                writeLocalFilters({ ...localFilters, sort: e.target.value as SortOrder })
+              }
+              aria-label={t('sort')}
+              className="cursor-pointer bg-transparent text-[12.5px] text-ink-2 outline-none"
+            >
+              <option value="relevance">{t('sortRelevance')}</option>
+              <option value="price_asc">{t('sortPriceAsc')}</option>
+              <option value="price_desc">{t('sortPriceDesc')}</option>
+              <option value="newest">{t('sortNewest')}</option>
+            </select>
+          </label>
         </div>
       </div>
 
@@ -306,7 +420,7 @@ export function CatalogView({
           } md:sticky md:top-[74px] md:z-auto md:block md:bg-transparent md:p-0 md:backdrop-blur-0 md:self-start`}
         >
           <FilterSidebar
-            state={filters}
+            state={filterState}
             tcgCounts={tcgCounts}
             conditionCounts={conditionCounts}
             languageCounts={languageCounts}
@@ -316,15 +430,17 @@ export function CatalogView({
             activeGame={activeGame}
             onToggleTcg={goToGame}
             onToggleCondition={(c: Condition) =>
-              setFilters((f) => ({ ...f, conditions: toggle(f.conditions, c) }))
+              writeLocalFilters({ ...localFilters, conditions: toggle(localFilters.conditions, c) })
             }
             onToggleLanguage={(l) =>
-              setFilters((f) => ({ ...f, languages: toggle(f.languages, l) }))
+              writeLocalFilters({ ...localFilters, languages: toggle(localFilters.languages, l) })
             }
-            onToggleFoil={() => setFilters((f) => ({ ...f, foilOnly: !f.foilOnly }))}
-            onPriceChange={(field, value) => setFilters((f) => ({ ...f, [field]: value }))}
+            onToggleFoil={() =>
+              writeLocalFilters({ ...localFilters, foilOnly: !localFilters.foilOnly })
+            }
+            onPriceChange={(field, value) => writeLocalFilters({ ...localFilters, [field]: value })}
             gameFacets={activeFacets}
-            gameFilterState={filters.game}
+            gameFilterState={gameFilters}
             freeTextOptions={freeTextOptions}
             onToggleGameFilterValue={toggleGameFilterValue}
             onSetGameFilterValue={setGameFilterValue}
