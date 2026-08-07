@@ -3,10 +3,11 @@ id: TASK-053
 title: >-
   Catalog URL unification (all filters shareable), functional sort, and
   facet-count engine
-status: To Do
+status: In Progress
 assignee:
   - '@claude'
 created_date: '2026-08-07 00:02'
+updated_date: '2026-08-07 01:14'
 labels:
   - 'epic:catalog-visual-refactor'
   - web
@@ -51,3 +52,28 @@ Depends on TASK-049 (createdAt) and TASK-051 (mtg facets exist so counts cover b
 - [ ] #5 clearAll clears both URL-local params and facets in one action
 - [ ] #6 pnpm typecheck, pnpm build, vitest, and biome are green
 <!-- AC:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+Plan (deps TASK-049/TASK-051 both Done; binding design decisions are in the task description — follow them exactly, they're already approved):
+
+Current state confirmed by reading the real files:
+- `CatalogView.tsx`: local `FilterState` (conditions/languages/foilOnly/minPesos/maxPesos/game) lives in `useState`, initialized once from `initialGameFilters` prop only (cond/lang/foil/price are NEVER read from URL). `navigate()` rebuilds the URL from scratch with only `q` + `game` + that game's facet params — local-filter state is silently dropped on every facet/game navigation because the page remounts via the `key` in `catalog/page.tsx` (`${q}|${activeGame}|${serializeGameFilters(gameFilters)}`).
+- `catalog/page.tsx`: server component, calls `getCatalog({ tcg: activeGame, game: gameFilters })` — facets ARE filtered server-side today. Sort UI is a decorative `<span>{t('sortRelevance')} ▾</span>` (CatalogView.tsx:294-296), no `<select>`, does nothing.
+- `data.ts`: `applyFilters` already does full client-side filtering incl. `matchesGameFilters` — currently redundant with server-side facet filtering but exists for mock parity. `FETCH_LIMIT = 200`.
+- `ActiveChips.tsx`: presentational, takes `chips: ActiveChip[]` + `onClearAll`, no changes needed to this component itself — only to what `CatalogView` passes in.
+
+Implementation:
+1. New `apps/web/src/lib/catalog/local-filters.ts` (pure, no React): parse/serialize `cond` (comma condition codes), `lang` (comma codes), `foil=1`, `min`/`max` (pesos), `sort=relevance|price_asc|price_desc|newest` to/from `URLSearchParams`. Export a `LocalFilters` type and `parseLocalFilters`/`serializeLocalFilters` (or apply-to-URLSearchParams) functions, round-trip safe.
+2. New `apps/web/src/lib/catalog/facet-counts.ts` (pure, no React): faceted count engine with per-facet self-exclusion — a value's count = items matching all OTHER active filters (game facets AND condition/language/foil each self-exclude). Consumes `matchesGameFilters`/`applyFilters`-shaped filter state; used by the sidebar (TASK-054) later but must be correct and unit-tested now.
+3. `catalog/page.tsx`: drop `game: gameFilters` from the `getCatalog` call — fetch `getCatalog({ tcg: activeGame })` only; facets now apply client-side in `CatalogView` via the existing `applyFilters`/`matchesGameFilters` (SSR still renders the filtered grid — same computation moves client-side but still runs during the server render of `CatalogView`). Parse local-filters server-side too (from `searchParams`) and pass as initial props so first paint matches the URL without a client flash. Page `key` stays `q|game|serializedFacets` — local-filter params must NOT be part of it (verify: adding cond/lang/foil/price/sort to key would remount on every tile click).
+4. `CatalogView.tsx`: initialize local filter state (cond/lang/foil/price/sort) from URL via the new parse function (with the SSR-parsed initial values as fallback), not just from a `game` prop. Two write paths: `navigate()` (q/game/facets) keeps `router.push` but must now carry current local-filter params forward instead of dropping them. New local-only setter path uses `window.history.replaceState` (construct the URL by merging current `location.search` with the new local-filter serialization) — no `router` call, no remount. Fallback noted in description if `useSearchParams` desyncs: `router.replace({ scroll: false })`.
+5. Sort: client-side only for now (comment noting Fase 5 API pagination will change this). `relevance` = API order, or startsWith>includes name rank when `q` present; `newest` = `createdAt` desc. Apply sort after `applyFilters` in the `visible` memo.
+6. Replace the decorative sort `<span>` with a real `<select>` styled to match existing input aesthetics (see `border-line`/`bg-input` classes already used elsewhere in this file), wired to the new sort state/setter. New i18n keys `catalog.sortPriceAsc`/`sortPriceDesc`/`sortNewest` in both `apps/web/messages/es.json` and `en.json` (an existing `catalog.sortRelevance` key likely already exists — reuse it, check first).
+7. `clearAll()` must reset both local-filter URL params and facet/game URL params in one shot (currently it clears local React state and separately does `router.push('/catalog')` only if a game is active — needs to always clear local params from the URL too, even with no game active).
+8. Unit tests: `local-filters.test.ts` (parse/serialize round-trips, defaults, malformed input never throws) and `facet-counts.test.ts` (self-exclusion counting correctness — a selected facet value's own count reflects OTHER active filters, not itself). All existing tests (game-filters, facet-presentation, data) must stay green.
+9. `pnpm typecheck`, `pnpm build`, `pnpm vitest run`, `pnpm biome check` all green from `apps/web`.
+
+Executed by nextjs-frontend subagent in an isolated worktree on branch task/TASK-053; verified by task-verifier before merge (this is a state-architecture task — verifier must specifically check AC#1 URL round-trip on hard refresh and AC#3 no-remount-on-local-change, not just typecheck/tests).
+<!-- SECTION:PLAN:END -->
