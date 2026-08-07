@@ -18,6 +18,12 @@ references:
   - apps/web/src/lib/catalog/display.ts
   - 'https://api.scryfall.com/symbology'
   - 'https://static.dotgg.gg/riftbound/'
+modified_files:
+  - scripts/fetch-filter-symbols.mjs
+  - apps/web/src/components/catalog/GameWordmark.tsx
+  - apps/web/public/symbols/mtg/W.svg
+  - apps/web/public/symbols/riftbound/domain/fury.svg
+  - apps/web/public/symbols/riftbound/rarity/epic.svg
 priority: high
 type: feature
 ordinal: 50000
@@ -83,6 +89,5 @@ Se agregó `scripts/fetch-filter-symbols.mjs`, que autohospeda 17 SVG en `apps/w
 
 Se agregó `GameWordmark`, un wordmark SVG propio por TCG (deliberadamente no logos registrados — decisión de IP del dueño): emblema de pips WUBRG para MTG, clúster de rombos para Riftbound, monograma para los otros cuatro juegos, todo sobre la estética angular del sitio y consumiendo `--game-accent`.
 
-Verificado por task-verifier con PASS en las 4 AC. Mergeado a main en 710ffe7.</finalSummary>
-<parameter name="modifiedFiles">["scripts/fetch-filter-symbols.mjs", "apps/web/src/components/catalog/GameWordmark.tsx", "apps/web/public/symbols/mtg/W.svg", "apps/web/public/symbols/riftbound/domain/fury.svg", "apps/web/public/symbols/riftbound/rarity/epic.svg"]
+Verificado por task-verifier con PASS en las 4 AC. Mergeado a main en 710ffe7.
 <!-- SECTION:FINAL_SUMMARY:END -->
