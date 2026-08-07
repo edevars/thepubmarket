@@ -59,13 +59,16 @@ export const catalog = new Hono<AppEnv>()
  *     enum estable que mantener).
  *   - seller: seller id exacto.
  *   - domain, type, supertype, energy, might, rarity: filtros propios de
- *     Riftbound (TASK-039), sobre `inventory.card_attributes` (JSON) salvo
- *     `rarity`, que es columna. Aceptan valor repetido (`domain=Fury&domain=Order`)
- *     o separado por comas (`domain=Fury,Order`) — OR entre valores del mismo
- *     param, AND entre params distintos. Matching case-insensitive, valores
- *     normalizados a la casing canónica antes de tocar SQL.
- *     REGLA: cualquiera de estos params presente con `tcg` ausente o distinto
- *     de 'riftbound' es un 400 `filter_requires_tcg` — se rechaza, no se
+ *     Riftbound (TASK-039); color, type, rarity: filtros propios de MTG
+ *     (TASK-049) — `type` y `rarity` son nombres compartidos con Riftbound,
+ *     cada juego con su propio vocabulario. Viven sobre `inventory.card_attributes`
+ *     (JSON) salvo `rarity`, que es columna. Aceptan valor repetido
+ *     (`domain=Fury&domain=Order`) o separado por comas (`domain=Fury,Order`)
+ *     — OR entre valores del mismo param, AND entre params distintos.
+ *     Matching case-insensitive, valores normalizados a la casing canónica
+ *     antes de tocar SQL.
+ *     REGLA: cualquiera de estos params presente con `tcg` ausente o que no
+ *     lo registre es un 400 `filter_requires_tcg` — se rechaza, no se
  *     ignora silenciosamente (así un typo en `tcg` no produce un catálogo
  *     filtrado a medias sin que el cliente se entere). Ver
  *     `../lib/catalog-filters.ts`.

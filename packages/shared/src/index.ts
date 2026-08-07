@@ -88,11 +88,53 @@ export const RIFTBOUND_SUPERTYPES = ['Basic', 'Champion', 'Signature', 'Token'] 
 export const RIFTBOUND_RARITIES = ['common', 'uncommon', 'rare', 'epic', 'showcase'] as const
 
 /**
+ * Atributos de MTG derivados de Scryfall (TASK-049). A diferencia de
+ * Riftbound, SÍ se usan para filtrar (`GET /catalog` — color, tipo, rareza),
+ * por eso `colors`/`types` se normalizan a un vocabulario cerrado en
+ * `normalizeCard` (ver apps/api/src/lib/scryfall.ts) y nunca quedan vacíos:
+ * una carta sin color de casta ('C', colorless) se representa como
+ * `colors: ['C']`, no como `[]`, para que el filtro de color no necesite un
+ * caso especial de NULL.
+ */
+export interface MtgAttributes {
+  tcg: 'mtg'
+  /** Identidad de color (WUBRG + 'C' colorless). Nunca vacío. */
+  colors: string[]
+  /**
+   * Tipos de carta de la cara frontal, intersectados con MTG_CARD_TYPES
+   * (p.ej. ['Artifact', 'Creature'] para "Artifact Creature").
+   */
+  types: string[]
+  /** Línea de tipo completa de la cara frontal, tal como la da Scryfall. */
+  typeLine: string | null
+  /** Valor de maná (`cmc` en Scryfall). Null si Scryfall no lo reporta. */
+  manaValue: number | null
+}
+
+/**
+ * Vocabulario de filtros de MTG (TASK-049), derivado de las reglas del
+ * juego (no de un muestreo del catálogo, a diferencia de RIFTBOUND_*): son
+ * enums estables del reglamento de Magic.
+ */
+export const MTG_COLORS = ['W', 'U', 'B', 'R', 'G', 'C'] as const
+export const MTG_RARITIES = ['common', 'uncommon', 'rare', 'mythic'] as const
+export const MTG_CARD_TYPES = [
+  'Artifact',
+  'Battle',
+  'Creature',
+  'Enchantment',
+  'Instant',
+  'Land',
+  'Planeswalker',
+  'Sorcery',
+] as const
+
+/**
  * Atributos específicos del juego de una impresión. Unión discriminada por
  * `tcg`: cada juego que aporte datos propios suma su variante aquí, en vez de
  * ensanchar `CardSnapshot` con campos nulos de todos los juegos.
  */
-export type CardGameAttributes = RiftboundAttributes
+export type CardGameAttributes = RiftboundAttributes | MtgAttributes
 
 /**
  * Snapshot de los datos canónicos de una carta tomados de su catálogo de origen
@@ -138,8 +180,9 @@ export interface CardSnapshot {
    */
   imageUrl: string | null
   /**
-   * Datos propios del juego, si su catálogo los aporta. Null para MTG (Scryfall
-   * no alimenta este campo) y para publicaciones anteriores a la columna.
+   * Datos propios del juego, si su catálogo los aporta. Null para
+   * publicaciones anteriores a la columna o a `normalizeCard` poblando MTG
+   * (TASK-049) — un consumidor debe tolerar null igual que con `rulesText`.
    */
   gameAttributes: CardGameAttributes | null
   /**
@@ -209,6 +252,13 @@ export interface InventoryItem {
   quantity: number
   /** Estado de la publicación. */
   status: 'active' | 'inactive'
+  /**
+   * Unix seconds de creación del item (TASK-049, para sort=newest) — mismo
+   * criterio que `OrderSummary.createdAt`: se reenvía tal cual la columna de
+   * D1, sin conversión a ms. OPCIONAL a propósito: aditivo, snapshots viejos
+   * cacheados sin este campo deben tratarse igual que si no existiera.
+   */
+  createdAt?: number
 }
 
 /** Cuántos singles disponibles hay de un juego. */

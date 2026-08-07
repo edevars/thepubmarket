@@ -86,6 +86,8 @@ export function rowToInventoryItem(
     priceCents: row.priceCents,
     quantity: row.quantity,
     status: row.status,
+    // Unix seconds tal cual la columna (TASK-049), para sort=newest.
+    createdAt: row.createdAt,
   }
 }
 

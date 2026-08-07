@@ -324,8 +324,11 @@ export function AddCardFlow() {
                       {card.setCode.toUpperCase()} · #{card.collectorNumber} · {card.rarity}
                     </span>
                     {/* Atributos propios de Riftbound: desambigua impresiones que
-                        comparten nombre entre sets/variantes (TASK-043). */}
-                    {card.gameAttributes && <RiftboundMeta attrs={card.gameAttributes} />}
+                        comparten nombre entre sets/variantes (TASK-043). MTG
+                        (TASK-049) no tiene bloque propio aquí todavía. */}
+                    {card.gameAttributes?.tcg === 'riftbound' && (
+                      <RiftboundMeta attrs={card.gameAttributes} />
+                    )}
                   </div>
                 </button>
               )
@@ -354,7 +357,7 @@ export function AddCardFlow() {
                 <div className="mt-1 font-mono text-[10.5px] tracking-[0.04em] text-faint">
                   {sel.setName} · {sel.setCode.toUpperCase()} #{sel.collectorNumber} · {sel.rarity}
                 </div>
-                {sel.gameAttributes && (
+                {sel.gameAttributes?.tcg === 'riftbound' && (
                   <div className="mt-1.5">
                     <RiftboundMeta attrs={sel.gameAttributes} />
                   </div>

@@ -9,12 +9,15 @@
  * sin runtime de Workers (ver vitest.config.ts: node env, sin D1).
  *
  * Los datos viven en `inventory.card_attributes` (JSON, shape
- * `RiftboundAttributes` en @thepubmarket/shared) salvo `rarity`, que ya es
- * columna propia.
+ * `RiftboundAttributes` o `MtgAttributes` en @thepubmarket/shared según el
+ * juego de la fila) salvo `rarity`, que ya es columna propia.
  */
 
 import { inventory } from '@thepubmarket/db'
 import {
+  MTG_CARD_TYPES,
+  MTG_COLORS,
+  MTG_RARITIES,
   RIFTBOUND_CARD_TYPES,
   RIFTBOUND_DOMAINS,
   RIFTBOUND_RARITIES,
@@ -82,12 +85,20 @@ interface ColumnSpec {
 type FilterSpec = JsonArraySpec | JsonScalarSpec | JsonIntSpec | ColumnSpec
 
 /**
- * Registro de filtros por juego. Solo Riftbound hoy — `GAME_FILTERS[tcg]`
- * ausente/vacío significa "este juego no tiene filtros propios", y cualquier
- * param que llegue igual se rechaza en `parseGameFilters` (no hay params
- * "huérfanos": si el nombre no está registrado para NINGÚN juego, se ignora,
- * pero si está registrado para OTRO juego, se rechaza con filter_requires_tcg
- * — ver el loop principal).
+ * Registro de filtros por juego. `GAME_FILTERS[tcg]` ausente/vacío significa
+ * "este juego no tiene filtros propios", y cualquier param que llegue igual
+ * se rechaza en `parseGameFilters` (no hay params "huérfanos": si el nombre
+ * no está registrado para NINGÚN juego, se ignora, pero si está registrado
+ * para OTRO juego, se rechaza con filter_requires_tcg — ver el loop
+ * principal).
+ *
+ * `set` (MTG y Riftbound) NO vive aquí: es un param genérico de nivel
+ * superior (`inventory.set_code` exacto, sin vocabulario cerrado) que la
+ * ruta aplica directo — ver `apps/api/src/routes/catalog.ts`.
+ *
+ * `type` y `rarity` de MTG (TASK-049) reusan los MISMOS nombres de param que
+ * Riftbound, con vocabularios distintos: `ALL_GAME_PARAMS` abajo soporta esta
+ * superposición sin que un juego pise al otro.
  */
 const GAME_FILTERS: Partial<Record<Tcg, FilterSpec[]>> = {
   riftbound: [
@@ -103,14 +114,44 @@ const GAME_FILTERS: Partial<Record<Tcg, FilterSpec[]>> = {
     { kind: 'jsonInt', param: 'might', path: '$.might', min: 0, max: 99 },
     { kind: 'column', param: 'rarity', column: inventory.rarity, supported: RIFTBOUND_RARITIES },
   ],
+  mtg: [
+    { kind: 'jsonArray', param: 'color', path: '$.colors', supported: MTG_COLORS },
+    // jsonArray a propósito, NO jsonScalar: una carta de MTG puede tener
+    // varios tipos a la vez ('Artifact Creature' → ['Artifact', 'Creature']),
+    // a diferencia del `type` de Riftbound que es un valor único por carta.
+    { kind: 'jsonArray', param: 'type', path: '$.types', supported: MTG_CARD_TYPES },
+    { kind: 'column', param: 'rarity', column: inventory.rarity, supported: MTG_RARITIES },
+  ],
 }
 
-/** Todos los nombres de param registrados en GAME_FILTERS, sin importar el juego. */
-const ALL_GAME_PARAMS = new Map<string, Tcg>(
-  (Object.entries(GAME_FILTERS) as [Tcg, FilterSpec[]][]).flatMap(([tcg, specs]) =>
-    specs.map((spec) => [spec.param, tcg] as const),
-  ),
-)
+/** Registro de un param: juego que lo declaró primero + todos los que lo declaran. */
+interface ParamRegistration {
+  /** Primer juego que registró el param (orden de declaración en GAME_FILTERS). */
+  firstTcg: Tcg
+  allTcgs: Tcg[]
+}
+
+/**
+ * Todos los nombres de param registrados en GAME_FILTERS, con la lista de
+ * juegos que los registran (TASK-049: `type` y `rarity` los registran tanto
+ * mtg como riftbound, cada uno con su propio vocabulario/spec).
+ *
+ * `Map<string, ParamRegistration>` en vez de `Map<string, Tcg>`: con un solo
+ * Tcg por param, `type`/`rarity` de mtg pisaban silenciosamente el
+ * `requiresTcg` de riftbound (el último en ganar en el `flatMap` original), y
+ * un param válido para el tcg activo podía 400ear solo porque OTRO juego
+ * también lo registra — ver el invariante documentado en `parseGameFilters`.
+ * `firstTcg` se calcula aquí (no con `allTcgs[0]` en el punto de uso) para
+ * que el tipo no dependa de un arreglo no-vacío en runtime.
+ */
+const ALL_GAME_PARAMS = new Map<string, ParamRegistration>()
+for (const [tcg, specs] of Object.entries(GAME_FILTERS) as [Tcg, FilterSpec[]][]) {
+  for (const spec of specs) {
+    const existing = ALL_GAME_PARAMS.get(spec.param)
+    if (existing) existing.allTcgs.push(tcg)
+    else ALL_GAME_PARAMS.set(spec.param, { firstTcg: tcg, allTcgs: [tcg] })
+  }
+}
 
 /**
  * Junta valores repetidos (`domain=Fury&domain=Order`) y separados por coma
@@ -161,13 +202,23 @@ function buildJsonIntCondition(spec: JsonIntSpec, ints: number[]): SQL {
 /**
  * Interpreta los filtros game-specific de la query string. Reglas (AC#3):
  *
- * - Un param registrado (domain/energy/might/type/supertype/rarity) presente
- *   sin `tcg`, o con un `tcg` distinto al que lo registra, es un 400
+ * - Un param registrado (domain/energy/might/type/supertype/rarity/color)
+ *   presente sin `tcg`, o con un `tcg` que no lo registra, es un 400
  *   `filter_requires_tcg` — se RECHAZA, nunca se ignora en silencio.
  * - Con el `tcg` correcto, un valor que no matchea el vocabulario (case-
  *   insensitive) es un 400 `invalid_filter` con `supported`.
  * - Sin ningún param game-specific presente, devuelve `conditions: []` sin
  *   importar el `tcg` — no hay filtro que aplicar.
+ * - Invariante (TASK-049): un param válido para el `tcg` activo NUNCA 400ea
+ *   solo porque otro juego también lo registra (p.ej. `type`/`rarity` los
+ *   registran mtg y riftbound); el spec efectivo siempre sale de
+ *   `GAME_FILTERS[tcg]`, nunca de qué otro juego comparte el nombre.
+ *
+ * `requiresTcg` en el 400 `filter_requires_tcg` usa el PRIMER juego que
+ * registra el param (orden de declaración en `GAME_FILTERS`) cuando el param
+ * lo registra más de uno: es ambiguo a propósito — no hay forma de saber cuál
+ * de los juegos "quiso decir" el cliente sin `tcg`, así que se documenta la
+ * ambigüedad en vez de resolverla con una heurística frágil.
  *
  * `query` recibe el nombre del param y devuelve sus valores repetidos (usar
  * `c.req.queries(name)` de Hono en la ruta).
@@ -182,15 +233,16 @@ export function parseGameFilters(
   const conditions: SQL[] = []
   const applied: AppliedFilter[] = []
 
-  for (const [param, requiresTcg] of ALL_GAME_PARAMS) {
+  for (const [param, registration] of ALL_GAME_PARAMS) {
     const values = collectValues(query(param) ?? [])
     if (values.length === 0) continue
 
     const spec = specByParam.get(param)
     if (!spec) {
-      // El param existe en el registro (para OTRO juego) pero no para el tcg
-      // activo (o no hay tcg): rechazar, no ignorar (AC#3).
-      return { ok: false, error: 'filter_requires_tcg', param, requiresTcg }
+      // El param existe en el registro (para OTRO juego, o para ninguno con
+      // el tcg activo) pero no para el tcg activo: rechazar, no ignorar
+      // (AC#3). `requiresTcg` es el primer juego registrante — ver doc arriba.
+      return { ok: false, error: 'filter_requires_tcg', param, requiresTcg: registration.firstTcg }
     }
 
     if (spec.kind === 'jsonInt') {

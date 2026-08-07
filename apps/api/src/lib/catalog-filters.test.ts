@@ -123,7 +123,9 @@ describe('parseGameFilters', () => {
   })
 
   describe('filter_requires_tcg (AC#3: se rechaza, no se ignora)', () => {
-    for (const param of ['domain', 'type', 'supertype', 'energy', 'might', 'rarity']) {
+    // domain/supertype/energy/might son EXCLUSIVOS de riftbound: sin tcg
+    // o con tcg=mtg, siguen 400eando filter_requires_tcg sin cambios.
+    for (const param of ['domain', 'supertype', 'energy', 'might']) {
       it(`${param} sin tcg`, () => {
         expect(parseGameFilters(undefined, queryFrom({ [param]: ['x'] }))).toEqual({
           ok: false,
@@ -142,6 +144,116 @@ describe('parseGameFilters', () => {
         })
       })
     }
+
+    // type/rarity los registran AMBOS juegos (TASK-049): sin tcg siguen
+    // 400eando (ambigüedad documentada — requiresTcg es el primer juego
+    // registrante, riftbound, por orden de declaración en GAME_FILTERS), pero
+    // con tcg=mtg ya NO son filter_requires_tcg (mtg también los registra) —
+    // ver los describes dedicados más abajo para su comportamiento con mtg.
+    for (const param of ['type', 'rarity']) {
+      it(`${param} sin tcg`, () => {
+        expect(parseGameFilters(undefined, queryFrom({ [param]: ['x'] }))).toEqual({
+          ok: false,
+          error: 'filter_requires_tcg',
+          param,
+          requiresTcg: 'riftbound',
+        })
+      })
+    }
+  })
+
+  describe('MTG (TASK-049): filtros por juego', () => {
+    it('color: jsonArray', () => {
+      const result = parseGameFilters('mtg', queryFrom({ color: ['R'] }))
+      expect(result.ok).toBe(true)
+      if (!result.ok) throw new Error('unreachable')
+      expect(result.conditions).toHaveLength(1)
+      expect(result.applied).toEqual([{ param: 'color', values: ['R'] }])
+    })
+
+    it('color: case-insensitive canonicaliza a mayúscula', () => {
+      const result = parseGameFilters('mtg', queryFrom({ color: ['w'] }))
+      expect(result.ok).toBe(true)
+      if (!result.ok) throw new Error('unreachable')
+      expect(result.applied).toEqual([{ param: 'color', values: ['W'] }])
+    })
+
+    it('color: multi-valor, repetido y comas', () => {
+      const result = parseGameFilters('mtg', queryFrom({ color: ['R,G'] }))
+      expect(result.ok).toBe(true)
+      if (!result.ok) throw new Error('unreachable')
+      expect(result.applied).toEqual([{ param: 'color', values: ['R', 'G'] }])
+    })
+
+    it('type: jsonArray (una carta puede tener varios tipos)', () => {
+      const result = parseGameFilters('mtg', queryFrom({ type: ['Creature'] }))
+      expect(result.ok).toBe(true)
+      if (!result.ok) throw new Error('unreachable')
+      expect(result.applied).toEqual([{ param: 'type', values: ['Creature'] }])
+    })
+
+    it('rarity: column', () => {
+      const result = parseGameFilters('mtg', queryFrom({ rarity: ['mythic'] }))
+      expect(result.ok).toBe(true)
+      if (!result.ok) throw new Error('unreachable')
+      expect(result.applied).toEqual([{ param: 'rarity', values: ['mythic'] }])
+    })
+
+    it('combina color + type + rarity (AND entre params)', () => {
+      const result = parseGameFilters(
+        'mtg',
+        queryFrom({ color: ['U'], type: ['Instant'], rarity: ['common'] }),
+      )
+      expect(result.ok).toBe(true)
+      if (!result.ok) throw new Error('unreachable')
+      expect(result.conditions).toHaveLength(3)
+      expect(result.applied.map((a) => a.param).sort()).toEqual(['color', 'rarity', 'type'])
+    })
+  })
+
+  describe('vocabularios cruzados entre mtg y riftbound (TASK-049)', () => {
+    it('type=Creature&tcg=riftbound -> invalid_filter con el vocabulario de riftbound', () => {
+      const result = parseGameFilters('riftbound', queryFrom({ type: ['Creature'] }))
+      expect(result).toEqual({
+        ok: false,
+        error: 'invalid_filter',
+        param: 'type',
+        value: 'Creature',
+        supported: ['Battlefield', 'Gear', 'Legend', 'Rune', 'Spell', 'Unit'],
+      })
+    })
+
+    it('type=Creature sin tcg -> filter_requires_tcg', () => {
+      const result = parseGameFilters(undefined, queryFrom({ type: ['Creature'] }))
+      expect(result).toEqual({
+        ok: false,
+        error: 'filter_requires_tcg',
+        param: 'type',
+        requiresTcg: 'riftbound',
+      })
+    })
+
+    it('rarity=mythic&tcg=riftbound -> invalid_filter (mythic no existe en riftbound)', () => {
+      const result = parseGameFilters('riftbound', queryFrom({ rarity: ['mythic'] }))
+      expect(result).toEqual({
+        ok: false,
+        error: 'invalid_filter',
+        param: 'rarity',
+        value: 'mythic',
+        supported: ['common', 'uncommon', 'rare', 'epic', 'showcase'],
+      })
+    })
+
+    it('rarity=showcase&tcg=mtg -> invalid_filter (showcase no existe en mtg)', () => {
+      const result = parseGameFilters('mtg', queryFrom({ rarity: ['showcase'] }))
+      expect(result).toEqual({
+        ok: false,
+        error: 'invalid_filter',
+        param: 'rarity',
+        value: 'showcase',
+        supported: ['common', 'uncommon', 'rare', 'mythic'],
+      })
+    })
   })
 
   describe('invalid_filter', () => {
