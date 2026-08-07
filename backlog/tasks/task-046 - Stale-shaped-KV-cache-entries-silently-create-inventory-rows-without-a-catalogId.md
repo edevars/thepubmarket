@@ -3,9 +3,10 @@ id: TASK-046
 title: >-
   Stale-shaped KV cache entries silently create inventory rows without a
   catalogId
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-08-06 14:24'
+updated_date: '2026-08-07 00:44'
 labels:
   - api
   - catalog
