@@ -225,6 +225,7 @@
     "fCondition": "Condition",
     "fLanguage": "Language",
     "fFoil": "Foil only",
+    "fColor": "Color",
     "fDomain": "Domain",
     "fType": "Type",
     "fSupertype": "Supertype",
