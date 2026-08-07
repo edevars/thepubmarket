@@ -322,6 +322,36 @@ Cuando un param sin `tcg` (o con un `tcg` que no lo registra) dispara
 no resuelta**: no hay forma de inferir cuál de los dos juegos "quiso decir" el
 cliente sin `tcg`, y no vale la pena una heurística frágil para adivinarlo.
 
+### Facetas en cliente: conteo con autoexclusión y el límite de `FETCH_LIMIT`
+
+Desde **TASK-053**, `apps/web/src/app/[locale]/catalog/page.tsx` deja de
+mandar los params de faceta de juego (`domain`, `color`, `energy`, …) a
+`GET /catalog` — solo `tcg` se sigue filtrando en el servidor. El motivo es
+el motor de conteo con autoexclusión de `apps/web/src/lib/catalog/facet-counts.ts`:
+para mostrar "cuántos items habría SI activaras este valor" en cada valor de
+una faceta (incluidos los que el filtro YA activo de esa misma faceta
+excluiría), el cliente necesita ver todos los items del juego activo sin
+recortar por faceta primero. Si el servidor filtrara por faceta como antes,
+los items de los valores no seleccionados nunca llegarían y ese conteo sería
+imposible de calcular sin una ida y vuelta a la API por valor.
+
+Consecuencia: el filtrado real por faceta (`matchesGameFilters`) y sus
+conteos (`countGameFacetValues`) se calculan en **cliente**, dentro de
+`CatalogView`, sobre el mismo array de items que ya trajo el server
+component vía `getCatalog({ tcg })`. Los filtros de faceta del lado API
+(`catalog-filters.ts`, §6 arriba) no se tocaron y siguen siendo el contrato
+real, probados ahí — la tienda web simplemente deja de ejercitarlos desde
+`GET /catalog`.
+
+**Caveat de `FETCH_LIMIT`.** `apps/web/src/lib/catalog/data.ts` trae como
+máximo `FETCH_LIMIT = 200` items por `tcg` en una sola página (Fase 1: sin
+paginación real todavía). Si un juego supera esa cifra, tanto el filtrado de
+facetas en cliente como sus conteos por valor quedan truncados a esos
+primeros 200 items — no es un bug, es la misma limitación de "una sola
+página" que ya aplicaba antes de TASK-053, solo que ahora también afecta a
+las facetas de juego y no solo al listado. Se resuelve cuando llegue
+paginación/búsqueda real (Fase 5).
+
 ---
 
 ## 7. Distinguir impresiones en el panel
@@ -375,7 +405,17 @@ En ambos casos, después:
    `CardGameAttributes` en `packages/shared` y llenarla en el mapeo. El detalle
    los muestra solo si vienen (`components/detail/game-attributes.ts`). No hace
    falta tocar D1: el blob ya existe. Si además quiere filtros en la tienda,
-   registrarlos en `GAME_FILTERS` (`lib/catalog-filters.ts`).
+   registrarlos en `GAME_FILTERS` (`lib/catalog-filters.ts`). Opcionalmente,
+   si algún valor de esa faceta merece icono/color propio en el sidebar (pips
+   de maná, hexágonos de dominio), agregar una entrada en
+   `apps/web/src/lib/catalog/facet-presentation.ts` (**TASK-052**) — un
+   registro `tcg → param → { icon?, hex? }` deliberadamente **separado** del
+   registro funcional `GAME_FILTERS`/`game-filters.ts` (que decide parseo y
+   matching) y sin ningún import de React, para poder cubrirlo al 100% con
+   vitest (que excluye `.tsx`). `presentationFor`/`accentFor` nunca lanzan:
+   un juego, param o valor sin entrada simplemente degrada a la tile plana de
+   siempre, así que este paso nunca es obligatorio para que el filtro
+   funcione, solo para que se vea con identidad propia.
 4. **Verificar que el código del juego esté en `Tcg`/`TCGS`** y que tenga
    entrada en `TCG_META` (`apps/web/src/lib/catalog/display.ts`) para su nombre
    visible. Los seis TCG del proyecto ya están.

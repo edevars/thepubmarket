@@ -58,6 +58,8 @@ export function PipRow({ values, presentation, selected, counts, onToggle }: Pip
                   src={pres.icon}
                   alt=""
                   aria-hidden="true"
+                  width={20}
+                  height={20}
                   className={`h-5 w-5 transition duration-base ease-standard ${
                     active ? '' : 'opacity-45 grayscale'
                   }`}
