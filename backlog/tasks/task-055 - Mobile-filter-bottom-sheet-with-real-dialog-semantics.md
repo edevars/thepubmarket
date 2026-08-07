@@ -1,11 +1,11 @@
 ---
 id: TASK-055
 title: Mobile filter bottom-sheet with real dialog semantics
-status: In Progress
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-08-07 00:03'
-updated_date: '2026-08-07 01:47'
+updated_date: '2026-08-07 01:57'
 labels:
   - 'epic:catalog-visual-refactor'
   - web
@@ -17,6 +17,12 @@ references:
   - apps/web/src/components/cart/CartDrawer.tsx
   - apps/web/src/components/layout/MobileNav.tsx
   - apps/web/src/components/catalog/CatalogView.tsx
+modified_files:
+  - apps/web/messages/en.json
+  - apps/web/messages/es.json
+  - apps/web/src/components/catalog/CatalogView.tsx
+  - apps/web/src/components/catalog/FilterSidebar.tsx
+  - apps/web/src/components/catalog/MobileFilterSheet.tsx
 priority: medium
 type: feature
 ordinal: 57000
@@ -39,10 +45,10 @@ Depends on TASK-053 (URL state — filter changes inside the sheet must not remo
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Sheet opens as a bottom sheet with scrim fade and panel slide using existing motion tokens; Escape and scrim tap close it; background never scrolls while open
-- [ ] #2 role=dialog, aria-modal, and aria-labelledby are present; focus enters the sheet on open and returns to the Filters trigger on close
-- [ ] #3 Applying any filter inside the sheet updates the live count in the CTA without closing the sheet
-- [ ] #4 Desktop sidebar unchanged; pnpm typecheck, pnpm build, and biome are green
+- [x] #1 Sheet opens as a bottom sheet with scrim fade and panel slide using existing motion tokens; Escape and scrim tap close it; background never scrolls while open
+- [x] #2 role=dialog, aria-modal, and aria-labelledby are present; focus enters the sheet on open and returns to the Filters trigger on close
+- [x] #3 Applying any filter inside the sheet updates the live count in the CTA without closing the sheet
+- [x] #4 Desktop sidebar unchanged; pnpm typecheck, pnpm build, and biome are green
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -67,3 +73,23 @@ Implementation:
 
 Executed by nextjs-frontend subagent in isolated worktree on branch task/TASK-055; verified by task-verifier before merge — verifier should specifically check focus trap/return and that filter interactions inside the sheet don't close it, not just visual/scrim behavior.
 <!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+MobileFilterSheet.tsx nuevo: .tpm-scrim/.tpm-drawer-panel (mismo patrón que CartDrawer) + lo que CartDrawer/MobileNav NO tenían — role="dialog" aria-modal="true" aria-labelledby apuntando a un id real renderizado condicionalmente en FilterSidebar (titleId prop, solo se monta dentro del sheet, sin id duplicado en desktop), foco movido al panel al abrir (panelRef.focus()), y retorno de foco al trigger ("Filters" button, filtersTriggerRef en CatalogView) en los tres caminos de cierre (Escape/scrim/CTA "Ver resultados") unificados en un solo close() callback — simétrico, no tres implementaciones separadas. Sin trap de Tab/Shift+Tab: confirmado que el AC#2 tal como está escrito no lo exige, solo entrada+retorno de foco.
+
+CatalogView.tsx: el <aside> dual-propósito (mobile+desktop con clases condicionales) se separó en un <aside> solo-desktop sin cambios de comportamiento, y MobileFilterSheet para mobile. FilterSidebar.tsx: min-h-0 flex-1 en el root es inerte en desktop (el wrapper desktop no es flex container, confirmado por el verifier).
+
+Verificado por task-verifier con PASS riguroso en las 4 AC, con trazado individual de cada uno de los tres caminos de cierre y confirmación de que ningún callback de cambio de filtro llama a onClose. typecheck/vitest(115/115)/biome/build verdes; branch confirmado partiendo del main actualizado (con TASK-053/054 ya mergeados). Mergeado a main en a3d4815 (merge commit posterior).
+<!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+El filtro móvil deja de ser un overlay sin semántica accesible y pasa a ser un diálogo real: `MobileFilterSheet` agrega `role="dialog"`, `aria-modal`, `aria-labelledby`, foco que entra al abrir y regresa al botón "Filtros" al cerrar (por Escape, tap en el scrim, o el CTA "Ver resultados"), todo sobre el mismo patrón visual `.tpm-scrim`/`.tpm-drawer-panel` que ya usan `CartDrawer` y `MobileNav` — pero yendo más allá de esos dos, que carecían de estas piezas de accesibilidad.
+
+Aplicar un filtro dentro del sheet nunca lo cierra; el conteo de resultados en el CTA se actualiza en vivo. El sidebar de escritorio quedó sin cambios de comportamiento — ahora renderiza `FilterSidebar` de forma independiente, ya no comparte un único elemento con clases condicionales para ambos breakpoints.
+
+Verificado por task-verifier con PASS explícito y trazado individual de los tres caminos de cierre (el punto más fácil de romper sutilmente en este tipo de tarea). Mergeado a main en a3d4815.
+<!-- SECTION:FINAL_SUMMARY:END -->
