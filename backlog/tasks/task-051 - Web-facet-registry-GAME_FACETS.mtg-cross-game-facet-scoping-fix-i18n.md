@@ -1,11 +1,11 @@
 ---
 id: TASK-051
 title: 'Web facet registry: GAME_FACETS.mtg + cross-game facet scoping fix + i18n'
-status: In Progress
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-08-07 00:01'
-updated_date: '2026-08-07 00:18'
+updated_date: '2026-08-07 00:25'
 labels:
   - 'epic:catalog-visual-refactor'
   - web
@@ -41,10 +41,10 @@ Depends on TASK-049 (shared MTG consts/types). Subagent: nextjs-frontend.
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 /catalog?game=mtg&color=G&type=Creature server-renders with those facets active; switching to another game purges mtg params (existing purge-by-construction behavior preserved)
-- [ ] #2 All existing riftbound facet tests are green unmodified; new mtg assertions (ordered param list, parsing, cross-game isolation) are green
-- [ ] #3 es/en parity for every new message key; facet values keep translate="no"
-- [ ] #4 pnpm typecheck, vitest, and biome are green
+- [x] #1 /catalog?game=mtg&color=G&type=Creature server-renders with those facets active; switching to another game purges mtg params (existing purge-by-construction behavior preserved)
+- [x] #2 All existing riftbound facet tests are green unmodified; new mtg assertions (ordered param list, parsing, cross-game isolation) are green
+- [x] #3 es/en parity for every new message key; facet values keep translate="no"
+- [x] #4 pnpm typecheck, vitest, and biome are green
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -59,3 +59,28 @@ Depends on TASK-049 (shared MTG consts/types). Subagent: nextjs-frontend.
 
 Executed by nextjs-frontend subagent in an isolated worktree on branch task/TASK-051; verified by task-verifier before merge.
 <!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+`GAME_FACETS.mtg` registrado en orden `['color','type','rarity','set']`: color/type multiValue sobre `MTG_COLORS`/`MTG_CARD_TYPES` (nuevo helper `mtgAttrs()` que estrecha `item.card.gameAttributes` a la variante `tcg === 'mtg'`, espejo de `riftboundAttrs()`), rarity/set reusan las mismas columnas compartidas que ya lee riftbound.
+
+**Fix crítico de scoping.** `facetByParam(param)` — que antes iteraba `Object.values(GAME_FACETS)` y devolvía el primer match global — pasó a `facetByParam(tcg, param)` delegando a `facetsFor(tcg).find(...)`. Único call site: dentro de `matchesGameFilters`, ahora invocado como `facetByParam(item.tcg, param)`. Esto evita que, con mtg y riftbound registrando ambos `type`/`rarity`/`set` con vocabularios distintos, un item aplicara el `valuesOf` del juego equivocado.
+
+Test de regresión directo del bug: un item mtg con `types:['Creature']` y uno riftbound con `type:'Unit'` verificados contra el param compartido `type` en ambas direcciones, confirmando que cada uno usa solo el vocabulario de su propio juego — no solo se testearon params exclusivos de un juego (domain/energy), que no habrían detectado el bug.
+
+La aserción congelada del orden de params de riftbound (`['domain','type','supertype','rarity','energy','might','set']`) quedó byte a byte idéntica. `catalog.fColor` = "Color" agregado idéntico en es/en.
+
+Verificado por task-verifier: PASS en las 4 AC, veredicto explícito de que el fix y su test de regresión son correctos y suficientes. typecheck/tests/biome verdes tras el merge a main (75/75 tests web).
+<!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+MTG ya renderiza sus propios facets (color, tipo, rareza, set) a través del sidebar genérico existente, sin tocar ningún componente — el registry-driven design del catálogo se mantuvo intacto.
+
+De paso se corrigió un bug latente real: `facetByParam` buscaba coincidencias de nombre de parámetro across TODOS los juegos y devolvía la primera, así que en cuanto MTG empezó a registrar `type`/`rarity`/`set` (nombres que Riftbound ya usaba con vocabularios distintos), un item podía terminar evaluado con el `valuesOf` del juego equivocado. Ahora la búsqueda queda scopeada al juego del propio item.
+
+Verificado por task-verifier con PASS explícito en la corrección del fix y en que su test de regresión efectivamente ejercita el escenario del bug (no solo params exclusivos de un juego). Mergeado a main en fc1ee89.</finalSummary>
+<parameter name="modifiedFiles">["apps/web/src/lib/catalog/game-filters.ts", "apps/web/src/lib/catalog/game-filters.test.ts", "apps/web/messages/es.json", "apps/web/messages/en.json"]
+<!-- SECTION:FINAL_SUMMARY:END -->
