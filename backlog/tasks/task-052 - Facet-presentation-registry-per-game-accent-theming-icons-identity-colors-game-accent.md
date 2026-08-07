@@ -3,11 +3,11 @@ id: TASK-052
 title: >-
   Facet presentation registry + per-game accent theming (icons, identity colors,
   --game-accent)
-status: In Progress
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-08-07 00:02'
-updated_date: '2026-08-07 01:06'
+updated_date: '2026-08-07 01:13'
 labels:
   - 'epic:catalog-visual-refactor'
   - web
@@ -19,6 +19,9 @@ references:
   - apps/web/src/lib/catalog/game-filters.ts
   - apps/web/src/lib/catalog/display.ts
   - docs/ingenieria/catalogo-multijuego.md
+modified_files:
+  - apps/web/src/lib/catalog/facet-presentation.ts
+  - apps/web/src/lib/catalog/facet-presentation.test.ts
 priority: medium
 type: feature
 ordinal: 54000
@@ -46,11 +49,11 @@ Depends on TASK-048 (icon files must exist at the referenced paths) and TASK-051
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Pure module with no React import, fully covered by vitest
-- [ ] #2 Missing entries degrade to the plain tile: helpers return undefined and never throw
-- [ ] #3 Coverage test: every multiValue value of mtg/riftbound facets has an entry or a documented intentional gap; hexes validate as 6-digit colors
-- [ ] #4 accentFor returns undefined for pokemon/yugioh/onepiece/lorcana
-- [ ] #5 pnpm typecheck, vitest, and biome are green
+- [x] #1 Pure module with no React import, fully covered by vitest
+- [x] #2 Missing entries degrade to the plain tile: helpers return undefined and never throw
+- [x] #3 Coverage test: every multiValue value of mtg/riftbound facets has an entry or a documented intentional gap; hexes validate as 6-digit colors
+- [x] #4 accentFor returns undefined for pokemon/yugioh/onepiece/lorcana
+- [x] #5 pnpm typecheck, vitest, and biome are green
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -64,3 +67,23 @@ Plan (deps TASK-048/TASK-051 both Done and merged to main):
 5. pnpm typecheck, vitest, biome green.
 Executed by nextjs-frontend subagent in isolated worktree on branch task/TASK-052; verified by task-verifier before merge.
 <!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+`facet-presentation.ts`: FACET_PRESENTATION cubre mtg.color (layout 'pips', hexes dark-bg-tuned + /symbols/mtg/{code}.svg), mtg.rarity (solo hex, no hay iconos de rareza MTG), riftbound.domain (7 dominios, hex oficial + /symbols/riftbound/domain/{name}.svg), riftbound.rarity (common/uncommon/rare/epic con icono; showcase queda fuera intencionalmente — sin asset desde TASK-048). GAME_ACCENT solo mtg/riftbound. presentationFor/accentFor nunca lanzan (guard clauses + early return undefined).
+
+Coverage test itera facetsFor(tcg) real de game-filters.ts (no una copia hardcodeada) y exige entry o gap documentado en INTENTIONAL_GAPS: mtg.type (8 valores), riftbound.type (6), riftbound.supertype (4), riftbound.rarity.showcase. energy/might son multiInt, fuera de scope de FACET_PRESENTATION.
+
+Verificado por task-verifier: PASS en las 5 AC. typecheck/vitest (86/86)/biome verdes en los 2 archivos nuevos (biome tiene 29 errores preexistentes en public/symbols/**/*.svg de TASK-048, no relacionados). Rutas de iconos confirmadas en disco. Mergeado a main en 900825b (merge commit posterior).
+<!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Registro de presentación de facets desacoplado del registro funcional: `apps/web/src/lib/catalog/facet-presentation.ts` mapea tcg+param+value a icono/hex (pips de maná MTG, hexes de rareza, dominios y rarezas de Riftbound) sin tocar `game-filters.ts`, más `GAME_ACCENT` para el acento por juego que consumirá el refactor del sidebar.
+
+`presentationFor`/`accentFor` nunca lanzan — entrada desconocida degrada a `undefined` (tile plano). Cobertura de tests genera la lista de valores directamente desde `GAME_FACETS` real, así que no puede desincronizarse silenciosamente si se agregan nuevos valores a un facet; los gaps intencionales (mtg.type, riftbound.type/supertype, riftbound.rarity.showcase) quedan documentados explícitamente en el código.
+
+Verificado por task-verifier con PASS en las 5 AC. Mergeado a main en 900825b.
+<!-- SECTION:FINAL_SUMMARY:END -->
