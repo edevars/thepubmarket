@@ -3,10 +3,11 @@ id: TASK-054
 title: >-
   FilterSidebar premium visual refactor: instrument-panel identity per TCG
   (wordmarks, pips, rune tiles, accents, micro-interactions)
-status: To Do
+status: In Progress
 assignee:
   - '@claude'
 created_date: '2026-08-07 00:03'
+updated_date: '2026-08-07 01:29'
 labels:
   - 'epic:catalog-visual-refactor'
   - web
@@ -54,3 +55,16 @@ Depends on TASK-048 (wordmarks/symbols), TASK-051 (mtg facets), TASK-052 (presen
 - [ ] #4 Registry genericity preserved: no per-game branching in the renderer beyond presentation lookups
 - [ ] #5 pnpm typecheck, pnpm build, vitest, and biome are green
 <!-- AC:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+Plan (deps TASK-048/051/052/053 all Done and merged to main):
+1. Load the `frontend-design` skill before writing UI, per CLAUDE.md.
+2. Read the current apps/web/src/components/catalog/FilterSidebar.tsx, GameWordmark.tsx (TASK-048), facet-presentation.ts (TASK-052), facet-counts.ts (TASK-053), and the motion-token contract from TASK-045 (globals.css .tpm-* classes) before writing anything — ground every visual decision in the real current code, not the description's paraphrase.
+3. Build presentation per the binding spec in the task description: GameWordmark plates for the game section; generic facet renderer consulting FACET_PRESENTATION (pips layout for MTG colors w/ grayscale-when-unselected + ring+glow when selected; icon tiles for rarity/domain with hex-tinted selected state mirroring the existing CONDITION_HEX inline-style pattern); counts + disabled states from facet-counts.ts everywhere, but a selected value must stay clickable/removable even at zero count; per-game accent via `--game-accent` CSS var from accentFor(activeGame) on the sidebar wrapper + catalog header eyebrow; collapsible sections (CSS grid-template-rows 0fr->1fr, `.tpm-collapse` added to globals.css, all open by default); staggered mount reveal, result-count tick, pip press-pop micro-interactions per the exact spec in the description.
+4. Hard constraint: FilterSidebar stays presentational, no 'use client', no game-name branching beyond presentation-registry lookups — a facet with no presentation entry must still render as today's plain tile.
+5. Audit with `web-design-guidelines` skill before closing.
+6. pnpm typecheck, pnpm build, vitest, biome green.
+Executed by nextjs-frontend subagent (with frontend-design skill) in isolated worktree on branch task/TASK-054; verified by task-verifier before merge — verifier must specifically check AC#4 (no per-game branching) and AC#3 (reduced-motion + focus rings), not just visual claims.
+<!-- SECTION:PLAN:END -->
