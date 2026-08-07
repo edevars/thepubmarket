@@ -1,9 +1,11 @@
 ---
 id: TASK-058.01
 title: Rewrite /fees narrative in plain language
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - claude
 created_date: '2026-08-07 22:20'
+updated_date: '2026-08-07 22:20'
 labels:
   - 'epic:pricing'
   - pitch
@@ -29,3 +31,9 @@ User feedback on the shipped /fees page: "no le entiendo nada" — the narrative
 - [ ] #4 Model values unchanged: page still reproduces scripts/fee-model.mjs output at defaults
 - [ ] #5 Deck routes untouched; build and curl smoke pass; deployed
 <!-- AC:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+Copy-only rewrite on branch task/TASK-058.01-plain-narrative (model untouched). New narrative arc — each section answers one question: (1) hero "¿Cuánto cobrar de comisión?" with proof reframed as "de cada $100 vendidos te quedan $X"; (2) new "En 30 segundos" block: hidden cost → fix → recommendation; (3) "Cómo leer los números" replaces the assumptions strip, plain bullets; (4) new block explaining the two Stripe configs in plain words (hoy tú absorbes ~$4.20 de cada $100 / propuesta: lo paga el vendedor como en TCGplayer) before anything references them; (5) five options with plain titles/notes and plain stat labels; (6) scenario table renamed "¿Cuánto ganarías al mes?" with Arranque/Tracción/Escala; (7) "el tope" explains the 87% seller floor before the simulator's parity chip; (8) simulator labels in plain Spanish; (9) sensitivity "¿Y si las cosas salen distinto?" with plain row labels; (10) MSI and decisions in plain words. Verify model parity (node eval of page JS vs script), curl smoke, build, deploy, close subtask.
+<!-- SECTION:PLAN:END -->

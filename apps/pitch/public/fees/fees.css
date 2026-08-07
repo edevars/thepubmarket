@@ -173,6 +173,130 @@
   color: var(--faint);
 }
 
+/* ---------- en 30 segundos ---------- */
+.fx-tldr {
+  margin-top: 44px;
+  background: linear-gradient(160deg, var(--panel), var(--panel-2));
+  border: 1px solid var(--line);
+  border-top: 2px solid var(--cyan);
+  padding: clamp(24px, 4vw, 40px);
+}
+.fx-tldr__label {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  font-weight: 500;
+  letter-spacing: 0.26em;
+  text-transform: uppercase;
+  color: var(--cyan);
+}
+.fx-tldr__list {
+  list-style: none;
+  counter-reset: tldr;
+  margin-top: 18px;
+  display: grid;
+  gap: 14px;
+  max-width: 76ch;
+}
+.fx-tldr__list li {
+  counter-increment: tldr;
+  position: relative;
+  padding-left: 40px;
+  font-size: 0.96rem;
+  color: var(--muted);
+  line-height: 1.6;
+}
+.fx-tldr__list li::before {
+  content: counter(tldr);
+  position: absolute;
+  left: 0;
+  top: 2px;
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  font-family: var(--font-mono);
+  font-size: 0.74rem;
+  color: var(--cyan);
+  border: 1px solid var(--line-strong);
+}
+.fx-tldr__list strong {
+  color: var(--ink);
+  font-weight: 600;
+}
+.fx-tldr__list em {
+  color: var(--ink-2);
+  font-style: normal;
+  font-weight: 500;
+}
+
+/* ---------- las dos configuraciones ---------- */
+.fx-configs {
+  margin-top: 34px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+.fx-configcard {
+  background: linear-gradient(160deg, var(--panel), var(--panel-2));
+  border: 1px solid var(--line);
+  padding: 24px 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.fx-configcard--a {
+  border-top: 2px solid var(--cond-hp);
+}
+.fx-configcard--b {
+  border-top: 2px solid var(--cond-nm);
+}
+.fx-configcard h3 {
+  font-size: 1.12rem;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.fx-configcard__tag {
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  padding: 3px 9px;
+  border: 1px solid;
+}
+.fx-configcard--a .fx-configcard__tag {
+  color: var(--cond-hp);
+  border-color: color-mix(in srgb, var(--cond-hp) 45%, transparent);
+}
+.fx-configcard--b .fx-configcard__tag {
+  color: var(--cond-nm);
+  border-color: color-mix(in srgb, var(--cond-nm) 45%, transparent);
+}
+.fx-configcard p {
+  font-size: 0.88rem;
+  color: var(--muted);
+  line-height: 1.55;
+}
+.fx-configcard p em {
+  color: var(--ink-2);
+  font-style: normal;
+  font-weight: 500;
+}
+.fx-configcard__num {
+  margin-top: auto;
+  padding-top: 10px;
+  border-top: 1px solid var(--line-soft);
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+}
+.fx-configcard--a .fx-configcard__num {
+  color: var(--cond-hp);
+}
+.fx-configcard--b .fx-configcard__num {
+  color: var(--cond-nm);
+}
+
 /* ---------- supuestos ---------- */
 .fx-assume {
   margin-top: 40px;
@@ -807,7 +931,8 @@
   .fx-tiles {
     grid-template-columns: 1fr 1fr;
   }
-  .fx-decisions {
+  .fx-decisions,
+  .fx-configs {
     grid-template-columns: 1fr;
   }
   .fx-assume {

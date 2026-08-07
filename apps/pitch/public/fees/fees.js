@@ -98,43 +98,43 @@ const SELLERS_BY_SCENARIO = [2, 5, 12]
 const BUNDLES = [
   {
     id: 'P1',
-    name: 'Los docs, tal cual',
+    name: 'El plan original, tal cual',
     cfg: 'A',
     fS: 0.09,
     fP: 0.05,
     mf: 15,
     cond: ['DMG', 'var(--cond-dmg)'],
-    note: 'Implementar 9/5 sobre la config actual. El sellado al 5% queda bajo el agua: la peor jugada de la mesa.',
+    note: 'Cobrar el 9% y 5% del plan sin cambiar quién paga a Stripe. El sellado sale tablas: la peor opción de la mesa.',
   },
   {
     id: 'P0',
-    name: 'La config accidental de hoy',
+    name: 'Lo que cobra el sistema hoy',
     cfg: 'A',
     fS: 0.1,
     fP: 0.1,
     mf: 0,
     cond: ['HP', 'var(--cond-hp)'],
-    note: '10% flat sin fee mínimo, plataforma paga Stripe. Funciona por accidente; mejor que P1.',
+    note: '10% parejo a todo y tú pagas a Stripe. Funciona de casualidad, pero casi la mitad de tu comisión se va a Stripe.',
   },
   {
     id: 'P2',
-    name: 'La mejor A posible',
+    name: 'Subir precios sin migrar',
     cfg: 'A',
     fS: 0.13,
     fP: 0.07,
     mf: 25,
     cond: ['MP', 'var(--cond-mp)'],
-    note: 'Repricing sin migrar. Todo el riesgo de cola (MSI, intl, disputas) sigue viviendo contigo.',
+    note: 'Cobrar 13% y 7% para compensar que tú pagas a Stripe. Mejora, pero los costos sorpresa siguen siendo tuyos.',
   },
   {
     id: 'P3',
-    name: 'Migrar, fees de los docs',
+    name: 'Migrar, con los % del plan',
     cfg: 'B',
     fS: 0.09,
     fP: 0.05,
     mf: 10,
     cond: ['LP', 'var(--cond-lp)'],
-    note: 'El seller paga Stripe. Sólida; deja ~1 punto de take en la mesa frente a P4.',
+    note: 'El vendedor paga a Stripe y cobras 9% y 5%. Sólida, pero deja dinero en la mesa frente a la recomendada.',
   },
   {
     id: 'P4',
@@ -144,17 +144,21 @@ const BUNDLES = [
     fP: 0.06,
     mf: 15,
     cond: ['NM', 'var(--cond-nm)'],
-    note: 'Satura exactamente la paridad TCGplayer: seller con RFC netea 87.0% efectivo.',
+    note: 'El vendedor paga a Stripe y cobras 10% y 6%. Al vendedor le quedan 87 de cada 100 pesos: igual que en TCGplayer.',
     foil: true,
   },
 ]
 
+// etiqueta legible de quién paga a Stripe
+const whoPays = (cfg) => (cfg === 'B' ? 'el vendedor' : 'tú')
+
 // ---------- render: hero proof ----------
 {
+  // ganancia por cada $100 vendidos = take neto en %, expresado como pesos
   const a = month(332000, 0.6, 0.1, 0.1, 'A', 5, POUTS, 0)
   const b = month(332000, 0.6, 0.1, 0.06, 'B', 5, POUTS, 15)
-  document.getElementById('proof-a').textContent = pct(a.pct)
-  document.getElementById('proof-b').textContent = pct(b.pct)
+  document.getElementById('proof-a').textContent = `$${a.pct.toFixed(2)}`
+  document.getElementById('proof-b').textContent = `$${b.pct.toFixed(2)}`
 }
 
 // ---------- render: la mano ----------
@@ -174,16 +178,16 @@ const BUNDLES = [
     el.style.setProperty('--tilt', `${(i - 2) * 1.4}deg`)
     el.innerHTML = `
       <div class="fx-card__rank">
-        <span>${bd.id} · config ${bd.cfg}</span>
+        <span>${bd.id} · paga Stripe: ${whoPays(bd.cfg)}</span>
         <span class="fx-card__cond">${bd.cond[0]}</span>
       </div>
       <h3>${bd.name}</h3>
-      <p class="fx-card__fees">${pct(bd.fS * 100, (bd.fS * 100) % 1 ? 1 : 0)} singles <span>·</span> ${pct(bd.fP * 100, 0)} sellado <span>·</span> mín ${bd.mf ? mxn(bd.mf) : '—'}</p>
+      <p class="fx-card__fees">${pct(bd.fS * 100, (bd.fS * 100) % 1 ? 1 : 0)} sueltas <span>·</span> ${pct(bd.fP * 100, 0)} sellado <span>·</span> mín ${bd.mf ? mxn(bd.mf) : '—'}</p>
       <p class="fx-card__note">${bd.note}</p>
       <div class="fx-card__stats">
-        <span class="fx-card__stat">neto Base <b>${mxn(base.net)}</b></span>
-        <span class="fx-card__stat">take neto <b>${pct(base.pct)}</b></span>
-        <span class="fx-card__stat">GMV p/ sueldo <b class="${be === null ? 'neg' : ''}">${be === null ? 'inalcanzable' : mxn(be)}</b></span>
+        <span class="fx-card__stat">ganancia/mes (Tracción) <b>${mxn(base.net)}</b></span>
+        <span class="fx-card__stat">de cada $100 te quedan <b>$${base.pct.toFixed(2)}</b></span>
+        <span class="fx-card__stat">ventas p/ sueldo $40k <b class="${be === null ? 'neg' : ''}">${be === null ? 'inalcanzable' : mxn(be)}</b></span>
       </div>`
     hand.appendChild(el)
   })
@@ -223,8 +227,8 @@ const BUNDLES = [
     if (bd.foil) tr.className = 'fx-best'
     tr.innerHTML = `
       <td>${bd.id} · ${bd.name}</td>
-      <td>${bd.cfg}</td>
-      <td>${(bd.fS * 100).toFixed(0)}/${(bd.fP * 100).toFixed(0)} · mín ${bd.mf ? `$${bd.mf}` : '—'}</td>
+      <td class="fx-td-text">${whoPays(bd.cfg)}</td>
+      <td>${(bd.fS * 100).toFixed(0)}% / ${(bd.fP * 100).toFixed(0)}% · mín ${bd.mf ? `$${bd.mf}` : '—'}</td>
       ${cells}
       <td>${be === null ? '—' : mxn(be)}</td>`
     tbody.appendChild(tr)
@@ -275,10 +279,10 @@ function renderExplorer() {
   $('v-intl').textContent = pct(st.a.intlShare * 100, 0)
   $('v-gmv').textContent = mxn(st.gmv)
   $('sellers-note').textContent =
-    `sellers activos: ${sellers} (≈1 por cada $70k de GMV, mín 2) · payout semanal · disputas 0.3% fijas`
+    `Supone: ${sellers} vendedores activos (≈1 por cada $70k de ventas) · pago semanal a cada uno · 0.3% de contracargos`
 
   // tiles
-  $('r-take').textContent = pct(m.pct)
+  $('r-take').textContent = `$${m.pct.toFixed(2)}`
   $('r-take').classList.toggle('neg', m.net < 0)
   $('r-net').textContent = mxn(m.net)
   $('r-net').classList.toggle('neg', m.net < 0)
@@ -292,9 +296,9 @@ function renderExplorer() {
   const parity = $('parity')
   parity.classList.toggle('fx-parity--ok', ok)
   parity.classList.toggle('fx-parity--bad', !ok)
-  $('parity-chip').textContent = ok ? '✓ paridad TCGplayer' : '✗ pierde paridad'
+  $('parity-chip').textContent = ok ? '✓ competitivo para el vendedor' : '✗ pierde vendedores'
   $('parity-text').innerHTML =
-    `Seller con RFC netea <b>${pct(sellerEff * 100)}</b> efectivo en singles (umbral: 87.0%, lo que netea en TCGplayer).`
+    `Al vendedor le quedan <b>${(sellerEff * 100).toFixed(1)}</b> de cada 100 pesos (con RFC, contando el IVA a favor). El piso es <b>87</b>: lo que le queda en TCGplayer.`
 
   // barra de asignación: orden de $400 en singles, tarjeta nacional, vista bruta
   const X = 400
@@ -303,9 +307,9 @@ function renderExplorer() {
   const seller = st.cfg === 'B' ? X - appFee - stripeFee : X - appFee
   const platform = st.cfg === 'B' ? appFee : appFee - stripeFee
   const segs = [
-    ['seller', 'Se queda el seller', Math.max(seller, 0)],
-    ['platform', 'Plataforma (fee bruto)', Math.max(platform, 0)],
-    ['stripe', 'Stripe (con IVA)', stripeFee],
+    ['seller', 'El vendedor recibe', Math.max(seller, 0)],
+    ['platform', 'Tu comisión (bruta)', Math.max(platform, 0)],
+    ['stripe', 'Stripe cobra (con IVA)', stripeFee],
   ]
   $('alloc-bar').innerHTML = segs
     .map(
@@ -331,17 +335,17 @@ renderExplorer()
   const P4 = { fS: 0.1, fP: 0.06, cfg: 'B', mf: 15 }
   const at = (b, mix, a) => month(332000, mix, b.fS, b.fP, b.cfg, 5, POUTS, b.mf, a)
   const CASES = [
-    ['Refunds 0%', 0.6, { ...BASE, refund: 0 }, 'los reembolsos pegan parejo'],
-    ['Refunds 8%', 0.6, { ...BASE, refund: 0.08 }, ''],
-    ['Intl 15%', 0.6, { ...BASE, intlShare: 0.15 }, 'B es inmune: lo paga el seller'],
-    ['Disputas 1%', 0.6, { ...BASE, disputeRate: 0.01 }, 'B es inmune: lo paga el seller'],
-    ['Mix 80% singles', 0.8, BASE, 'más singles favorece a ambas'],
-    ['Mix 40% singles', 0.4, BASE, 'con mucho sellado, A sufre más'],
+    ['Nadie devuelve nada (0%)', 0.6, { ...BASE, refund: 0 }, 'las devoluciones pegan parejo'],
+    ['El doble de devoluciones (8%)', 0.6, { ...BASE, refund: 0.08 }, ''],
+    ['Muchas tarjetas extranjeras (15%)', 0.6, { ...BASE, intlShare: 0.15 }, 'a la recomendada no le afecta: lo paga el vendedor'],
+    ['Más contracargos (1%)', 0.6, { ...BASE, disputeRate: 0.01 }, 'a la recomendada no le afecta: lo paga el vendedor'],
+    ['Se vende más carta suelta (80%)', 0.8, BASE, 'más cartas sueltas favorece a ambas'],
+    ['Se vende más sellado (60%)', 0.4, BASE, 'con mucho sellado, la opción sin migrar sufre más'],
   ]
   const tbody = document.querySelector('#sens-table tbody')
   const baseline = [at(P2, 0.6, BASE).net, at(P4, 0.6, BASE).net]
   tbody.innerHTML =
-    `<tr><td>— Base sin variar</td><td>${mxn(baseline[0])}</td><td>${mxn(baseline[1])}</td><td class="fx-td-text"></td></tr>` +
+    `<tr><td>— Todo sale como se supuso</td><td>${mxn(baseline[0])}</td><td>${mxn(baseline[1])}</td><td class="fx-td-text"></td></tr>` +
     CASES.map(([label, mix, a, note]) => {
       const p2 = at(P2, mix, a).net
       const p4 = at(P4, mix, a).net
@@ -353,8 +357,8 @@ renderExplorer()
   const oA = order(2500, 0.07, 'A', 0, BASE)
   const oB = order(2500, 0.06, 'B', 0, BASE)
   $('msi-text').innerHTML =
-    `Una orden sellada de <b>$2,500</b> con 3 MSI (~+5%): bajo config A la plataforma termina en ` +
-    `<b>${mxn(oA.net - msi)}</b> — pierde dinero en esa orden. Bajo config B el neto de plataforma se ` +
-    `mantiene en <b>${mxn(oB.net)}</b> y el costo (<b>${mxn(msi)}</b>) es del seller. ` +
-    `Recomendación: MSI apagado al arranque; si se habilita para sellado, con opt-in explícito del seller.`
+    `Vender una caja de <b>$2,500</b> a 3 meses sin intereses cuesta ~<b>${mxn(msi)}</b> extra de comisión. ` +
+    `Si tú pagas a Stripe (como hoy), esa venta te deja <b>${mxn(oA.net - msi)}</b>: pierdes dinero. ` +
+    `Con la propuesta, tu ganancia queda en <b>${mxn(oB.net)}</b> y el costo extra es del vendedor. ` +
+    `Recomendación: MSI apagado al arranque; si se prende para sellado, con acuerdo explícito del vendedor.`
 }

@@ -4,10 +4,10 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="robots" content="noindex, nofollow" />
-    <title>The Pub Market — Análisis de comisiones (interno)</title>
+    <title>The Pub Market — ¿Cuánto cobrar de comisión? (interno)</title>
     <meta
       name="description"
-      content="Análisis interno de pricing: cinco propuestas de fee evaluadas contra los costos reales de Stripe MX, con modelo interactivo."
+      content="Análisis interno: cuánto debe cobrar The Pub Market por cada venta, comparado contra los costos reales de Stripe México."
     />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -23,142 +23,215 @@
     <a class="fx-skip" href="#contenido">Saltar al contenido</a>
     <header class="fx-topbar">
       <a class="fx-topbar__back" href="/">← Pitch</a>
-      <p class="fx-topbar__title">Pricing y comisiones · análisis interno</p>
+      <p class="fx-topbar__title">¿Cuánto cobrar de comisión? · análisis interno</p>
       <p class="fx-topbar__meta">ago 2026 · TASK-058</p>
     </header>
 
     <main class="fx-main" id="contenido">
-      <!-- ═══ Tesis ═══ -->
+      <!-- ═══ La pregunta ═══ -->
       <section class="fx-hero" aria-labelledby="titulo">
-        <p class="kicker" data-reveal>Cinco jugadas sobre la mesa</p>
+        <p class="kicker" data-reveal>La pregunta</p>
         <h1 id="titulo" data-reveal style="--delay: 60ms">
-          El fee es la mitad<br />de la <span class="foil-text">historia</span>
+          ¿Cuánto cobrar<br />por cada <span class="foil-text">venta</span>?
         </h1>
         <p class="fx-hero__thesis" data-reveal style="--delay: 160ms">
-          La palanca no es el porcentaje: es <strong>quién paga a Stripe</strong>. Migrar la config
-          de Connect vale ~3 puntos de GMV; cada punto de fee vale ~0.8.
+          Comparamos cinco opciones de comisión contra los costos reales de Stripe México.
+          El hallazgo: <strong>importa menos el porcentaje que cobres y más quién paga la
+          comisión de Stripe</strong> — tú o el vendedor.
         </p>
-        <ul class="fx-hero__proof" data-reveal style="--delay: 260ms" aria-label="Comparación de configuraciones">
-          <li class="fx-proof">
-            <span class="fx-proof__tag fx-proof__tag--a">Config A · hoy</span>
+        <div class="fx-hero__proof" data-reveal style="--delay: 260ms" role="group" aria-label="Ganancia por cada 100 pesos vendidos, hoy contra la propuesta">
+          <div class="fx-proof">
+            <span class="fx-proof__tag fx-proof__tag--a">Hoy</span>
             <span class="fx-proof__num" id="proof-a">—</span>
-            <span class="fx-proof__cap">take neto con 10% flat (la plataforma paga Stripe)</span>
-          </li>
-          <li class="fx-proof__vs" aria-hidden="true">vs</li>
-          <li class="fx-proof">
-            <span class="fx-proof__tag fx-proof__tag--b">Config B · propuesta</span>
+            <span class="fx-proof__cap">te quedan de cada $100 vendidos (tú pagas a Stripe)</span>
+          </div>
+          <span class="fx-proof__vs" aria-hidden="true">vs</span>
+          <div class="fx-proof">
+            <span class="fx-proof__tag fx-proof__tag--b">Propuesta</span>
             <span class="fx-proof__num" id="proof-b">—</span>
-            <span class="fx-proof__cap">take neto con 10/6 (el seller paga Stripe)</span>
+            <span class="fx-proof__cap">te quedarían de cada $100 (el vendedor paga a Stripe)</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- ═══ En 30 segundos ═══ -->
+      <section class="fx-tldr" aria-labelledby="tldr-t">
+        <h2 class="fx-tldr__label" id="tldr-t">En 30 segundos</h2>
+        <ol class="fx-tldr__list">
+          <li>
+            <strong>Hay un costo escondido.</strong> Stripe cobra ~$4.20 de cada $100 por procesar
+            el pago con tarjeta. Por cómo está configurada la cuenta hoy, ese costo
+            <em>lo pagas tú</em>, no el vendedor.
           </li>
-        </ul>
+          <li>
+            <strong>Cambiar eso casi duplica tu ganancia.</strong> Si Stripe le cobra al vendedor
+            — como pasa en TCGplayer o eBay — tu ganancia sube de ~$3.60 a ~$6.60 por cada $100,
+            sin subir tu comisión ni encarecer nada al comprador.
+          </li>
+          <li>
+            <strong>La recomendación:</strong> cobrar <em>10% en cartas sueltas</em>,
+            <em>6% en producto sellado</em>, mínimo <em>$15 por orden</em> — y que el vendedor
+            pague a Stripe. Al vendedor le quedan 87 de cada 100 pesos: lo mismo que en TCGplayer.
+          </li>
+        </ol>
       </section>
 
-      <!-- ═══ Supuestos ═══ -->
-      <section class="fx-assume" aria-label="Supuestos del modelo">
-        <h2 class="fx-assume__label">Supuestos</h2>
+      <!-- ═══ Cómo leer los números ═══ -->
+      <section class="fx-assume" aria-label="Cómo leer los números de esta página">
+        <h2 class="fx-assume__label">Cómo leer los números</h2>
         <ul class="fx-assume__list">
-          <li><strong>Todo ex-IVA</strong> — acreditable con RFC; el fee publicado incluye IVA</li>
-          <li>Stripe MX: <strong>3.6% + $3</strong> tarjeta nacional · Connect: $35/mes + 0.25% + $12/payout</li>
-          <li>Refunds 4% · intl 5% · disputas 0.3% · payout semanal · mix 60/40 singles/sellado</li>
-          <li>AOV singles ~$436 · sellado ~$2,560 (distribuciones ilustrativas)</li>
+          <li><strong>“Ventas del mes”</strong> = todo lo que se vende en el marketplace; tu ingreso es solo tu comisión</li>
+          <li><strong>“Te quedan”</strong> = tu ganancia libre, ya descontados todos los costos y el IVA</li>
+          <li>Supuestos: 4% de devoluciones · ticket promedio $436 en cartas sueltas · pago semanal a vendedores</li>
+          <li>Cifras ilustrativas hasta cargar las ventas reales de The Pub Game Store</li>
         </ul>
       </section>
 
-      <!-- ═══ La mano ═══ -->
-      <section class="fx-section" aria-labelledby="mano-t">
-        <p class="kicker">La mano</p>
-        <h2 class="headline" id="mano-t">Cinco propuestas, calificadas como cartas</h2>
+      <!-- ═══ El punto clave ═══ -->
+      <section class="fx-section" aria-labelledby="configs-t">
+        <p class="kicker">El punto clave</p>
+        <h2 class="headline" id="configs-t">¿Quién le paga a Stripe?</h2>
         <p class="lead">
-          La condición es información: el ranking real del modelo, de la peor jugada a la
-          recomendada. Neto mensual en el escenario Base ($332k GMV) y el GMV necesario para
-          pagar un sueldo de $40k.
+          Procesar un pago con tarjeta cuesta ~$4.20 de cada $100: es la comisión de Stripe.
+          El dinero de la venta siempre va directo del comprador al vendedor — eso no cambia, y
+          nos mantiene fuera de la Ley Fintech. Lo que sí se puede elegir es
+          <strong>de qué bolsillo sale esa comisión</strong>:
         </p>
-        <ul class="fx-hand" id="hand"></ul>
+        <div class="fx-configs">
+          <div class="fx-configcard fx-configcard--a">
+            <h3><span class="fx-configcard__tag">Hoy</span> Tú absorbes el costo</h3>
+            <p>
+              Stripe cobra su comisión de <em>tu</em> cuenta. De tu comisión de 10%, casi la
+              mitad se va en pagarle a Stripe. Y los extras también son tuyos: tarjetas
+              extranjeras, contracargos, meses sin intereses.
+            </p>
+            <p class="fx-configcard__num">Te cuesta ~$4.20 de cada $100 vendidos</p>
+          </div>
+          <div class="fx-configcard fx-configcard--b">
+            <h3><span class="fx-configcard__tag">Propuesta</span> El vendedor lo absorbe</h3>
+            <p>
+              Stripe le cobra al vendedor, igual que en TCGplayer, eBay o Mercado Libre. Tu
+              comisión te llega completa y los extras son del vendedor. Tú solo pagas la cuota
+              de Stripe Connect.
+            </p>
+            <p class="fx-configcard__num">Te cuesta ~$0.50 de cada $100 vendidos</p>
+          </div>
+        </div>
+        <p class="fx-note">
+          En las tablas de abajo estas dos formas aparecen como <strong>“hoy”</strong> y
+          <strong>“propuesta”</strong> (técnicamente: configuraciones A y B de Stripe Connect).
+        </p>
+      </section>
+
+      <!-- ═══ Las cinco opciones ═══ -->
+      <section class="fx-section" aria-labelledby="mano-t">
+        <p class="kicker">Las cinco opciones</p>
+        <h2 class="headline" id="mano-t">Cinco formas de cobrar, de peor a mejor</h2>
+        <p class="lead">
+          Cada opción combina un porcentaje de comisión con quién paga a Stripe. Las calificamos
+          como cartas — <strong>NM la mejor, DMG la peor</strong> — según dos números: cuánto te
+          dejan al mes y cuánto necesitas vender para pagarte un sueldo de $40,000.
+        </p>
+        <ul class="fx-hand" id="hand" role="list"></ul>
       </section>
 
       <!-- ═══ Tabla completa ═══ -->
       <section class="fx-section" aria-labelledby="tabla-t">
         <p class="kicker">Los tres escenarios</p>
-        <h2 class="headline" id="tabla-t">Neto mensual por escenario</h2>
-        <!-- biome-ignore lint/a11y/noNoninteractiveTabindex: un contenedor con scroll
-           horizontal DEBE ser enfocable o el teclado no puede recorrerlo
-           (WCAG 2.1.1). La regla asume que nada no-interactivo necesita foco;
-           aquí sí. El `:focus-visible` de .fx-scroll lo hace visible. -->
-        <section class="fx-scroll" aria-label="Tabla comparativa de propuestas" tabindex="0">
+        <h2 class="headline" id="tabla-t">¿Cuánto ganarías al mes?</h2>
+        <p class="lead">
+          Tu ganancia mensual con cada opción, según cuánto venda el marketplace: arrancando
+          ($80 mil/mes), con tracción ($332 mil) o en escala ($1.2 millones). La última columna:
+          cuánto necesita vender el marketplace para que tú ganes $40,000 al mes.
+        </p>
+        <div class="fx-scroll" role="region" aria-label="Ganancia mensual por opción y escenario" tabindex="0">
           <table class="table fx-table" id="bundles-table">
             <thead>
               <tr>
-                <th scope="col">Propuesta</th>
-                <th scope="col">Config</th>
-                <th scope="col">Fees</th>
-                <th scope="col">Conservador $80k</th>
-                <th scope="col">Base $332k</th>
-                <th scope="col">Optimista $1.2M</th>
-                <th scope="col">GMV p/ sueldo</th>
+                <th scope="col">Opción</th>
+                <th scope="col">¿Quién paga a Stripe?</th>
+                <th scope="col">Comisiones</th>
+                <th scope="col">Arranque $80k</th>
+                <th scope="col">Tracción $332k</th>
+                <th scope="col">Escala $1.2M</th>
+                <th scope="col">Ventas p/ sueldo $40k</th>
               </tr>
             </thead>
             <tbody></tbody>
           </table>
-        </section>
+        </div>
         <p class="fx-note">
-          Config A = <code>fees.payer 'application'</code> (la plataforma absorbe processing,
-          disputas e internacional). Config B = <code>application_express</code> (los paga el
-          seller; la plataforma solo paga Connect). La no-custodia es idéntica en ambas.
+          Lectura rápida: la peor opción necesita vender <strong>$2.26 millones al mes</strong>
+          para pagarte un sueldo; la recomendada, <strong>$610 mil</strong>. Esa es la distancia
+          entre configurar bien y mal quién paga a Stripe.
         </p>
       </section>
 
-      <!-- ═══ Explorador ═══ -->
+      <!-- ═══ El límite ═══ -->
+      <section class="fx-section" aria-labelledby="tope-t">
+        <p class="kicker">El límite</p>
+        <h2 class="headline" id="tope-t">¿Por qué no cobrar más?</h2>
+        <p class="lead">
+          Porque el vendedor compara. En TCGplayer, después de todas las comisiones, el vendedor
+          se queda con <strong>~87 de cada 100 pesos</strong>. Si aquí se queda con menos, no
+          trae su inventario. La propuesta de 10% lo deja exactamente en 87: cobramos lo máximo
+          posible sin perder vendedores. En el simulador de abajo, el indicador
+          <em>“competitivo para el vendedor”</em> vigila ese límite.
+        </p>
+      </section>
+
+      <!-- ═══ Simulador ═══ -->
       <section class="fx-section" aria-labelledby="exp-t">
         <p class="kicker">El modelo, en vivo</p>
-        <h2 class="headline" id="exp-t">Arma tu propia jugada</h2>
+        <h2 class="headline" id="exp-t">Muévele a los números</h2>
         <p class="lead">
-          Mueve los supuestos y mira el resultado al instante. Empieza en la propuesta
-          recomendada (P4).
+          Cambia cualquier palanca y mira qué pasa con tu ganancia. Empieza en la opción
+          recomendada.
         </p>
 
         <div class="fx-explorer">
-          <form class="fx-controls" id="controls" aria-label="Parámetros del modelo">
+          <form class="fx-controls" id="controls" aria-label="Palancas del simulador">
             <fieldset class="fx-config">
               <legend>¿Quién paga a Stripe?</legend>
               <div class="fx-seg" role="radiogroup">
                 <label class="fx-seg__opt">
                   <input type="radio" name="config" value="A" />
-                  <span>Config A<em>la plataforma</em></span>
+                  <span>Tú<em>como está hoy</em></span>
                 </label>
                 <label class="fx-seg__opt">
                   <input type="radio" name="config" value="B" checked />
-                  <span>Config B<em>el seller</em></span>
+                  <span>El vendedor<em>la propuesta</em></span>
                 </label>
               </div>
             </fieldset>
 
             <div class="fx-sliders">
               <label class="fx-slider">
-                <span class="fx-slider__name">Fee singles <output id="v-feeS">10.0%</output></span>
+                <span class="fx-slider__name">Comisión cartas sueltas <output id="v-feeS">10.0%</output></span>
                 <input type="range" id="feeS" min="6" max="15" step="0.5" value="10" />
               </label>
               <label class="fx-slider">
-                <span class="fx-slider__name">Fee sellado <output id="v-feeP">6.0%</output></span>
+                <span class="fx-slider__name">Comisión sellado <output id="v-feeP">6.0%</output></span>
                 <input type="range" id="feeP" min="3" max="9" step="0.5" value="6" />
               </label>
               <label class="fx-slider">
-                <span class="fx-slider__name">Fee mínimo <output id="v-minFee">$15</output></span>
+                <span class="fx-slider__name">Comisión mínima por orden <output id="v-minFee">$15</output></span>
                 <input type="range" id="minFee" min="0" max="30" step="5" value="15" />
               </label>
               <label class="fx-slider">
-                <span class="fx-slider__name">Mix singles <output id="v-mix">60%</output></span>
+                <span class="fx-slider__name">Ventas que son cartas sueltas <output id="v-mix">60%</output></span>
                 <input type="range" id="mix" min="30" max="90" step="5" value="60" />
               </label>
               <label class="fx-slider">
-                <span class="fx-slider__name">Refunds <output id="v-refund">4%</output></span>
+                <span class="fx-slider__name">Devoluciones <output id="v-refund">4%</output></span>
                 <input type="range" id="refund" min="0" max="10" step="1" value="4" />
               </label>
               <label class="fx-slider">
-                <span class="fx-slider__name">Tarjeta intl <output id="v-intl">5%</output></span>
+                <span class="fx-slider__name">Pagos con tarjeta extranjera <output id="v-intl">5%</output></span>
                 <input type="range" id="intl" min="0" max="20" step="5" value="5" />
               </label>
               <label class="fx-slider fx-slider--wide">
-                <span class="fx-slider__name">GMV mensual <output id="v-gmv">$332,000</output></span>
+                <span class="fx-slider__name">Ventas del mes <output id="v-gmv">$332,000</output></span>
                 <input type="range" id="gmv" min="50000" max="2000000" step="10000" value="332000" />
               </label>
             </div>
@@ -169,19 +242,19 @@
             <div class="fx-tiles">
               <div class="fx-tile">
                 <span class="fx-tile__num" id="r-take">—</span>
-                <span class="fx-tile__cap">take neto / GMV</span>
+                <span class="fx-tile__cap">te quedan de cada $100 vendidos</span>
               </div>
               <div class="fx-tile">
                 <span class="fx-tile__num" id="r-net">—</span>
-                <span class="fx-tile__cap">neto mensual</span>
+                <span class="fx-tile__cap">tu ganancia del mes</span>
               </div>
               <div class="fx-tile">
                 <span class="fx-tile__num" id="r-breakeven">—</span>
-                <span class="fx-tile__cap">GMV para sueldo $40k</span>
+                <span class="fx-tile__cap">ventas/mes para pagarte $40k</span>
               </div>
               <div class="fx-tile">
                 <span class="fx-tile__num" id="r-minorder">—</span>
-                <span class="fx-tile__cap">orden mínima viable</span>
+                <span class="fx-tile__cap">orden más chica que no te hace perder</span>
               </div>
             </div>
 
@@ -192,9 +265,9 @@
 
             <figure class="fx-alloc">
               <figcaption class="fx-alloc__title">
-                ¿A dónde va una orden de <strong>$400</strong> en singles? <span class="fx-alloc__sub">(vista bruta, tarjeta nacional)</span>
+                ¿Cómo se reparte una venta de <strong>$400</strong>? <span class="fx-alloc__sub">(carta suelta, tarjeta nacional)</span>
               </figcaption>
-              <div class="fx-alloc__bar" id="alloc-bar" role="img" aria-label="Reparto de una orden de 400 pesos entre seller, plataforma y Stripe"></div>
+              <div class="fx-alloc__bar" id="alloc-bar" role="img" aria-label="Reparto de una venta de 400 pesos entre el vendedor, tu comisión y Stripe"></div>
               <ul class="fx-alloc__legend" id="alloc-legend"></ul>
             </figure>
           </div>
@@ -204,61 +277,60 @@
       <!-- ═══ Sensibilidad ═══ -->
       <section class="fx-section" aria-labelledby="sens-t">
         <p class="kicker">Estrés</p>
-        <h2 class="headline" id="sens-t">¿Qué tan robusta es cada config?</h2>
+        <h2 class="headline" id="sens-t">¿Y si las cosas salen distinto?</h2>
         <p class="lead">
-          Neto mensual en Base ($332k) al mover un supuesto a la vez. P2 es la mejor jugada
-          posible sin migrar; P4 es la recomendada.
+          Tu ganancia mensual (con ventas de $332 mil) si algún supuesto cambia. Comparamos la
+          mejor opción <em>sin</em> cambiar quién paga a Stripe contra la recomendada: la
+          recomendada aguanta mejor casi todos los golpes, porque los costos sorpresa son del
+          vendedor, no tuyos.
         </p>
-        <!-- biome-ignore lint/a11y/noNoninteractiveTabindex: un contenedor con scroll
-           horizontal DEBE ser enfocable o el teclado no puede recorrerlo
-           (WCAG 2.1.1). La regla asume que nada no-interactivo necesita foco;
-           aquí sí. El `:focus-visible` de .fx-scroll lo hace visible. -->
-        <section class="fx-scroll" aria-label="Tabla de sensibilidad" tabindex="0">
+        <div class="fx-scroll" role="region" aria-label="Ganancia mensual bajo distintos supuestos" tabindex="0">
           <table class="table fx-table" id="sens-table">
             <thead>
               <tr>
-                <th scope="col">Variación</th>
-                <th scope="col">P2 · A 13/7</th>
-                <th scope="col">P4 · B 10/6</th>
+                <th scope="col">¿Qué pasa si…?</th>
+                <th scope="col">Sin migrar, cobrando 13/7</th>
+                <th scope="col">Recomendada, 10/6</th>
                 <th scope="col">Lectura</th>
               </tr>
             </thead>
             <tbody></tbody>
           </table>
-        </section>
+        </div>
         <div class="fx-msi" id="msi-note">
-          <h3>El caso MSI</h3>
+          <h3>Cuidado con los meses sin intereses</h3>
           <p id="msi-text">—</p>
         </div>
       </section>
 
-      <!-- ═══ Decisiones ═══ -->
+      <!-- ═══ Siguientes pasos ═══ -->
       <section class="fx-section" aria-labelledby="dec-t">
-        <p class="kicker">Si eliges P4</p>
-        <h2 class="headline" id="dec-t">Tres decisiones pendientes</h2>
+        <p class="kicker">Siguientes pasos</p>
+        <h2 class="headline" id="dec-t">Si eliges la recomendada, hay que hacer tres cosas</h2>
         <ol class="fx-decisions">
           <li>
-            <h3>Migrar la config de Connect</h3>
+            <h3>Cambiar la configuración de Stripe</h3>
             <p>
-              Crear cuentas con <code>type: 'express'</code> (→ <code>application_express</code>) en
-              vez de controller properties. En test-mode, recrear cuentas cuesta ~cero; después de
-              go-live, mucho. Verificar si Accounts v2 ya permite <code>fees_collector: 'stripe'</code>
-              con Express Dashboard.
+              Crear las cuentas de vendedor en la modalidad donde Stripe le cobra al vendedor.
+              Mientras estemos en modo de prueba, rehacer cuentas no cuesta nada; después del
+              lanzamiento costaría mucho. Es el momento de hacerlo.
             </p>
           </li>
           <li>
-            <h3>Fee por categoría + mínimo</h3>
+            <h3>Cobrar distinto según el producto</h3>
             <p>
-              Hoy el checkout cobra 10% flat (<code>PLATFORM_FEE_BPS</code>). Implementar
-              singles/sellado por separado y el fee mínimo por orden.
+              Hoy el sistema cobra 10% parejo a todo. Hay que separar: 10% a cartas sueltas, 6%
+              a producto sellado, y una comisión mínima de $15 por orden para que las cartas muy
+              baratas no salgan gratis.
             </p>
           </li>
           <li>
-            <h3>IVA del fee: incluido o encima</h3>
+            <h3>Decidir cómo se anuncia el IVA</h3>
             <p>
-              Este modelo asume 10% <em>IVA incluido</em> (netas 8.6%). Anunciar “10% + IVA” netea
-              10% pero baja al seller a 85.6% y rompe la paridad. Emitir CFDI al seller en
-              cualquier caso. <strong>No es asesoría fiscal formal.</strong>
+              Este análisis asume que el 10% ya trae el IVA adentro (lo más claro para el
+              vendedor, estilo TCGplayer). Anunciarlo como “10% + IVA” nos deja más dinero, pero
+              al vendedor le quedan 85.6 de cada 100 — por debajo de TCGplayer.
+              <strong>Esto no es asesoría fiscal formal.</strong>
             </p>
           </li>
         </ol>
@@ -266,19 +338,19 @@
 
       <!-- ═══ Caveats ═══ -->
       <footer class="fx-footer">
-        <h2 class="fx-footer__label">Lo que este modelo no sabe</h2>
+        <h2 class="fx-footer__label">Lo que este análisis no sabe</h2>
         <ul class="fx-caveats">
-          <li>No hay curva de demanda: el óptimo está calculado contra la restricción de paridad competitiva (seller con RFC ≥ 87% efectivo, como TCGplayer), no contra elasticidad medida.</li>
-          <li>Distribuciones de orden y mix son ilustrativas; se recalibran con 12 meses de ventas reales de The Pub Game Store.</li>
-          <li>Cifras de Stripe MX verificadas ago 2026; re-verificar antes de go-live.</li>
+          <li>No sabemos cuántos vendedores se irían si cobramos de más; usamos como límite que al vendedor le quede lo mismo que en TCGplayer (87 de cada 100 pesos).</li>
+          <li>El tamaño típico de las órdenes y la mezcla de productos son estimaciones; se ajustan con 12 meses de ventas reales de The Pub Game Store.</li>
+          <li>Las tarifas de Stripe México están verificadas a agosto 2026; hay que re-verificarlas antes del lanzamiento real.</li>
           <li>Nada de esto es asesoría legal ni fiscal formal.</li>
         </ul>
         <p class="fx-footer__repro">
-          Reproduce cada número: <code>node scripts/fee-model.mjs</code> — mismo modelo, mismos
-          defaults que esta página. Fuentes:
-          <a href="https://stripe.com/mx/pricing" rel="noopener">stripe.com/mx/pricing</a> ·
-          <a href="https://stripe.com/mx/connect/pricing" rel="noopener">connect/pricing</a> ·
-          <a href="https://docs.stripe.com/connect/direct-charges-fee-payer-behavior" rel="noopener">fee-payer-behavior</a>
+          Cada número de esta página sale de un modelo que puedes correr tú mismo:
+          <code>node scripts/fee-model.mjs</code>. Fuentes:
+          <a href="https://stripe.com/mx/pricing" rel="noopener">tarifas de Stripe México</a> ·
+          <a href="https://stripe.com/mx/connect/pricing" rel="noopener">tarifas de Stripe Connect</a> ·
+          <a href="https://docs.stripe.com/connect/direct-charges-fee-payer-behavior" rel="noopener">quién paga las comisiones (docs de Stripe)</a>
           · <code>docs/negocio/pricing-y-comisiones.md</code>
         </p>
         <p class="fx-footer__brand">The Pub Market · documento interno · cifras ilustrativas</p>
