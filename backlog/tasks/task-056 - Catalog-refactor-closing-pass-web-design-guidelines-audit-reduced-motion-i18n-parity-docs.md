@@ -3,10 +3,11 @@ id: TASK-056
 title: >-
   Catalog refactor closing pass: web-design-guidelines audit, reduced-motion,
   i18n parity, docs
-status: To Do
+status: In Progress
 assignee:
   - '@claude'
 created_date: '2026-08-07 00:03'
+updated_date: '2026-08-07 01:57'
 labels:
   - 'epic:catalog-visual-refactor'
   - web
@@ -53,3 +54,16 @@ Depends on all other epic tasks (TASK-048..TASK-055). Subagent: nextjs-frontend 
 - [ ] #4 clearAll purges local params + facets; zero-result facet combinations render NoResultsState without errors
 - [ ] #5 docs/ingenieria/catalogo-multijuego.md updated; pnpm typecheck, pnpm build, biome, and full vitest green repo-wide
 <!-- AC:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+Plan (all deps TASK-048..055 Done and merged to main — this is the epic's closing quality gate):
+1. Load `web-design-guidelines` skill and run a full audit of apps/web/src/components/catalog/{FilterSidebar,MobileFilterSheet,CollapsibleSection,FacetTile,PipRow,GameFacetSection,CatalogView,GameWordmark}.tsx + apps/web/src/app/[locale]/catalog/page.tsx, covering mtg + riftbound, es + en, mobile + desktop. Fix findings in-task, don't just report them.
+2. Manually verify prefers-reduced-motion (apps/web/src/app/globals.css global block) actually neutralizes every animation added across TASK-052..055: .tpm-reveal stagger, .tpm-collapse, .tpm-tick, pip press-pop, MobileFilterSheet's scrim/panel transitions — check for stuck mid-transition states (e.g. a collapsed section stuck at a partial grid-template-rows value if the transition is cut mid-flight).
+3. es/en message-key parity sweep: diff the full key sets of apps/web/messages/es.json and en.json, confirm every key added across TASK-051 (fColor), TASK-053 (sortPriceAsc/sortPriceDesc/sortNewest), TASK-055 (closeFilters), and any others touched by this epic exist in both with sensible values.
+4. Regression checks: clearAll purges local URL params AND facets in one action (TASK-053's fix) — re-verify still true after TASK-054/055 changes; a zero-result facet combination (e.g. mtg color=C with no colorless stock, or any filter combo yielding 0 items) renders NoResultsState without crashing, not a blank grid.
+5. Update docs/ingenieria/catalogo-multijuego.md §6/§8: document ALL_GAME_PARAMS Map<string, Tcg[]> semantics (TASK-049), the facet-presentation registry pattern (TASK-052, functional registries stay pure/no React), the client-side facet/count decision (TASK-053) and its FETCH_LIMIT=200 truncation caveat.
+6. pnpm typecheck, pnpm build, biome, and full vitest green repo-wide (not just apps/web — the whole monorepo, since this is the epic's final gate).
+Executed by nextjs-frontend subagent (with web-design-guidelines skill) in isolated worktree on branch task/TASK-056; verified by task-verifier before merge.
+<!-- SECTION:PLAN:END -->
