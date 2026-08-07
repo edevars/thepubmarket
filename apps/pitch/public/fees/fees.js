@@ -34,8 +34,9 @@ function order(X, f, cfg, minFee = 0, a = BASE) {
   const rev = ((1 - a.refund) * appFee) / IVA
   const proc = (S.proc + a.intlShare * S.intl) * X + S.fix
   let cost = cfg === 'A' ? proc + a.disputeRate * S.dispute : 0
-  const sellerNet = Math.max(1 - f - (cfg === 'B' ? S.proc + S.fix / X : 0), 0)
-  cost += S.poutPct * X * sellerNet * (1 - a.refund)
+  const sellerNet = Math.max(1 - f - (cfg === 'A' ? 0 : S.proc + S.fix / X), 0)
+  // Standard (C) no genera cuotas de Connect para la plataforma; A y B sí.
+  if (cfg !== 'C') cost += S.poutPct * X * sellerNet * (1 - a.refund)
   return { rev, cost, net: rev - cost }
 }
 
@@ -56,7 +57,8 @@ function month(gmv, mix, fS, fP, cfg, sellers, poutsPerSeller, mf = 0, a = BASE)
   const eS = E(SINGLES, fS, cfg, mf, a)
   const eP = E(SEALED, fP, cfg, mf, a)
   const rev = nS * eS.rev + nP * eP.rev
-  const cost = nS * eS.cost + nP * eP.cost + sellers * (S.acct + poutsPerSeller * S.poutFix) + FIXED
+  const connect = cfg === 'C' ? 0 : sellers * (S.acct + poutsPerSeller * S.poutFix)
+  const cost = nS * eS.cost + nP * eP.cost + connect + FIXED
   return { rev, net: rev - cost, pct: ((rev - cost) / gmv) * 100 }
 }
 
@@ -147,16 +149,27 @@ const BUNDLES = [
     note: 'El vendedor paga a Stripe y cobras 10% y 6%. Al vendedor le quedan 87 de cada 100 pesos: igual que en TCGplayer.',
     foil: true,
   },
+  {
+    id: 'P5',
+    name: '10% parejo a todo',
+    cfg: 'B',
+    fS: 0.1,
+    fP: 0.1,
+    mf: 15,
+    cond: ['NM', 'var(--cond-nm)'],
+    note: 'Igual que la recomendada, pero cobrando 10% también al sellado. Da más dinero y es más simple de explicar — con un riesgo: ver abajo.',
+    foil: true,
+  },
 ]
 
 // etiqueta legible de quién paga a Stripe
-const whoPays = (cfg) => (cfg === 'B' ? 'el vendedor' : 'tú')
+const whoPays = (cfg) => (cfg === 'A' ? 'tú' : 'el vendedor')
 
 // ---------- render: hero proof ----------
 {
-  // ganancia por cada $100 vendidos = take neto en %, expresado como pesos
-  const a = month(332000, 0.6, 0.1, 0.1, 'A', 5, POUTS, 0)
-  const b = month(332000, 0.6, 0.1, 0.06, 'B', 5, POUTS, 15)
+  // Mismo pricing (10% parejo) en ambos lados: aísla el efecto de quién paga a Stripe.
+  const a = month(332000, 0.6, 0.1, 0.1, 'A', 5, POUTS, 15)
+  const b = month(332000, 0.6, 0.1, 0.1, 'B', 5, POUTS, 15)
   document.getElementById('proof-a').textContent = `$${a.pct.toFixed(2)}`
   document.getElementById('proof-b').textContent = `$${b.pct.toFixed(2)}`
 }
@@ -178,7 +191,7 @@ const whoPays = (cfg) => (cfg === 'B' ? 'el vendedor' : 'tú')
     el.style.setProperty('--tilt', `${(i - 2) * 1.4}deg`)
     el.innerHTML = `
       <div class="fx-card__rank">
-        <span>${bd.id} · paga Stripe: ${whoPays(bd.cfg)}</span>
+        <span>${bd.id} · paga Stripe ${whoPays(bd.cfg)}</span>
         <span class="fx-card__cond">${bd.cond[0]}</span>
       </div>
       <h3>${bd.name}</h3>
@@ -279,7 +292,9 @@ function renderExplorer() {
   $('v-intl').textContent = pct(st.a.intlShare * 100, 0)
   $('v-gmv').textContent = mxn(st.gmv)
   $('sellers-note').textContent =
-    `Supone: ${sellers} vendedores activos (≈1 por cada $70k de ventas) · pago semanal a cada uno · 0.3% de contracargos`
+    st.cfg === 'C'
+      ? `Supone: ${sellers} vendedores activos · con cuentas Standard no pagas cuotas de Connect · 0.3% de contracargos`
+      : `Supone: ${sellers} vendedores activos (≈1 por cada $70k de ventas) · pago semanal a cada uno · 0.3% de contracargos`
 
   // tiles
   $('r-take').textContent = `$${m.pct.toFixed(2)}`
@@ -291,7 +306,7 @@ function renderExplorer() {
   $('r-minorder').textContent = minOrder === null ? '—' : mxn(minOrder)
 
   // paridad: seller con RFC, orden de $400 (fee y Stripe ex-IVA)
-  const sellerEff = 1 - st.fS / IVA - (st.cfg === 'B' ? S.proc + S.fix / 400 : 0)
+  const sellerEff = 1 - st.fS / IVA - (st.cfg === 'A' ? 0 : S.proc + S.fix / 400)
   const ok = sellerEff >= 0.87
   const parity = $('parity')
   parity.classList.toggle('fx-parity--ok', ok)
@@ -304,8 +319,8 @@ function renderExplorer() {
   const X = 400
   const appFee = Math.max(st.fS * X, st.mf)
   const stripeFee = (S.proc * X + S.fix) * IVA
-  const seller = st.cfg === 'B' ? X - appFee - stripeFee : X - appFee
-  const platform = st.cfg === 'B' ? appFee : appFee - stripeFee
+  const seller = st.cfg === 'A' ? X - appFee : X - appFee - stripeFee
+  const platform = st.cfg === 'A' ? appFee - stripeFee : appFee
   const segs = [
     ['seller', 'El vendedor recibe', Math.max(seller, 0)],
     ['platform', 'Tu comisión (bruta)', Math.max(platform, 0)],

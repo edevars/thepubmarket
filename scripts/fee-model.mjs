@@ -4,8 +4,14 @@
 // Correr: node scripts/fee-model.mjs
 // Tarifas Stripe MX verificadas ago 2026: stripe.com/mx/pricing · stripe.com/mx/connect/pricing
 //   · docs.stripe.com/connect/direct-charges-fee-payer-behavior
-// Config A = fees.payer 'application' (actual): plataforma paga processing+disputas+intl+Connect.
-// Config B = 'application_express' (type:'express'): seller paga processing+disputas+intl; plataforma paga Connect.
+// Tipos de cuenta conectada modelados (docs.stripe.com/connect/direct-charges-fee-payer-behavior):
+//   A = Express vía controller properties, fees.payer 'application' (LO IMPLEMENTADO HOY):
+//       la plataforma paga processing + disputas + intl + cuotas de Connect.
+//   B = Express legacy (type:'express') → fees.payer 'application_express':
+//       el seller paga processing/disputas/intl; la plataforma paga las cuotas de Connect.
+//   C = Standard (type:'standard') → fees.payer 'account':
+//       el seller paga processing/disputas/intl y NO hay cuotas de Connect para la plataforma.
+//       Además, Stripe (no la plataforma) es responsable de saldos negativos.
 const IVA = 1.16
 const S = { proc: 0.036, fix: 3, intl: 0.005, poutPct: 0.0025, poutFix: 12, acct: 35, dispute: 150 }
 const FIXED = 500,
@@ -37,8 +43,9 @@ function order(X, f, cfg, minFee = 0, a = BASE) {
   const rev = ((1 - a.refund) * appFee) / IVA // en refund se devuelve el app fee
   const proc = (S.proc + a.intlShare * S.intl) * X + S.fix // Stripe no devuelve su fee en refunds
   let cost = cfg === 'A' ? proc + a.disputeRate * S.dispute : 0
-  const sellerNet = Math.max(1 - f - (cfg === 'B' ? S.proc + S.fix / X : 0), 0)
-  cost += S.poutPct * X * sellerNet * (1 - a.refund) // parte variable del payout (plataforma)
+  const sellerNet = Math.max(1 - f - (cfg === 'A' ? 0 : S.proc + S.fix / X), 0)
+  // Standard (C) no genera cuotas de Connect para la plataforma; A y B sí.
+  if (cfg !== 'C') cost += S.poutPct * X * sellerNet * (1 - a.refund)
   return { rev, cost, net: rev - cost }
 }
 const E = (d, f, cfg, mf, a) =>
@@ -58,7 +65,8 @@ function month(gmv, mix, fS, fP, cfg, sellers, poutsPerSeller, mf = 0, a = BASE)
   const eS = E(SINGLES, fS, cfg, mf, a),
     eP = E(SEALED, fP, cfg, mf, a)
   const rev = nS * eS.rev + nP * eP.rev
-  const cost = nS * eS.cost + nP * eP.cost + sellers * (S.acct + poutsPerSeller * S.poutFix) + FIXED
+  const connect = cfg === 'C' ? 0 : sellers * (S.acct + poutsPerSeller * S.poutFix)
+  const cost = nS * eS.cost + nP * eP.cost + connect + FIXED
   return { rev, net: rev - cost, pct: ((rev - cost) / gmv) * 100 }
 }
 
@@ -124,6 +132,7 @@ const BUNDLES = [
   ['P2 A repriced: A, 13/7, min $25', 'A', 0.13, 0.07, 25],
   ['P3 B docs: B, 9/5, min $10', 'B', 0.09, 0.05, 10],
   ['P4 B rec: B, 10/6, min $15', 'B', 0.1, 0.06, 15],
+  ['P5 B flat: B, 10/10, min $15', 'B', 0.1, 0.1, 15],
 ]
 console.log('\n== T4: neto mensual plataforma (mix 60/40, payout semanal=4.33/seller) ==')
 console.log(`bundle | ${SC.map((s) => s[0]).join(' | ')} | GMV break-even sueldo`)
@@ -186,3 +195,37 @@ for (const [f, cfg] of [
     `cfg ${cfg} fee ${pct(f)}: neto plataforma ${mxn(platNet)} | costo extra seller ${mxn(sellerHit)}`,
   )
 }
+
+// ── T7: tipo de cuenta conectada, a fee fijo 10/6 y 10/10 ─────────────────────
+// Compara los tres tipos con el MISMO pricing: aísla el efecto del tipo de cuenta.
+console.log('\n== T7: tipo de cuenta del seller (mismo pricing, mix 60/40) ==')
+console.log('pricing | cuenta | Conservador | Base | Optimista | GMV break-even sueldo')
+for (const [pricing, fS, fP] of [
+  ['10/6', 0.1, 0.06],
+  ['10/10', 0.1, 0.1],
+]) {
+  for (const [cfg, label] of [
+    ['A', 'Express hoy (plataforma paga)'],
+    ['B', 'Express legacy (seller paga)'],
+    ['C', 'Standard (seller paga, sin Connect)'],
+  ]) {
+    const row = SC.map(([, g, sel]) => {
+      const m = month(g, 0.6, fS, fP, cfg, sel, 4.33, 15)
+      return `${mxn(m.net)} (${m.pct.toFixed(1)}%)`
+    })
+    let g = 100000
+    while (g < 6e6) {
+      if (month(g, 0.6, fS, fP, cfg, Math.max(2, Math.round(g / 70000)), 4.33, 15).net >= SALARY)
+        break
+      g += 10000
+    }
+    console.log(`${pricing} | ${label} | ${row.join(' | ')} | ${mxn(g)}`)
+  }
+}
+
+// ── T8: neto del seller con 10% parejo (¿aguanta la paridad en sellado?) ──────
+console.log('\n== T8: neto efectivo del seller con RFC, fee 10% (seller paga Stripe) ==')
+for (const X of [80, 400, 800, 2500, 6000]) {
+  console.log(`orden ${mxn(X)}: ${pct(1 - 0.1 / IVA - S.proc - S.fix / X)}`)
+}
+console.log('Piso competitivo (TCGplayer): 87.00%')

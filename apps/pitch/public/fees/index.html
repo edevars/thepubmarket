@@ -52,6 +52,10 @@
             <span class="fx-proof__cap">te quedarían de cada $100 (el vendedor paga a Stripe)</span>
           </div>
         </div>
+        <p class="fx-hero__foot" data-reveal style="--delay: 340ms">
+          Los dos casos cobran <strong>lo mismo</strong> — 10% de comisión. Lo único que cambia es
+          quién absorbe el costo de Stripe.
+        </p>
       </section>
 
       <!-- ═══ En 30 segundos ═══ -->
@@ -64,14 +68,16 @@
             <em>lo pagas tú</em>, no el vendedor.
           </li>
           <li>
-            <strong>Cambiar eso casi duplica tu ganancia.</strong> Si Stripe le cobra al vendedor
-            — como pasa en TCGplayer o eBay — tu ganancia sube de ~$3.60 a ~$6.60 por cada $100,
-            sin subir tu comisión ni encarecer nada al comprador.
+            <strong>Cambiar eso más que duplica tu ganancia.</strong> Si Stripe le cobra al
+            vendedor — como pasa en TCGplayer o eBay — pasas de ~$3.70 a ~$7.90 por cada $100,
+            cobrando exactamente la misma comisión y sin encarecer nada al comprador.
           </li>
           <li>
-            <strong>La recomendación:</strong> cobrar <em>10% en cartas sueltas</em>,
-            <em>6% en producto sellado</em>, mínimo <em>$15 por orden</em> — y que el vendedor
-            pague a Stripe. Al vendedor le quedan 87 de cada 100 pesos: lo mismo que en TCGplayer.
+            <strong>La recomendación:</strong> <em>10% parejo</em> a cartas sueltas y sellado,
+            mínimo <em>$15 por orden</em>, y crear las cuentas de vendedor como
+            <em>Standard</em> para que Stripe les cobre a ellos. Al vendedor le quedan 87 de cada
+            100 pesos: lo mismo que en TCGplayer. La alternativa conservadora es bajar el sellado
+            a 6% — cuesta ~$4,400 al mes y explicamos abajo cuándo vale la pena.
           </li>
         </ol>
       </section>
@@ -133,6 +139,24 @@
           dejan al mes y cuánto necesitas vender para pagarte un sueldo de $40,000.
         </p>
         <ul class="fx-hand" id="hand" role="list"></ul>
+
+        <div class="fx-callout">
+          <h3>El riesgo de cobrar 10% al sellado (P5)</h3>
+          <p>
+            Al vendedor le siguen quedando <strong>87.4 a 87.7 de cada 100 pesos</strong> en
+            sellado — pasa la prueba de TCGplayer. Pero el sellado no se compite por lo que le
+            queda al vendedor, <strong>se compite por el precio de venta al público</strong>: una
+            tienda que vende una caja de $6,000 casi a costo no tiene 10% que dar. Cobrar 10%
+            puede empujarlos a listar el sellado en otro lado, o a subirlo de precio aquí y
+            perder contra Amazon y Mercado Libre.
+          </p>
+          <p>
+            <strong>Cómo decidirlo sin adivinar:</strong> arranca con 10% parejo — más simple de
+            explicar y te da <strong>$4,400 más al mes</strong> en el escenario de tracción — y
+            baja el sellado a 6% solo si un vendedor ancla te dice que no le sale. Bajar una
+            comisión es fácil; subirla, no.
+          </p>
+        </div>
       </section>
 
       <!-- ═══ Tabla completa ═══ -->
@@ -200,7 +224,11 @@
                 </label>
                 <label class="fx-seg__opt">
                   <input type="radio" name="config" value="B" checked />
-                  <span>El vendedor<em>la propuesta</em></span>
+                  <span>El vendedor<em>cuenta Express</em></span>
+                </label>
+                <label class="fx-seg__opt">
+                  <input type="radio" name="config" value="C" />
+                  <span>El vendedor<em>cuenta Standard</em></span>
                 </label>
               </div>
             </fieldset>
@@ -303,37 +331,247 @@
         </div>
       </section>
 
-      <!-- ═══ Siguientes pasos ═══ -->
-      <section class="fx-section" aria-labelledby="dec-t">
-        <p class="kicker">Siguientes pasos</p>
-        <h2 class="headline" id="dec-t">Si eliges la recomendada, hay que hacer tres cosas</h2>
-        <ol class="fx-decisions">
+      <!-- ═══ Qué cuenta de Stripe va de cada lado ═══ -->
+      <section class="fx-section" aria-labelledby="cuentas-t">
+        <p class="kicker">Siguientes pasos · 1 de 3</p>
+        <h2 class="headline" id="cuentas-t">Qué cuenta de Stripe va de cada lado</h2>
+        <p class="lead">
+          Hay dos cuentas distintas en juego y se confunden fácil: la tuya (la plataforma) y la
+          de cada vendedor. La tuya se configura una sola vez; la del vendedor define quién paga
+          las comisiones y quién carga con los riesgos — y <strong>no se puede cambiar después
+          de crearla</strong>.
+        </p>
+
+        <h3 class="fx-subhead">Tu cuenta (el owner de la plataforma)</h3>
+        <ul class="fx-checklist">
           <li>
-            <h3>Cambiar la configuración de Stripe</h3>
-            <p>
-              Crear las cuentas de vendedor en la modalidad donde Stripe le cobra al vendedor.
-              Mientras estemos en modo de prueba, rehacer cuentas no cuesta nada; después del
-              lanzamiento costaría mucho. Es el momento de hacerlo.
-            </p>
+            <strong>Cuenta de Stripe normal, en México, a nombre de la entidad de The Pub
+            Market</strong> — persona moral o persona física con actividad empresarial. No es una
+            cuenta especial: es la cuenta estándar con <strong>Connect activado</strong> desde
+            el perfil de plataforma del dashboard.
           </li>
           <li>
-            <h3>Cobrar distinto según el producto</h3>
-            <p>
-              Hoy el sistema cobra 10% parejo a todo. Hay que separar: 10% a cartas sueltas, 6%
-              a producto sellado, y una comisión mínima de $15 por orden para que las cartas muy
-              baratas no salgan gratis.
-            </p>
+            <strong>Sube tu Constancia de Situación Fiscal y tu RFC.</strong> Sin eso, Stripe no
+            te emite el CFDI mensual de sus comisiones y no puedes acreditar ese IVA. Es un
+            trámite de cinco minutos que cuesta dinero real si se olvida.
           </li>
           <li>
-            <h3>Decidir cómo se anuncia el IVA</h3>
-            <p>
-              Este análisis asume que el 10% ya trae el IVA adentro (lo más claro para el
-              vendedor, estilo TCGplayer). Anunciarlo como “10% + IVA” nos deja más dinero, pero
-              al vendedor le quedan 85.6 de cada 100 — por debajo de TCGplayer.
-              <strong>Esto no es asesoría fiscal formal.</strong>
-            </p>
+            <strong>Tú eres quien tiene las llaves de la API</strong> y quien cobra la comisión.
+            El dinero de las ventas nunca pasa por tu cuenta: llega directo a la del vendedor y
+            de ahí Stripe te transfiere solo tu comisión. Eso es lo que te mantiene fuera de la
+            Ley Fintech y no cambia con ninguna de las opciones de abajo.
           </li>
-        </ol>
+          <li>
+            <strong>Solo si eliges cuentas Express:</strong> tienes que aceptar en el perfil de
+            plataforma que eres responsable de los saldos negativos de tus vendedores. Con
+            cuentas Standard ese riesgo lo carga Stripe.
+          </li>
+        </ul>
+
+        <h3 class="fx-subhead">La cuenta de cada vendedor</h3>
+        <p class="fx-note fx-note--lead">
+          Tres formas de crearla. Los montos son tu ganancia mensual con 10% parejo y ventas de
+          $332 mil:
+        </p>
+        <div class="fx-scroll" role="region" aria-label="Comparación de tipos de cuenta de vendedor" tabindex="0">
+          <table class="table fx-table fx-table--accounts">
+            <thead>
+              <tr>
+                <th scope="col">Tipo de cuenta</th>
+                <th scope="col">Standard <span class="fx-th-tag fx-th-tag--best">recomendada</span></th>
+                <th scope="col">Express “legacy”</th>
+                <th scope="col">Express como está hoy</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Cómo se crea</td>
+                <td class="fx-td-text"><code>type: 'standard'</code></td>
+                <td class="fx-td-text"><code>type: 'express'</code></td>
+                <td class="fx-td-text"><code>controller.stripe_dashboard.express</code></td>
+              </tr>
+              <tr>
+                <td>¿Quién paga la comisión de Stripe?</td>
+                <td class="fx-td-text">El vendedor</td>
+                <td class="fx-td-text">El vendedor</td>
+                <td class="fx-td-text fx-neg">Tú</td>
+              </tr>
+              <tr>
+                <td>Cuotas de Connect (tuyas)</td>
+                <td class="fx-td-text">Ninguna</td>
+                <td class="fx-td-text">$35/mes + $12 por pago, por vendedor</td>
+                <td class="fx-td-text">$35/mes + $12 por pago, por vendedor</td>
+              </tr>
+              <tr>
+                <td>¿Quién cubre saldos negativos?</td>
+                <td class="fx-td-text">Stripe</td>
+                <td class="fx-td-text fx-neg">Tú</td>
+                <td class="fx-td-text fx-neg">Tú</td>
+              </tr>
+              <tr>
+                <td>Contracargos y tarjetas extranjeras</td>
+                <td class="fx-td-text">Del vendedor</td>
+                <td class="fx-td-text">Del vendedor</td>
+                <td class="fx-td-text fx-neg">Tuyos</td>
+              </tr>
+              <tr>
+                <td>Qué ve el vendedor</td>
+                <td class="fx-td-text">Dashboard completo de Stripe, con su propio login</td>
+                <td class="fx-td-text">Dashboard Express (reducido), entras por liga que tú generas</td>
+                <td class="fx-td-text">Dashboard Express (reducido)</td>
+              </tr>
+              <tr>
+                <td>Fricción de alta</td>
+                <td class="fx-td-text">Mayor: el vendedor crea o conecta su propia cuenta Stripe</td>
+                <td class="fx-td-text">Menor: alta guiada por Stripe sin salir del flujo</td>
+                <td class="fx-td-text">Menor</td>
+              </tr>
+              <tr class="fx-best">
+                <td>Tu ganancia al mes (10% parejo, $332k)</td>
+                <td>$27,373 <small>(8.2%)</small></td>
+                <td>$26,253 <small>(7.9%)</small></td>
+                <td class="fx-neg">$12,431 <small>(3.7%)</small></td>
+              </tr>
+              <tr>
+                <td>Ventas/mes para pagarte $40k</td>
+                <td>$490,000</td>
+                <td>$510,000</td>
+                <td class="fx-neg">$1,040,000</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="fx-note">
+          <strong>Recomendación: Standard.</strong> Te deja más dinero, te quita el riesgo de
+          saldos negativos y es lo que Stripe recomienda para este tipo de cobro. El costo es
+          fricción de alta — el vendedor tiene que crear su propia cuenta de Stripe — y menos
+          control (tú no defines su calendario de pagos). Para un marketplace de vendedores
+          invitados, que son negocios reales con RFC, ese intercambio conviene. Si la fricción
+          resulta ser un problema al invitar tiendas, Express “legacy” es la segunda opción y
+          cuesta ~$1,100 al mes menos.
+        </p>
+        <p class="fx-warn">
+          El tipo de dashboard de una cuenta <strong>no se puede cambiar</strong>: para migrar
+          hay que crear cuentas nuevas. Hoy estamos en modo de prueba y rehacerlas no cuesta
+          nada. Después de invitar vendedores reales, sí.
+        </p>
+      </section>
+
+      <!-- ═══ Cobrar distinto según el producto ═══ -->
+      <section class="fx-section" aria-labelledby="cobro-t">
+        <p class="kicker">Siguientes pasos · 2 de 3</p>
+        <h2 class="headline" id="cobro-t">Ajustar cómo cobra el sistema</h2>
+        <ul class="fx-checklist">
+          <li>
+            <strong>Comisión mínima de $15 por orden.</strong> Hoy no hay mínimo: una carta de
+            $50 deja $5 de comisión, menos de lo que cuesta procesar la orden.
+          </li>
+          <li>
+            <strong>Comisión por categoría.</strong> Hoy el sistema cobra 10% parejo a todo. Si
+            te quedas con 10% parejo (P5) no hay nada que construir; si decides bajar el sellado
+            a 6%, hay que separar las dos tasas en el cobro.
+          </li>
+          <li>
+            <strong>Pagos semanales a los vendedores</strong> si te quedas en Express. Con pago
+            diario, los $12 por transferencia se comen la ganancia de los vendedores chicos. Con
+            cuentas Standard esto deja de importar.
+          </li>
+        </ul>
+      </section>
+
+      <!-- ═══ IVA ═══ -->
+      <section class="fx-section" aria-labelledby="iva-t">
+        <p class="kicker">Siguientes pasos · 3 de 3</p>
+        <h2 class="headline" id="iva-t">El IVA que hoy no aparece por ningún lado</h2>
+        <p class="lead">
+          El IVA no se ve en la plataforma, pero existe en cada venta y alguien lo va a pagar
+          después. Son <strong>tres IVAs distintos</strong> y conviene no confundirlos:
+        </p>
+
+        <div class="fx-ivas">
+          <div class="fx-iva">
+            <span class="fx-iva__who">Lo paga el vendedor</span>
+            <h3>El IVA de la carta</h3>
+            <p>
+              Una carta de $400 ya trae <strong>$55.17 de IVA</strong> adentro. Ese dinero no es
+              del vendedor: lo debe al SAT en su declaración del mes. Tú nunca lo tocas.
+            </p>
+          </div>
+          <div class="fx-iva">
+            <span class="fx-iva__who">Lo pagas tú</span>
+            <h3>El IVA de tu comisión</h3>
+            <p>
+              Tu comisión es un servicio que le prestas al vendedor, y lleva IVA. De un 10% sobre
+              $400 ($40), <strong>$5.52 son IVA</strong> que le debes al SAT. Por eso tu ingreso
+              real es 8.62%, no 10% — el modelo ya lo descuenta.
+            </p>
+          </div>
+          <div class="fx-iva">
+            <span class="fx-iva__who">Se recupera</span>
+            <h3>El IVA de Stripe</h3>
+            <p>
+              Stripe cobra 16% de IVA sobre sus comisiones y emite CFDI mensual. Quien pague esa
+              comisión acredita ese IVA: si migras a Standard o Express legacy, ese CFDI le
+              llega al vendedor, no a ti.
+            </p>
+          </div>
+        </div>
+
+        <h3 class="fx-subhead">Lo que tienes que hacer</h3>
+        <ul class="fx-checklist">
+          <li>
+            <strong>Mostrar el IVA en la plataforma.</strong> La ley obliga a las plataformas de
+            intermediación a publicar el IVA por separado, <em>o bien</em> publicar el precio con
+            la leyenda <strong>“IVA incluido”</strong>. Hoy la plataforma no hace ninguna de las
+            dos. La salida barata es la leyenda: un cambio de texto en la ficha de producto y el
+            checkout. <span class="fx-ref">LIVA art. 18-J-I</span>
+          </li>
+          <li>
+            <strong>Emitir CFDI al vendedor por tu comisión</strong>, cada mes, por cada
+            vendedor. Es lo que le permite a él acreditar ese IVA — y si no lo emites, tu
+            comisión le sale más cara de lo que cree.
+          </li>
+          <li>
+            <strong>Informar al SAT cada mes, aunque no cobres el dinero.</strong> Esta es la
+            que sorprende: la obligación de reportar aplica <em>“aun cuando no hayan efectuado el
+            cobro”</em>. A más tardar el día 10 hay que mandar, por cada vendedor: nombre o razón
+            social, RFC, CURP, domicilio fiscal, <strong>la institución financiera y la CLABE
+            donde recibe sus depósitos</strong>, y el monto de sus operaciones.
+            <span class="fx-ref">LIVA art. 18-J-III</span>
+          </li>
+          <li>
+            <strong>Pedirle al vendedor su CLABE y sus datos fiscales en el alta.</strong> Es un
+            hueco real: con Stripe Connect el vendedor registra su banco con Stripe, no contigo,
+            así que hoy no tienes ese dato — y sin él no puedes cumplir el reporte anterior.
+          </li>
+          <li>
+            <strong>Exigir RFC a todo vendedor.</strong> Es requisito del reporte, y sin RFC un
+            vendedor no acredita nada: el 87 de cada 100 pesos se le cae a ~76.
+            <span class="fx-ref">LIVA art. 18-K</span>
+          </li>
+        </ul>
+
+        <div class="fx-good">
+          <h3>La buena noticia: no tienes que retener impuestos</h3>
+          <p>
+            Las plataformas tipo Mercado Libre están obligadas a <strong>retener</strong> parte
+            del IVA y del ISR de sus vendedores y enterarlo al SAT. Esa obligación aplica
+            <em>“cuando cobren el precio y el impuesto al valor agregado”</em> por cuenta del
+            vendedor. The Pub Market nunca cobra el precio — el dinero va directo del comprador
+            al vendedor — así que <strong>la retención no se dispara</strong>. El mismo diseño
+            que te mantiene fuera de la Ley Fintech te ahorra convertirte en retenedor. Es un
+            argumento fuerte para no cambiar nunca a un esquema donde el dinero pase por ti.
+            <span class="fx-ref">LIVA art. 1-A BIS y 18-J-II</span>
+          </p>
+        </div>
+
+        <p class="fx-warn">
+          Esto es análisis, <strong>no asesoría fiscal formal</strong>. Dos cosas para llevarle a
+          un fiscalista antes de lanzar: (1) confirmar que la interpretación de “no cobramos el
+          precio” aplica a este diseño exacto de Stripe Connect; (2) la reforma fiscal 2026
+          subió las retenciones y las extendió a vendedores personas morales — hay que verificar
+          el texto vigente, porque el análisis de arriba parte del texto consolidado de la ley.
+        </p>
       </section>
 
       <!-- ═══ Caveats ═══ -->
@@ -343,6 +581,7 @@
           <li>No sabemos cuántos vendedores se irían si cobramos de más; usamos como límite que al vendedor le quede lo mismo que en TCGplayer (87 de cada 100 pesos).</li>
           <li>El tamaño típico de las órdenes y la mezcla de productos son estimaciones; se ajustan con 12 meses de ventas reales de The Pub Game Store.</li>
           <li>Las tarifas de Stripe México están verificadas a agosto 2026; hay que re-verificarlas antes del lanzamiento real.</li>
+          <li>El modelo cuenta el IVA como neutral: supone que tú y el vendedor están al corriente con el SAT y acreditan lo que pagan. Un vendedor sin RFC gana bastante menos de lo que muestra la página.</li>
           <li>Nada de esto es asesoría legal ni fiscal formal.</li>
         </ul>
         <p class="fx-footer__repro">
@@ -350,7 +589,9 @@
           <code>node scripts/fee-model.mjs</code>. Fuentes:
           <a href="https://stripe.com/mx/pricing" rel="noopener">tarifas de Stripe México</a> ·
           <a href="https://stripe.com/mx/connect/pricing" rel="noopener">tarifas de Stripe Connect</a> ·
-          <a href="https://docs.stripe.com/connect/direct-charges-fee-payer-behavior" rel="noopener">quién paga las comisiones (docs de Stripe)</a>
+          <a href="https://docs.stripe.com/connect/direct-charges-fee-payer-behavior" rel="noopener">quién paga las comisiones (docs de Stripe)</a> ·
+          <a href="https://docs.stripe.com/connect/migrate-to-controller-properties" rel="noopener">tipos de cuenta conectada</a> ·
+          <a href="https://www.diputados.gob.mx/LeyesBiblio/pdf/LIVA.pdf" rel="noopener">Ley del IVA (arts. 1-A BIS, 18-J, 18-K)</a>
           · <code>docs/negocio/pricing-y-comisiones.md</code>
         </p>
         <p class="fx-footer__brand">The Pub Market · documento interno · cifras ilustrativas</p>

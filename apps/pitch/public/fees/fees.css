@@ -164,6 +164,16 @@
   color: var(--muted);
   max-width: 24ch;
 }
+.fx-hero__foot {
+  margin-top: 18px;
+  font-size: 0.88rem;
+  color: var(--muted-2);
+  max-width: 60ch;
+}
+.fx-hero__foot strong {
+  color: var(--ink-2);
+  font-weight: 600;
+}
 .fx-proof__vs {
   align-self: center;
   font-family: var(--font-mono);
@@ -351,8 +361,8 @@
   padding-left: 0;
   margin-top: 44px;
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
-  gap: 14px;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 12px;
   align-items: stretch;
 }
 .fx-card {
@@ -542,7 +552,7 @@
 }
 .fx-seg {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(3, 1fr);
   gap: 8px;
 }
 .fx-seg__opt input {
@@ -808,6 +818,205 @@
   font-weight: 500;
 }
 
+/* ---------- subtítulos y listas de siguientes pasos ---------- */
+.fx-subhead {
+  margin-top: 38px;
+  margin-bottom: 14px;
+  font-size: 1.15rem;
+  color: var(--ink);
+}
+.fx-subhead::before {
+  content: "";
+  display: block;
+  width: 30px;
+  height: 1px;
+  margin-bottom: 12px;
+  background: linear-gradient(90deg, var(--cyan), transparent);
+}
+.fx-checklist {
+  list-style: none;
+  display: grid;
+  gap: 12px;
+  max-width: 82ch;
+}
+.fx-checklist li {
+  position: relative;
+  padding-left: 26px;
+  font-size: 0.92rem;
+  color: var(--muted);
+  line-height: 1.6;
+}
+.fx-checklist li::before {
+  content: "";
+  position: absolute;
+  left: 2px;
+  top: 8px;
+  width: 8px;
+  height: 8px;
+  background: var(--primary);
+  transform: rotate(45deg);
+}
+.fx-checklist strong {
+  color: var(--ink);
+  font-weight: 600;
+}
+.fx-checklist em {
+  color: var(--ink-2);
+  font-style: italic;
+}
+.fx-ref {
+  display: inline-block;
+  margin-left: 4px;
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.04em;
+  color: var(--faint);
+  white-space: nowrap;
+}
+
+/* callout neutro (riesgo del 10% parejo) */
+.fx-callout {
+  margin-top: 26px;
+  border: 1px solid var(--line);
+  border-left: 2px solid var(--cond-mp);
+  background: linear-gradient(160deg, var(--panel), var(--panel-2));
+  padding: 24px;
+}
+.fx-callout h3 {
+  font-size: 1.08rem;
+  margin-bottom: 10px;
+}
+.fx-callout p {
+  font-size: 0.9rem;
+  color: var(--muted);
+  line-height: 1.6;
+  max-width: 78ch;
+}
+.fx-callout p + p {
+  margin-top: 12px;
+}
+.fx-callout strong {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+/* aviso (irreversible / no es asesoría) */
+.fx-warn {
+  margin-top: 22px;
+  padding: 16px 20px;
+  border: 1px solid color-mix(in srgb, var(--cond-hp) 35%, var(--line));
+  border-left: 2px solid var(--cond-hp);
+  background: var(--panel-2);
+  font-size: 0.86rem;
+  color: var(--muted);
+  line-height: 1.6;
+  max-width: 80ch;
+}
+.fx-warn strong {
+  color: var(--ink);
+  font-weight: 600;
+}
+.fx-warn em {
+  color: var(--ink-2);
+  font-style: italic;
+}
+
+/* buena noticia (no hay retención) */
+.fx-good {
+  margin-top: 26px;
+  border: 1px solid var(--line);
+  border-left: 2px solid var(--cond-nm);
+  background: linear-gradient(160deg, var(--panel), var(--panel-2));
+  padding: 24px;
+}
+.fx-good h3 {
+  font-size: 1.08rem;
+  margin-bottom: 10px;
+  color: var(--cond-nm);
+}
+.fx-good p {
+  font-size: 0.9rem;
+  color: var(--muted);
+  line-height: 1.6;
+  max-width: 80ch;
+}
+.fx-good strong {
+  color: var(--ink);
+  font-weight: 600;
+}
+.fx-good em {
+  color: var(--ink-2);
+  font-style: italic;
+}
+
+/* nota que introduce una tabla */
+.fx-note--lead {
+  margin-top: 8px;
+  margin-bottom: 14px;
+  color: var(--muted);
+}
+
+/* tabla de tipos de cuenta: primera columna es la etiqueta de fila */
+.fx-table--accounts {
+  min-width: 780px;
+}
+.fx-table--accounts td:first-child {
+  color: var(--muted);
+  font-weight: 400;
+  width: 26%;
+}
+.fx-table--accounts td:not(:first-child) {
+  color: var(--ink-2);
+}
+.fx-th-tag {
+  display: inline-block;
+  margin-left: 6px;
+  font-size: 0.6rem;
+  letter-spacing: 0.14em;
+  padding: 2px 7px;
+  border: 1px solid;
+}
+.fx-th-tag--best {
+  color: var(--cond-nm);
+  border-color: color-mix(in srgb, var(--cond-nm) 45%, transparent);
+}
+
+/* los tres IVAs */
+.fx-ivas {
+  margin-top: 34px;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}
+.fx-iva {
+  background: linear-gradient(160deg, var(--panel), var(--panel-2));
+  border: 1px solid var(--line);
+  padding: 22px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.fx-iva__who {
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--cyan);
+}
+.fx-iva h3 {
+  font-size: 1.08rem;
+}
+.fx-iva p {
+  font-size: 0.86rem;
+  color: var(--muted);
+  line-height: 1.55;
+}
+.fx-iva strong {
+  color: var(--ink);
+  font-weight: 600;
+  font-family: var(--font-mono);
+}
+
 /* ---------- decisiones ---------- */
 .fx-decisions {
   margin-top: 40px;
@@ -932,7 +1141,11 @@
     grid-template-columns: 1fr 1fr;
   }
   .fx-decisions,
-  .fx-configs {
+  .fx-configs,
+  .fx-ivas {
+    grid-template-columns: 1fr;
+  }
+  .fx-seg {
     grid-template-columns: 1fr;
   }
   .fx-assume {
