@@ -10,7 +10,7 @@
  * Scryfall exige enviar User-Agent y Accept identificables en cada request.
  */
 
-import type { CardSnapshot } from '@thepubmarket/shared'
+import { type CardSnapshot, MTG_CARD_TYPES, type MtgAttributes } from '@thepubmarket/shared'
 import { CARD_CACHE_TTL_SECONDS, CatalogError, SEARCH_CACHE_TTL_SECONDS } from './catalog'
 import type { CatalogContext } from './catalog-providers'
 
@@ -22,8 +22,12 @@ const SCRYFALL_HEADERS: HeadersInit = {
   Accept: 'application/json',
 }
 
-const cardKey = (scryfallId: string) => `scryfall:card:${scryfallId}`
-const searchKey = (query: string) => `scryfall:search:${query.trim().toLowerCase()}`
+// :v2: (TASK-049): antes de esto `normalizeCard` guardaba `gameAttributes:
+// null` para todo MTG. Bump del prefijo para que los snapshots cacheados sin
+// atributos expiren solos en vez de servirse indefinidamente hasta su TTL
+// natural — no hace falta invalidar KV a mano.
+const cardKey = (scryfallId: string) => `scryfall:card:v2:${scryfallId}`
+const searchKey = (query: string) => `scryfall:search:v2:${query.trim().toLowerCase()}`
 
 /** Subconjunto de la respuesta de Scryfall que nos interesa. */
 interface ScryfallCard {
@@ -38,7 +42,13 @@ interface ScryfallCard {
   artist?: string
   finishes?: string[]
   image_uris?: { normal?: string }
-  card_faces?: Array<{ image_uris?: { normal?: string } }>
+  card_faces?: Array<{ image_uris?: { normal?: string }; colors?: string[]; type_line?: string }>
+  /** Ausente en cartas de doble cara: cada cara tiene la suya en `card_faces`. */
+  colors?: string[]
+  /** Ausente en cartas de doble cara: ver `card_faces[0].type_line`. */
+  type_line?: string
+  /** Valor de maná. Puede venir con decimales raros (ninguno hoy), por eso number. */
+  cmc?: number
 }
 
 interface ScryfallList {
@@ -51,6 +61,48 @@ export class ScryfallError extends CatalogError {
   constructor(message: string, status: number) {
     super(message, status)
     this.name = 'ScryfallError'
+  }
+}
+
+/**
+ * Deriva `MtgAttributes` de una carta cruda (TASK-049). Reglas:
+ *
+ * - `colors`: el campo top-level si viene y no está vacío; si no, la unión de
+ *   los colores de cada cara (`card_faces[].colors`); si sigue vacío (carta
+ *   colorless, p.ej. un artefacto), `['C']` — así el filtro de color nunca
+ *   necesita un caso especial de NULL/array vacío.
+ * - `types`: tokens de la línea de tipo de la cara FRONTAL (antes del '—'),
+ *   intersectados con MTG_CARD_TYPES (descarta supertipos como 'Legendary' y
+ *   subtipos como 'Human').
+ * - `typeLine`: la línea de tipo completa de la cara frontal, o null.
+ * - `manaValue`: `cmc` tal cual, o null si Scryfall no lo reporta.
+ */
+function buildMtgAttributes(raw: ScryfallCard): MtgAttributes {
+  const topColors = raw.colors ?? []
+  const colors =
+    topColors.length > 0
+      ? topColors
+      : (() => {
+          const union = new Set<string>()
+          for (const face of raw.card_faces ?? []) {
+            for (const c of face.colors ?? []) union.add(c)
+          }
+          return [...union]
+        })()
+
+  const typeLine = raw.type_line ?? raw.card_faces?.[0]?.type_line ?? null
+  const types = typeLine
+    ? (typeLine.split('—')[0]?.trim().split(/\s+/).filter(Boolean) ?? []).filter((t) =>
+        (MTG_CARD_TYPES as readonly string[]).includes(t),
+      )
+    : []
+
+  return {
+    tcg: 'mtg',
+    colors: colors.length > 0 ? colors : ['C'],
+    types,
+    typeLine,
+    manaValue: raw.cmc ?? null,
   }
 }
 
@@ -73,9 +125,7 @@ export function normalizeCard(raw: ScryfallCard): CardSnapshot {
     artist: raw.artist ?? null,
     finishes: raw.finishes ?? [],
     imageUrl,
-    // Scryfall no alimenta atributos de juego: los de MTG (maná, colores) no
-    // se muestran hoy y no se guardan.
-    gameAttributes: null,
+    gameAttributes: buildMtgAttributes(raw),
   }
 }
 

@@ -25,7 +25,10 @@ export function gameAttributeRows(
   attrs: CardGameAttributes | null | undefined,
   labels: GameAttributeLabels,
 ): Array<[string, string]> {
-  if (!attrs) return []
+  // TASK-049: CardGameAttributes ahora es una unión (Riftbound | MTG). Esta
+  // tabla solo pinta el bloque de Riftbound; MTG no tiene fila propia aquí
+  // todavía (colores/tipos se muestran aparte en el detalle vía card.card).
+  if (attrs?.tcg !== 'riftbound') return []
 
   const rows: Array<[string, string]> = []
   // El supertipo ('Champion') califica al tipo: se muestran juntos.

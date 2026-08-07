@@ -229,10 +229,26 @@ Decisiones que conviene no re-litigar:
 
 ### Atributos propios del juego
 
-`gameAttributes` es una **unión discriminada por `tcg`**. Hoy solo Riftbound
-aporta datos (`type`, `supertype`, `domains[]`, `energy`, `might`, `power`);
-Scryfall devuelve `null`. (`power` viene en null desde dotgg, que no expone el
-costo de runas; `artist` tampoco lo expone.)
+`gameAttributes` es una **unión discriminada por `tcg`**: `RiftboundAttributes`
+(`type`, `supertype`, `domains[]`, `energy`, `might`, `power` — `power` viene en
+null desde dotgg, que no expone el costo de runas; `artist` tampoco lo expone) y,
+desde TASK-049, `MtgAttributes` (`colors[]`, `types[]`, `typeLine`, `manaValue`),
+que `normalizeCard` (`apps/api/src/lib/scryfall.ts`) deriva de la respuesta cruda
+de Scryfall en cada alta/búsqueda:
+
+- `colors`: el campo top-level de Scryfall si viene no vacío; si no, la unión de
+  `card_faces[].colors`; si sigue vacío (carta colorless), `['C']` — así el
+  filtro de color nunca necesita un caso especial de NULL/array vacío.
+- `types`: tokens de la línea de tipo de la cara **frontal** (antes del `—`)
+  intersectados con `MTG_CARD_TYPES`, así que una carta con dos tipos a la vez
+  (`'Artifact Creature'`) produce `['Artifact', 'Creature']`.
+- `manaValue`: `cmc` de Scryfall tal cual, o `null` si no lo reporta.
+
+Publicaciones creadas antes de TASK-049 (o snapshots viejos cacheados en KV)
+tienen `gameAttributes: null` para MTG — es un estado legítimo, no un bug; el
+cache de Scryfall usa el prefijo `scryfall:card:v2:`/`scryfall:search:v2:`
+precisamente para que esos snapshots sin atributos expiren solos en vez de
+servirse indefinidamente.
 
 Se persisten como blob JSON en la columna aditiva `inventory.card_attributes`
 (migración `0012`). Se descartaron a propósito:
@@ -266,10 +282,45 @@ cartas"), mientras que la web ignora un `?game=` desconocido y cae al catálogo
 completo (un enlace viejo no debe romperse).
 
 Encima de eso, `GET /catalog` acepta filtros específicos del juego
-(`apps/api/src/lib/catalog-filters.ts`, TASK-039), que para Riftbound se validan
-contra los vocabularios `RIFTBOUND_*` de `@thepubmarket/shared` — la lista de
-valores que realmente aparecen en el catálogo importado. Salvo `rarity`, que ya
-es columna, se resuelven contra el JSON de `inventory.card_attributes`.
+(`apps/api/src/lib/catalog-filters.ts`, TASK-039; MTG desde TASK-049), que se
+validan contra un vocabulario cerrado por juego: `RIFTBOUND_*` de
+`@thepubmarket/shared` para Riftbound (la lista de valores que realmente
+aparecen en el catálogo importado) y `MTG_COLORS` / `MTG_CARD_TYPES` /
+`MTG_RARITIES` para MTG (enums estables del reglamento, no un muestreo). Salvo
+`rarity`, que ya es columna, se resuelven contra el JSON de
+`inventory.card_attributes`. `set` es aparte: un param genérico de nivel
+superior (`inventory.set_code` exacto) sin vocabulario cerrado, porque los sets
+nuevos entran constantemente vía import.
+
+**Registro por juego (`GAME_FILTERS`) y superposición de nombres.** Cada juego
+declara su lista de `FilterSpec` bajo su clave en `GAME_FILTERS: Partial<Record<Tcg,
+FilterSpec[]>>`. MTG y Riftbound **comparten los nombres** `type` y `rarity`
+(cada uno con su propio path/columna y vocabulario) — MTG necesita `type` como
+`jsonArray` (una carta puede tener varios tipos, `'Artifact Creature'`), a
+diferencia del `type` `jsonScalar` de Riftbound (un tipo por carta).
+
+Para resolver esta superposición, `ALL_GAME_PARAMS` es un
+`Map<string, ParamRegistration>` (`{ firstTcg: Tcg; allTcgs: Tcg[] }`), no
+`Map<string, Tcg>`. Con un solo `Tcg` por param, el `flatMap` original dejaba
+que el último juego en registrar un nombre (`mtg`, declarado después de
+`riftbound`) pisara en silencio el `requiresTcg` de Riftbound en el 400
+`filter_requires_tcg` — un bug real detectado antes de shippear TASK-049.
+
+Invariante que garantiza el `Map<string, ParamRegistration>`: **un param
+válido para el `tcg` activo nunca 400ea solo porque otro juego también lo
+registra.** El spec efectivo para resolver un filtro sale siempre de
+`GAME_FILTERS[tcg]` (el juego de la request), nunca de qué otro juego
+comparte el nombre — `ALL_GAME_PARAMS` solo se consulta para decidir si un
+param *ausente* del juego activo está registrado en absoluto (→
+`filter_requires_tcg`) o no existe para ningún juego (→ se ignora).
+
+Cuando un param sin `tcg` (o con un `tcg` que no lo registra) dispara
+`filter_requires_tcg`, el campo `requiresTcg` de la respuesta usa
+`firstTcg` — el primer juego que lo registró, por orden de declaración en
+`GAME_FILTERS` (hoy: `riftbound` antes que `mtg`, así que `type`/`rarity` sin
+`tcg` reportan `requiresTcg: 'riftbound'`). Es una ambigüedad **documentada,
+no resuelta**: no hay forma de inferir cuál de los dos juegos "quiso decir" el
+cliente sin `tcg`, y no vale la pena una heurística frágil para adivinarlo.
 
 ---
 
