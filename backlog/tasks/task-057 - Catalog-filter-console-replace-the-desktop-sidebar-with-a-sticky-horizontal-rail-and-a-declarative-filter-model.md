@@ -7,7 +7,7 @@ status: Done
 assignee:
   - '@claude'
 created_date: '2026-08-07 03:13'
-updated_date: '2026-08-07 03:54'
+updated_date: '2026-08-07 04:19'
 labels:
   - 'epic:catalog-filter-console'
   - web
@@ -192,6 +192,46 @@ con Claude in Chrome a 1512px.
 **Hueco de datos preexistente (NO es regresión):** los 200 items de MTG en producción tienen `gameAttributes: null`, así que sus facetas propias (color/tipo/rareza) cuentan 0 y los 6 pips de maná salen deshabilitados. La regla `count === 0 && !selected` es la misma que ya aplicaba el sidebar anterior, así que el comportamiento no cambió — pero significa que hoy la zona de identidad de MTG está muerta en prod. Se arregla repoblando los snapshots de inventario de MTG con el normalizador de Scryfall de TASK-049. Riftbound sí trae atributos (catálogo propio en D1) y funciona completo.
 
 **No verificado:** el breakpoint mobile. La extensión no pudo redimensionar la ventana (`innerWidth` se quedó en 1512px pese a varios intentos), así que el bottom sheet y la fila de pips con scroll horizontal siguen sin prueba visual. Su marcado sí está en el HTML servido y el botón «Filtros (N)» existe con `display:none` en desktop, como corresponde.
+
+## Cierre: el filtro de colores de MTG (backfill de datos, sin cambio de código)
+
+El usuario reportó que todos los filtros funcionaban salvo el de colores de
+Magic — exactamente el hueco de datos que la verificación anterior había
+dejado señalado. No era la UI: las 506 filas de inventario de MTG en producción
+tenían `card_attributes = NULL` porque se cargaron antes de TASK-049, así que
+los conteos de color/tipo/rareza daban 0 y la regla `count === 0 && !selected`
+deshabilitaba los seis pips.
+
+No hizo falta escribir nada: `scripts/backfill-mtg-attributes.mjs` (TASK-050) ya
+existía para justo esto y nunca se había corrido contra producción. Ejecutado
+con `API_URL` del Worker de prod y la `ADMIN_KEY` de `apps/api/.dev.vars`:
+**507 filas actualizadas, 0 sin resolver**. `GET /admin/inventory/mtg-missing-attributes`
+devuelve 0 en la corrida siguiente, que es la señal de idempotencia que el
+propio script documenta.
+
+Verificado en vivo tras el backfill: la API devuelve `colors`/`types`/`typeLine`/
+`manaValue` poblados, los 6 pips quedan `disabled: false`, y tocar el rojo da
+`?game=mtg&color=R` con 200→17 resultados, todos rojos.
+
+## Mobile, por fin verificado
+
+La ventana sí quedó en 406px en esta sesión, así que el breakpoint que estaba
+pendiente ya está cubierto:
+
+- **Riel**: solo la fila de pips + botón «FILTROS (N)»; los triggers de
+  carta/oferta ocultos, como corresponde a `hidden md:flex`.
+- **Pestañas de juego**: scroll horizontal sin cortar «Todos».
+- **Bottom sheet**: encabezado propio con `TITLE_ID`, badge de conteo, secciones
+  apiladas (Color con pips en variante `wrap` y conteos, Tipo, Rareza con sus
+  rombos de color, Set, Condición, Idioma, Precio, Foil como `role="switch"`) y
+  CTA «Ver 17 resultados» fijo abajo.
+- **Rampa de condición a 406px**: NM 13 · LP 3 · MP 1 · HP 0 · DMG 0, sin
+  recorte — el `min-w-[248px]` cabe de sobra.
+- **Autoexclusión visible**: con el rojo activo, los conteos de Color siguen
+  mostrando el total de cada color (22/21/34/17/36/80) mientras Tipo y Rareza sí
+  respetan el filtro. Es el comportamiento diseñado en TASK-053.
+
+Con esto no queda nada de TASK-057 sin verificar en producción.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
