@@ -31,7 +31,12 @@ const FETCH_LIMIT = 200
 const USE_MOCKS = process.env.NEXT_PUBLIC_USE_MOCKS === 'true'
 
 export interface CatalogFilters {
-  /** Búsqueda por nombre (substring, case-insensitive). */
+  /**
+   * Búsqueda por nombre (substring, case-insensitive). Se aplica en el
+   * SERVIDOR (`GET /catalog?q=`, LIKE sobre el título) — ver `loadActive`. El
+   * filtro cliente de `applyFilters` se conserva porque los mocks y las listas
+   * ya cargadas también lo necesitan; sobre datos reales es idempotente.
+   */
   q?: string
   /**
    * Juego. Se aplica en el SERVIDOR (`GET /catalog?tcg=`), no aquí: si se
@@ -75,11 +80,27 @@ export function applyFilters(items: InventoryItem[], f: CatalogFilters): Invento
   })
 }
 
-/** Carga el inventario activo (API real o mocks según el toggle). */
-async function loadActive(filters: Pick<CatalogFilters, 'tcg' | 'game'>): Promise<InventoryItem[]> {
+/**
+ * Carga el inventario activo (API real o mocks según el toggle).
+ *
+ * `q` viaja al SERVIDOR (TASK-059). Antes no lo hacía y el término se aplicaba
+ * en cliente sobre la página ya truncada, así que buscar solo encontraba algo
+ * dentro de los primeros `FETCH_LIMIT` items por título: con 502 singles de
+ * Riftbound, la ventana buscable iba de "Affectionate Poro" a "Jayce - Man of
+ * Progress" y "Rengar" no existía para el buscador. A diferencia de las
+ * facetas de juego —que se quedan en cliente a propósito, porque el motor de
+ * conteo con autoexclusión necesita ver los items de los valores NO
+ * seleccionados— el término de búsqueda NO alimenta ningún conteo por valor:
+ * acota el universo entero, así que filtrarlo en la base es correcto y es la
+ * única forma de alcanzar el catálogo completo.
+ */
+async function loadActive(
+  filters: Pick<CatalogFilters, 'tcg' | 'game' | 'q'>,
+): Promise<InventoryItem[]> {
   if (USE_MOCKS) return MOCK_LISTINGS.filter((i) => i.status === 'active')
   const { items } = await fetchCatalog({
     limit: FETCH_LIMIT,
+    q: filters.q,
     tcg: filters.tcg,
     gameFilters: filters.game,
   })

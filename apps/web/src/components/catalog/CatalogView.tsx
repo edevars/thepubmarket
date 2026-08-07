@@ -203,9 +203,16 @@ export function CatalogView({
    * el router interno de Next esté sincronizado con mutaciones directas de
    * `history` hechas por `writeLocalFilters`.
    */
-  function buildUrl(nextGame: Tcg | undefined, nextGameFilters: Record<string, string[]>): string {
+  function buildUrl(
+    nextGame: Tcg | undefined,
+    nextGameFilters: Record<string, string[]>,
+    /** `q` destino. Explícito porque quitar la búsqueda tiene que navegar con
+     * el valor nuevo, y el `setQ('')` que lo acompaña no se ve todavía en este
+     * render. */
+    nextQuery: string = q,
+  ): string {
     const params = new URLSearchParams()
-    if (q.trim()) params.set('q', q.trim())
+    if (nextQuery.trim()) params.set('q', nextQuery.trim())
     if (nextGame) {
       params.set('game', nextGame)
       for (const facet of facetsFor(nextGame)) {
@@ -455,7 +462,22 @@ export function CatalogView({
           toggleGameFilterValue(facet.param, value) /* toggle = quitar: ya está seleccionado */,
       })),
     ),
-    ...(q ? [{ key: 'q', label: `"${q}"`, onRemove: () => setQ('') }] : []),
+    // Quitar la búsqueda NAVEGA, no solo limpia estado (TASK-059): desde que
+    // `q` lo aplica el servidor, `items` ya viene acotado al término, así que
+    // un `setQ('')` a secas dejaría al comprador viendo el set reducido sin
+    // ningún filtro visible que lo explicara.
+    ...(q
+      ? [
+          {
+            key: 'q',
+            label: `"${q}"`,
+            onRemove: () => {
+              setQ('')
+              router.push(buildUrl(activeGame, gameFilters, ''), { scroll: false })
+            },
+          },
+        ]
+      : []),
   ]
 
   const resultLine =

@@ -350,7 +350,29 @@ facetas en cliente como sus conteos por valor quedan truncados a esos
 primeros 200 items — no es un bug, es la misma limitación de "una sola
 página" que ya aplicaba antes de TASK-053, solo que ahora también afecta a
 las facetas de juego y no solo al listado. Se resuelve cuando llegue
-paginación/búsqueda real (Fase 5).
+paginación real (Fase 5).
+
+**La búsqueda `q` es la excepción, y por una razón (TASK-059).** Va al
+SERVIDOR (`GET /catalog?q=`, `LIKE` sobre el título), no a `applyFilters` en
+cliente. Aplicarla en cliente sobre la página ya truncada convertía el
+buscador en "busca dentro de los primeros 200 items por título": con 502
+singles de Riftbound la ventana buscable iba de *Affectionate Poro* a *Jayce -
+Man of Progress*, y buscar "Rengar" no devolvía nada aunque hubiera cinco
+publicados y activos. Más de la mitad del inventario era imposible de
+encontrar por nombre.
+
+La diferencia con las facetas no es arbitraria: una faceta alimenta conteos
+por valor, y esos conteos necesitan ver los items de los valores NO
+seleccionados para poder decir "cuántos habría si activaras este otro valor".
+`q` no alimenta ningún conteo — acota el universo entero — así que filtrarlo
+en la base es correcto y además es lo único que alcanza el catálogo completo.
+Los conteos de facetas con una búsqueda activa se calculan sobre los
+resultados de esa búsqueda, que es lo que el comprador espera.
+
+Consecuencia de diseño: como el set que llega ya viene acotado por `q`, quitar
+la búsqueda tiene que NAVEGAR (`CatalogView`, chip `q`), no solo limpiar
+estado local. Si solo limpiara el estado, el comprador se quedaría viendo el
+set reducido sin ningún filtro visible que lo explicara.
 
 ### La consola de filtros y el modelo declarativo (TASK-057)
 
