@@ -43,6 +43,9 @@ CHECKPOINT.md
 # Claude Code plugin skill cache (auto-downloaded, not project source)
 .agents/
 
+# Worktrees efímeros que crea Claude Code para subagentes aislados
+.claude/worktrees/
+
 # TypeScript
 *.tsbuildinfo
 
