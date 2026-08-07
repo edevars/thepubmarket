@@ -6,7 +6,7 @@ title: >-
 status: In Progress
 assignee: []
 created_date: '2026-08-06 14:24'
-updated_date: '2026-08-07 00:44'
+updated_date: '2026-08-07 01:00'
 labels:
   - api
   - catalog
@@ -38,9 +38,17 @@ Scope is the API catalog layer; no payment or fund-flow code is involved.
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 A cached snapshot whose shape does not match the current CardSnapshot contract is never used: it is treated as a cache miss and refetched from the source
-- [ ] #2 createListing rejects a snapshot without a catalogId instead of inserting a row, returning a typed error; no code path can write inventory.catalog_id as NULL for a supported tcg
-- [ ] #3 Unit tests cover both cases: a legacy-shaped KV entry (scryfallId, no tcg/catalogId) and a snapshot missing catalogId
-- [ ] #4 The 7 pre-existing production inventory rows with catalog_id IS NULL are audited and resolved (backfilled from their set_code/collector_number, or deactivated if unresolvable), and the outcome is recorded in the task notes
-- [ ] #5 Typecheck, Biome and vitest are green
+- [x] #1 A cached snapshot whose shape does not match the current CardSnapshot contract is never used: it is treated as a cache miss and refetched from the source
+- [x] #2 createListing rejects a snapshot without a catalogId instead of inserting a row, returning a typed error; no code path can write inventory.catalog_id as NULL for a supported tcg
+- [x] #3 Unit tests cover both cases: a legacy-shaped KV entry (scryfallId, no tcg/catalogId) and a snapshot missing catalogId
+- [x] #4 The 7 pre-existing production inventory rows with catalog_id IS NULL are audited and resolved (backfilled from their set_code/collector_number, or deactivated if unresolvable), and the outcome is recorded in the task notes
+- [x] #5 Typecheck, Biome and vitest are green
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Prod cleanup (AC#4): audited all 7 rows with catalog_id IS NULL via `wrangler d1 execute thepubmarket-db --remote`. All 7 were legacy MTG rows created before the catalog_id column existed (not fresh KV-cache-bug writes) — ids: 30fb9202-9452-455c-8fa8-9fb6dbcd2e8d (Ragavan, Nimble Pilferer, mh2/138), 8ea9d63b-e7c2-4c10-ba18-95235ed6673c (Sheoldred, the Apocalypse, dmu/107), 8db7414f-8b1a-4506-b7f0-75ceb03cd8d9 (Path to Exile, msc/141), ea0c6237-4b9b-4e25-9a97-90dc0b579dcd (Teferi, Hero of Dominaria, dom/207), 7f0a87a4-0008-408f-bc77-7b9e2dbf1a76 (Mother of Runes, clb/702), 054541b6-1b0c-41c4-bb86-c75f6b518349 (Skullclamp, c20/251), 4f7ef07f-b0cf-42e2-8b4c-99e995928551 (Dark Ritual, msc/793). Each row's scryfall_id was resolved against api.scryfall.com and set/collector_number matched the D1 row exactly, so all 7 were backfilled (not deactivated) via per-row `UPDATE inventory SET catalog_id = scryfall_id WHERE id = ...`. Verified afterward: `SELECT count(*) FROM inventory WHERE catalog_id IS NULL` = 0.
+
+Fix: apps/api/src/lib/scryfall.ts adds isValidCardSnapshot() gating getCardById and searchCards KV reads — a shape mismatch (e.g. legacy scryfallId-only entries) is treated as a cache miss and refetched. apps/api/src/lib/inventory.ts createListing now returns a typed error (invalid_catalog_snapshot, 502) instead of inserting when catalogId is missing. Tests in scryfall.test.ts and inventory.test.ts cover both cases. Verified via task-verifier: typecheck/lint/vitest all green, no fund-flow code touched.
+<!-- SECTION:NOTES:END -->
