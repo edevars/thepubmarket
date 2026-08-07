@@ -3,10 +3,11 @@ id: TASK-050
 title: >-
   Backfill MTG card attributes from Scryfall for existing inventory (local +
   prod)
-status: To Do
+status: In Progress
 assignee:
   - '@claude'
 created_date: '2026-08-07 00:01'
+updated_date: '2026-08-07 00:26'
 labels:
   - 'epic:catalog-visual-refactor'
   - api
@@ -46,3 +47,18 @@ Depends on TASK-049 (MtgAttributes type, attribute derivation rules). Does not b
 - [ ] #3 Rows with unresolvable Scryfall ids are reported in the script output, not silently skipped
 - [ ] #4 Prod run command is documented (script header or docs); api tests, typecheck, and biome are green
 <!-- AC:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+## Plan (TASK-049 merged: MtgAttributes type, buildMtgAttributes derivation rules in apps/api/src/lib/scryfall.ts, card_attributes column already exists)
+
+1. `apps/api/src/routes/admin.ts`: study existing admin endpoints (auth pattern, admin-key guard) and add:
+   - `GET /admin/inventory/mtg-missing-attributes?limit=N` — rows where `tcg='mtg' AND (card_attributes IS NULL OR not valid MtgAttributes shape)`. Returns id + scryfall/catalog identifier needed to re-resolve the card.
+   - `POST /admin/inventory/attributes` — batch `[{id, gameAttributes}]`, validates `tcg:'mtg'` shape server-side, updates `card_attributes` column.
+2. `scripts/backfill-mtg-attributes.mjs` modeled on `scripts/import-riftbound.mjs`: API_URL/ADMIN_KEY env vars, pulls missing rows via the GET endpoint, resolves cards via Scryfall `POST /cards/collection` (75 identifiers/request, ~150ms throttle), derives MtgAttributes using the same rules as TASK-049's `buildMtgAttributes` (reuse the logic — check if it's exported/importable, else duplicate the small pure mapper standalone like import-riftbound.mjs does), posts batches via the POST endpoint. Idempotent by construction (GET only returns missing rows) — re-running converges to 0.
+3. Document the prod one-liner in the script header.
+4. No schema change — card_attributes column already exists.
+
+Executed by cloudflare-worker-dev subagent in an isolated worktree on branch task/TASK-050; verified by task-verifier before merge (verify against local D1, not prod).
+<!-- SECTION:PLAN:END -->
