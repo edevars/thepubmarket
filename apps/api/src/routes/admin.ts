@@ -24,7 +24,15 @@ import {
   sellers,
   users,
 } from '@thepubmarket/db'
-import { ANCHOR_SELLER_ID, CONDITIONS, FINISHES, TCGS, type Tcg } from '@thepubmarket/shared'
+import {
+  ANCHOR_SELLER_ID,
+  CONDITIONS,
+  FINISHES,
+  MTG_CARD_TYPES,
+  MTG_COLORS,
+  TCGS,
+  type Tcg,
+} from '@thepubmarket/shared'
 import { and, desc, eq, sql } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { z } from 'zod'
@@ -460,4 +468,106 @@ admin.post('/catalog/cards', async (c) => {
     })),
     summary,
   })
+})
+
+/**
+ * Backfill de atributos de MTG (TASK-050). Cada single de MTG cargado antes de
+ * TASK-049 quedó con `card_attributes = NULL` — el pipeline de alta no los
+ * derivaba todavía. Estos dos endpoints son la mitad de lectura/escritura que
+ * usa `scripts/backfill-mtg-attributes.mjs` para reconstruirlos desde Scryfall,
+ * en local y en prod contra el mismo camino (misma auth, misma validación).
+ *
+ * `SAFE_MTG_ATTRS` replica el patrón de `catalog-filters.ts`: `json_extract`
+ * sobre un blob inválido lanza en SQLite, así que primero se valida con
+ * `json_valid` y solo entonces se extrae. Una fila con `card_attributes`
+ * corrupto (no JSON, o JSON sin `colors`) cuenta como "faltante" igual que
+ * NULL — ambas dejan a la carta fuera de los filtros de color/tipo.
+ */
+const SAFE_MTG_ATTRS = sql`iif(json_valid(${inventory.cardAttributes}), ${inventory.cardAttributes}, NULL)`
+const missingAttributesQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(500).default(100),
+})
+
+/**
+ * GET /admin/inventory/mtg-missing-attributes?limit= — filas de MTG sin
+ * `card_attributes` válido. Devuelve el id de inventario y el id de la
+ * impresión en Scryfall (`catalogId`, con fallback a `scryfallId` legacy vía
+ * `catalogIdOf` — ver lib/inventory.ts) para que el script pueda resolverla
+ * de nuevo contra `POST /cards/collection`.
+ */
+admin.get('/inventory/mtg-missing-attributes', async (c) => {
+  const parsed = missingAttributesQuerySchema.safeParse({ limit: c.req.query('limit') })
+  if (!parsed.success) {
+    return c.json({ error: 'invalid_query', issues: parsed.error.issues }, 400)
+  }
+  const db = c.get('db')
+
+  const rows = await db
+    .select({ id: inventory.id, catalogId: inventory.catalogId, scryfallId: inventory.scryfallId })
+    .from(inventory)
+    .where(
+      and(
+        eq(inventory.tcg, 'mtg'),
+        sql`(${inventory.cardAttributes} IS NULL OR json_extract(${SAFE_MTG_ATTRS}, '$.colors') IS NULL)`,
+      ),
+    )
+    .orderBy(inventory.createdAt)
+    .limit(parsed.data.limit)
+    .all()
+
+  return c.json({
+    items: rows.map((row) => ({
+      id: row.id,
+      scryfallId: row.catalogId ?? row.scryfallId ?? null,
+    })),
+  })
+})
+
+/** Forma de `MtgAttributes` (@thepubmarket/shared) — ver TASK-049. */
+const mtgAttributesSchema = z.object({
+  tcg: z.literal('mtg'),
+  colors: z.array(z.enum([...MTG_COLORS] as [string, ...string[]])).min(1),
+  types: z.array(z.enum([...MTG_CARD_TYPES] as [string, ...string[]])),
+  typeLine: z.string().min(1).nullable(),
+  manaValue: z.number().nullable(),
+})
+
+const attributesBatchSchema = z
+  .array(
+    z.object({
+      id: z.string().min(1).max(64),
+      gameAttributes: mtgAttributesSchema,
+    }),
+  )
+  .min(1)
+  .max(200)
+
+/**
+ * POST /admin/inventory/attributes — aplica un batch de `card_attributes`
+ * resueltos por el script de backfill. Todo o nada: si un solo item del batch
+ * no tiene forma de `MtgAttributes`, se rechaza el batch completo (400) antes
+ * de tocar la base — mejor que aplicar parcial y dejar al script sin saber qué
+ * fila sí quedó actualizada.
+ */
+admin.post('/inventory/attributes', async (c) => {
+  const parsed = attributesBatchSchema.safeParse(await c.req.json().catch(() => null))
+  if (!parsed.success) {
+    return c.json({ error: 'invalid_body', issues: parsed.error.issues }, 400)
+  }
+  const items = parsed.data
+  const db = c.get('db')
+
+  // db.batch exige tupla no vacía; zod ya garantiza items.min(1).
+  const [first, ...rest] = items.map((item) =>
+    db
+      .update(inventory)
+      .set({ cardAttributes: JSON.stringify(item.gameAttributes), updatedAt: sql`(unixepoch())` })
+      .where(and(eq(inventory.id, item.id), eq(inventory.tcg, 'mtg')))
+      .returning({ id: inventory.id }),
+  )
+  const results = first ? await db.batch([first, ...rest]) : []
+  const updatedIds = new Set(results.flat().map((r) => r.id))
+  const notFound = items.map((i) => i.id).filter((id) => !updatedIds.has(id))
+
+  return c.json({ updated: updatedIds.size, notFound })
 })
