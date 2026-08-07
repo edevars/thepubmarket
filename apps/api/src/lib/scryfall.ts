@@ -65,6 +65,29 @@ export class ScryfallError extends CatalogError {
 }
 
 /**
+ * Valida que un valor leído de KV tenga la forma actual de `CardSnapshot`
+ * antes de confiar en él (TASK-046). El contrato ha cambiado con el tiempo
+ * (p.ej. `scryfallId` → `catalogId`, se agregó `tcg`) y KV puede seguir
+ * sirviendo una entrada vieja hasta por 30 días. Un snapshot con forma
+ * desactualizada NO debe tratarse como hit: se descarta y se refetchea de la
+ * fuente. `card.finishes` puede venir vacío legítimamente, así que solo se
+ * valida que sea un array.
+ */
+function isValidCardSnapshot(value: unknown): value is CardSnapshot {
+  if (!value || typeof value !== 'object') return false
+  const v = value as Record<string, unknown>
+  return (
+    typeof v.tcg === 'string' &&
+    typeof v.catalogId === 'string' &&
+    v.catalogId.length > 0 &&
+    typeof v.name === 'string' &&
+    typeof v.setCode === 'string' &&
+    typeof v.collectorNumber === 'string' &&
+    Array.isArray(v.finishes)
+  )
+}
+
+/**
  * Deriva `MtgAttributes` de una carta cruda (TASK-049). Reglas:
  *
  * - `colors`: el campo top-level si viene y no está vacío; si no, la unión de
@@ -138,7 +161,9 @@ export async function getCardById(scryfallId: string, ctx: CatalogContext): Prom
   // provider local (catalog-db).
   const kv = ctx.kv
   const cached = await kv.get<CardSnapshot>(cardKey(scryfallId), 'json')
-  if (cached) return cached
+  // Una entrada con forma vieja (contrato cambiado desde que se cacheó) se
+  // trata como cache miss: nunca se sirve un snapshot a medio migrar.
+  if (cached && isValidCardSnapshot(cached)) return cached
 
   const res = await fetch(`${SCRYFALL_BASE}/cards/${encodeURIComponent(scryfallId)}`, {
     headers: SCRYFALL_HEADERS,
@@ -165,7 +190,9 @@ export async function searchCards(query: string, ctx: CatalogContext): Promise<C
   if (!trimmed) return []
 
   const cached = await kv.get<CardSnapshot[]>(searchKey(trimmed), 'json')
-  if (cached) return cached
+  // Mismo criterio que `getCardById`: una lista con algún elemento de forma
+  // vieja se descarta entera antes que servir snapshots inconsistentes.
+  if (cached && Array.isArray(cached) && cached.every(isValidCardSnapshot)) return cached
 
   const url = new URL(`${SCRYFALL_BASE}/cards/search`)
   url.searchParams.set('q', trimmed)

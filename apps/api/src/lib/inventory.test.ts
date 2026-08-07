@@ -217,6 +217,27 @@ describe('createListing', () => {
     expect(mockedGetCardById).not.toHaveBeenCalled()
   })
 
+  it('rejects a snapshot without catalogId instead of inserting a row with NULL catalog_id (TASK-046)', async () => {
+    // Guarda contra un snapshot mal formado (p.ej. cache de KV con contrato
+    // viejo) que llegaría con catalogId vacío/undefined.
+    mockedGetCardById.mockResolvedValue({ ...MTG_SNAPSHOT, catalogId: '' })
+    const captured: Record<string, unknown>[] = []
+
+    const result = await createListing(
+      ctxWith(fakeDb(captured)),
+      { tcg: 'mtg', catalogId: MTG_SNAPSHOT.catalogId, ...OFFER },
+      'seller-1',
+    )
+
+    expect(result).toMatchObject({
+      ok: false,
+      error: 'invalid_catalog_snapshot',
+      status: 502,
+      extra: { tcg: 'mtg' },
+    })
+    expect(captured).toHaveLength(0)
+  })
+
   it('maps a provider 404 to card_not_found and other failures to 502', async () => {
     mockedGetCardById.mockRejectedValueOnce(new ScryfallError('missing', 404))
     const notFound = await createListing(
