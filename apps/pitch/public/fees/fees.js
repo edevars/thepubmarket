@@ -352,8 +352,18 @@ renderExplorer()
   const CASES = [
     ['Nadie devuelve nada (0%)', 0.6, { ...BASE, refund: 0 }, 'las devoluciones pegan parejo'],
     ['El doble de devoluciones (8%)', 0.6, { ...BASE, refund: 0.08 }, ''],
-    ['Muchas tarjetas extranjeras (15%)', 0.6, { ...BASE, intlShare: 0.15 }, 'a la recomendada no le afecta: lo paga el vendedor'],
-    ['Más contracargos (1%)', 0.6, { ...BASE, disputeRate: 0.01 }, 'a la recomendada no le afecta: lo paga el vendedor'],
+    [
+      'Muchas tarjetas extranjeras (15%)',
+      0.6,
+      { ...BASE, intlShare: 0.15 },
+      'a la recomendada no le afecta: lo paga el vendedor',
+    ],
+    [
+      'Más contracargos (1%)',
+      0.6,
+      { ...BASE, disputeRate: 0.01 },
+      'a la recomendada no le afecta: lo paga el vendedor',
+    ],
     ['Se vende más carta suelta (80%)', 0.8, BASE, 'más cartas sueltas favorece a ambas'],
     ['Se vende más sellado (60%)', 0.4, BASE, 'con mucho sellado, la opción sin migrar sufre más'],
   ]

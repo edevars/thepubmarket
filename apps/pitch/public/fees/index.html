@@ -39,7 +39,7 @@
           El hallazgo: <strong>importa menos el porcentaje que cobres y más quién paga la
           comisión de Stripe</strong> — tú o el vendedor.
         </p>
-        <div class="fx-hero__proof" data-reveal style="--delay: 260ms" role="group" aria-label="Ganancia por cada 100 pesos vendidos, hoy contra la propuesta">
+        <section class="fx-hero__proof" data-reveal style="--delay: 260ms" aria-label="Ganancia por cada 100 pesos vendidos, hoy contra la propuesta">
           <div class="fx-proof">
             <span class="fx-proof__tag fx-proof__tag--a">Hoy</span>
             <span class="fx-proof__num" id="proof-a">—</span>
@@ -51,7 +51,7 @@
             <span class="fx-proof__num" id="proof-b">—</span>
             <span class="fx-proof__cap">te quedarían de cada $100 (el vendedor paga a Stripe)</span>
           </div>
-        </div>
+        </section>
         <p class="fx-hero__foot" data-reveal style="--delay: 340ms">
           Los dos casos cobran <strong>lo mismo</strong> — 10% de comisión. Lo único que cambia es
           quién absorbe el costo de Stripe.
@@ -138,7 +138,7 @@
           como cartas — <strong>NM la mejor, DMG la peor</strong> — según dos números: cuánto te
           dejan al mes y cuánto necesitas vender para pagarte un sueldo de $40,000.
         </p>
-        <ul class="fx-hand" id="hand" role="list"></ul>
+        <ul class="fx-hand" id="hand"></ul>
 
         <div class="fx-callout">
           <h3>El riesgo de cobrar 10% al sellado (P5)</h3>
@@ -168,7 +168,8 @@
           ($80 mil/mes), con tracción ($332 mil) o en escala ($1.2 millones). La última columna:
           cuánto necesita vender el marketplace para que tú ganes $40,000 al mes.
         </p>
-        <div class="fx-scroll" role="region" aria-label="Ganancia mensual por opción y escenario" tabindex="0">
+        <!-- biome-ignore lint/a11y/noNoninteractiveTabindex: WCAG 2.1.1 — un contenedor con scroll horizontal debe ser enfocable para que se pueda recorrer con teclado. -->
+        <section class="fx-scroll" aria-label="Ganancia mensual por opción y escenario" tabindex="0">
           <table class="table fx-table" id="bundles-table">
             <thead>
               <tr>
@@ -183,7 +184,7 @@
             </thead>
             <tbody></tbody>
           </table>
-        </div>
+        </section>
         <p class="fx-note">
           Lectura rápida: la peor opción necesita vender <strong>$2.26 millones al mes</strong>
           para pagarte un sueldo; la recomendada, <strong>$610 mil</strong>. Esa es la distancia
@@ -312,7 +313,8 @@
           recomendada aguanta mejor casi todos los golpes, porque los costos sorpresa son del
           vendedor, no tuyos.
         </p>
-        <div class="fx-scroll" role="region" aria-label="Ganancia mensual bajo distintos supuestos" tabindex="0">
+        <!-- biome-ignore lint/a11y/noNoninteractiveTabindex: WCAG 2.1.1 — un contenedor con scroll horizontal debe ser enfocable para que se pueda recorrer con teclado. -->
+        <section class="fx-scroll" aria-label="Ganancia mensual bajo distintos supuestos" tabindex="0">
           <table class="table fx-table" id="sens-table">
             <thead>
               <tr>
@@ -324,7 +326,7 @@
             </thead>
             <tbody></tbody>
           </table>
-        </div>
+        </section>
         <div class="fx-msi" id="msi-note">
           <h3>Cuidado con los meses sin intereses</h3>
           <p id="msi-text">—</p>
@@ -373,7 +375,8 @@
           Tres formas de crearla. Los montos son tu ganancia mensual con 10% parejo y ventas de
           $332 mil:
         </p>
-        <div class="fx-scroll" role="region" aria-label="Comparación de tipos de cuenta de vendedor" tabindex="0">
+        <!-- biome-ignore lint/a11y/noNoninteractiveTabindex: WCAG 2.1.1 — un contenedor con scroll horizontal debe ser enfocable para que se pueda recorrer con teclado. -->
+        <section class="fx-scroll" aria-label="Comparación de tipos de cuenta de vendedor" tabindex="0">
           <table class="table fx-table fx-table--accounts">
             <thead>
               <tr>
@@ -440,7 +443,7 @@
               </tr>
             </tbody>
           </table>
-        </div>
+        </section>
         <p class="fx-note">
           <strong>Recomendación: Standard.</strong> Te deja más dinero, te quita el riesgo de
           saldos negativos y es lo que Stripe recomienda para este tipo de cobro. El costo es
