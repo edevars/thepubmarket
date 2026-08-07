@@ -1,5 +1,6 @@
-import { describe, expect, it } from 'vitest'
-import { normalizeCard } from './scryfall'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import type { CatalogContext } from './catalog-providers'
+import { getCardById, normalizeCard } from './scryfall'
 
 describe('normalizeCard', () => {
   it('does not set rules/flavor text: Scryfall stays backward-compatible (TASK-038)', () => {
@@ -117,5 +118,82 @@ describe('normalizeCard', () => {
         manaValue: 2,
       })
     })
+  })
+})
+
+/** KV falso en memoria: alcanza para `get`/`put` con el shape que usa scryfall.ts. */
+function fakeKv(seed: Record<string, unknown> = {}): KVNamespace {
+  const store = new Map<string, string>(
+    Object.entries(seed).map(([k, v]) => [k, JSON.stringify(v)]),
+  )
+  return {
+    get: async (key: string) => {
+      const raw = store.get(key)
+      return raw === undefined ? null : JSON.parse(raw)
+    },
+    put: async (key: string, value: string) => {
+      store.set(key, value)
+    },
+  } as unknown as KVNamespace
+}
+
+const RAW_BOLT = {
+  id: 'fresh-id-from-scryfall',
+  oracle_id: 'oracle-1',
+  name: 'Lightning Bolt',
+  set: 'lea',
+  set_name: 'Limited Edition Alpha',
+  collector_number: '161',
+  lang: 'en',
+  rarity: 'common',
+  artist: 'Christopher Rush',
+  finishes: ['nonfoil', 'foil'],
+  image_uris: { normal: 'https://cards.scryfall.io/normal/bolt.jpg' },
+}
+
+describe('getCardById (TASK-046: cache shape validation)', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('treats a legacy-shaped KV entry (scryfallId, sin tcg/catalogId) como cache miss y refetchea', async () => {
+    // Forma vieja de CardSnapshot, previa al rename scryfallId -> catalogId
+    // y a la adición de `tcg`. No debe servirse jamás.
+    const legacySnapshot = {
+      scryfallId: 'fresh-id-from-scryfall',
+      name: 'Lightning Bolt',
+      setCode: 'lea',
+      setName: 'Limited Edition Alpha',
+      collectorNumber: '161',
+      lang: 'en',
+      rarity: 'common',
+      artist: 'Christopher Rush',
+      finishes: ['nonfoil', 'foil'],
+      imageUrl: 'https://cards.scryfall.io/normal/bolt.jpg',
+      gameAttributes: null,
+    }
+    const kv = fakeKv({ 'scryfall:card:v2:fresh-id-from-scryfall': legacySnapshot })
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify(RAW_BOLT), { status: 200 }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const ctx = { kv, db: {} as CatalogContext['db'], origin: 'http://localhost' }
+    const card = await getCardById('fresh-id-from-scryfall', ctx)
+
+    expect(fetchMock).toHaveBeenCalledOnce()
+    expect(card.catalogId).toBe('fresh-id-from-scryfall')
+    expect(card.tcg).toBe('mtg')
+  })
+
+  it('sirve un snapshot cacheado con la forma actual sin pegarle a Scryfall', async () => {
+    const validSnapshot = normalizeCard(RAW_BOLT)
+    const kv = fakeKv({ 'scryfall:card:v2:fresh-id-from-scryfall': validSnapshot })
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+
+    const ctx = { kv, db: {} as CatalogContext['db'], origin: 'http://localhost' }
+    const card = await getCardById('fresh-id-from-scryfall', ctx)
+
+    expect(fetchMock).not.toHaveBeenCalled()
+    expect(card).toEqual(validSnapshot)
   })
 })

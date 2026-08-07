@@ -144,6 +144,19 @@ export async function createListing(
     throw err
   }
 
+  // Defensa contra un snapshot mal formado (p.ej. cache de KV con contrato
+  // viejo — TASK-046): sin `catalogId` no hay nada que guardar en
+  // `inventory.catalog_id`, y esa columna nunca debe insertarse en NULL para
+  // un juego soportado. Se trata como falla del catálogo, no del vendedor.
+  if (!card.catalogId) {
+    return {
+      ok: false,
+      error: 'invalid_catalog_snapshot',
+      status: 502,
+      extra: { tcg: input.tcg },
+    }
+  }
+
   // El acabado pedido debe existir para esa impresión (cuando el catálogo lo informa).
   if (card.finishes.length > 0 && !card.finishes.includes(input.finish)) {
     return {
