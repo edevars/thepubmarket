@@ -352,6 +352,62 @@ página" que ya aplicaba antes de TASK-053, solo que ahora también afecta a
 las facetas de juego y no solo al listado. Se resuelve cuando llegue
 paginación/búsqueda real (Fase 5).
 
+### La consola de filtros y el modelo declarativo (TASK-057)
+
+Hasta TASK-056 los filtros vivían en una columna fija de 232px
+(`FilterSidebar.tsx`, 377 líneas) que con Riftbound llegaba a ~1900px de alto.
+TASK-057 la sustituyó por una **consola horizontal sticky** bajo el header, y
+metió un modelo declarativo en medio para que los componentes dejaran de
+decidir nada.
+
+**`apps/web/src/lib/catalog/filter-model.ts`** es el centro. Es un módulo puro
+(sin React, sin `next-intl`, sin `window` — por tanto testeable, ya que vitest
+excluye los `.tsx`) que recibe los conteos que `CatalogView` ya calculó y
+devuelve un `FilterDescriptor[]`: qué filtros existen, con qué control se
+pintan (`pips`/`tiles`/`ints`/`select`/`switch`/`range`), en qué zona van y qué
+valores están disponibles. Tres consecuencias:
+
+- La regla de deshabilitado (`count === 0 && !selected`, TASK-054 AC#2) existe
+  en **un solo sitio**; antes estaba copiada en cinco componentes.
+- La consola horizontal (`FilterConsole`) y la pila vertical del sheet mobile
+  (`FilterStack`) consumen los MISMOS descriptores y las mismas primitivas de
+  `components/catalog/controls/`. No hay una sola rama duplicada entre ambas.
+- El reparto entre lo que cabe inline y lo que cae en el popover "Más filtros"
+  es **determinista y sin medición en runtime**: `filter-model.ts` estima
+  anchos con una tabla de constantes. Ese ancho NO depende de cuántos valores
+  lleve seleccionados el usuario, a propósito — si dependiera, marcar un valor
+  podría empujar su propio trigger al overflow y cerrarle el popover en la
+  cara.
+
+**Zonas de la consola.** `identity` es la faceta firma del juego: la que el
+registro de presentación marca con `layout: 'pips'`. Va inline y a todo color,
+y es lo único cromático del riel. `card` son el resto de facetas del juego, y
+`offer` los filtros que no son de la carta sino de la oferta (condición,
+idioma, precio, foil) — estos existen para los seis TCG, así que la consola
+nunca se queda vacía aunque el juego no declare facetas propias.
+
+**El juego salió de los filtros.** Ahora es `GameTabs`, una tira de pestañas
+con `<Link>` reales (soporta Cmd+clic y clic central). No es un filtro: cambia
+la URL, refiltra en el servidor y remonta la vista. Por eso tampoco suma al
+conteo de "filtros activos", y "Limpiar filtros" conserva el juego activo — la
+pestaña "Todos" es la forma explícita de salir de él.
+
+**Cambio en el `key` de remount.** `catalog/page.tsx` ya no incluye las facetas
+de juego serializadas en su `key`. Desde TASK-053 esas facetas no entran al
+fetch del servidor, así que remontar por ellas no traía ni un item nuevo y sí
+destruía el foco del teclado, el popover abierto y las animaciones en cada
+clic. `CatalogView` re-sincroniza `gameFilters` desde las props con un
+`useEffect` para cubrir el único caso que quedaba vivo: navegación del
+historial (Back/Forward) entre URLs que solo difieren en facetas.
+
+**Restricciones de layout que hay que respetar** si se toca la consola (están
+comentadas en `FilterConsole.tsx` y `ui/Popover.tsx`): el wrapper sticky no
+puede llevar `overflow` (rompe el sticky y recorta los popovers, y
+`overflow-x: auto` recorta también en vertical); ningún trigger de popover
+puede vivir dentro del scroller horizontal de mobile; y el riel necesita
+`z-10` explícito, porque las tarjetas del grid son `relative` y si no
+pintarían por encima de los paneles abiertos.
+
 ---
 
 ## 7. Distinguir impresiones en el panel
@@ -406,8 +462,8 @@ En ambos casos, después:
    los muestra solo si vienen (`components/detail/game-attributes.ts`). No hace
    falta tocar D1: el blob ya existe. Si además quiere filtros en la tienda,
    registrarlos en `GAME_FILTERS` (`lib/catalog-filters.ts`). Opcionalmente,
-   si algún valor de esa faceta merece icono/color propio en el sidebar (pips
-   de maná, hexágonos de dominio), agregar una entrada en
+   si algún valor de esa faceta merece icono/color propio en la consola (pips
+   de maná, runas de dominio), agregar una entrada en
    `apps/web/src/lib/catalog/facet-presentation.ts` (**TASK-052**) — un
    registro `tcg → param → { icon?, hex? }` deliberadamente **separado** del
    registro funcional `GAME_FILTERS`/`game-filters.ts` (que decide parseo y
@@ -416,6 +472,15 @@ En ambos casos, después:
    un juego, param o valor sin entrada simplemente degrada a la tile plana de
    siempre, así que este paso nunca es obligatorio para que el filtro
    funcione, solo para que se vea con identidad propia.
+
+   Si además quieres que el juego tenga **zona de identidad** en la consola de
+   filtros (la fila de pips inline y a color, TASK-057), marca ESA faceta con
+   `layout: 'pips'` en su entrada de `facet-presentation.ts`. Es lo único que
+   hace falta: `filter-model.ts` la detecta ahí y la saca del popover, sin
+   tocar un solo componente. Sin `layout: 'pips'` el juego simplemente no
+   tiene zona de identidad y sus facetas caen todas en triggers — que es lo
+   correcto para un juego cuya identidad no sea un vocabulario corto y con
+   iconos.
 4. **Verificar que el código del juego esté en `Tcg`/`TCGS`** y que tenga
    entrada en `TCG_META` (`apps/web/src/lib/catalog/display.ts`) para su nombre
    visible. Los seis TCG del proyecto ya están.

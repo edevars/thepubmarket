@@ -182,7 +182,7 @@ export function DeliveryStep({
           )}
         </div>
 
-        <aside className="sticky top-20 flex flex-col gap-3">
+        <aside className="sticky top-[calc(var(--header-h)+1rem)] flex flex-col gap-3">
           <div className="clip-tile relative overflow-hidden border border-line bg-panel-2 p-[22px]">
             <div className="mb-4 font-display text-base font-bold uppercase tracking-[0.08em] text-white">
               {t('summary')}

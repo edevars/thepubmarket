@@ -4,7 +4,7 @@ import { setRequestLocale } from 'next-intl/server'
 import { CatalogView } from '@/components/catalog/CatalogView'
 import { EmptyState } from '@/components/states/EmptyState'
 import { getCatalog, getGameCounts } from '@/lib/catalog/data'
-import { parseGameFiltersFromSearchParams, serializeGameFilters } from '@/lib/catalog/game-filters'
+import { parseGameFiltersFromSearchParams } from '@/lib/catalog/game-filters'
 import { parseLocalFiltersFromSearchParams } from '@/lib/catalog/local-filters'
 
 interface CatalogPageProps {
@@ -52,13 +52,17 @@ export default async function CatalogPage({ params, searchParams }: CatalogPageP
       {empty ? (
         <EmptyState />
       ) : (
-        // `key` por query+juego+facetas de juego SOLAMENTE: los filtros
-        // locales (cond/lang/foil/precio/orden) NO forman parte de la key a
-        // propósito — incluirlos remontaría `CatalogView` en cada tap de un
-        // chip de condición, perdiendo foco/animación (TASK-053 AC#3). Solo
-        // lo que cambia el fetch del servidor debe remontar el componente.
+        // `key` por query+juego SOLAMENTE: es exactamente lo que entra al
+        // fetch de arriba (`getCatalog({ tcg: activeGame })` + el `q` que
+        // `CatalogView` usa para ordenar por relevancia). Ni los filtros
+        // locales (cond/lang/foil/precio/orden) ni las facetas de juego
+        // forman parte de la key — ambos se aplican en cliente, así que
+        // remontar por ellos solo destruye foco, estado de popover y
+        // animaciones sin traer un solo item nuevo (TASK-053 AC#3,
+        // TASK-057). `CatalogView` re-sincroniza `gameFilters` desde las
+        // props cuando la URL cambia por navegación del historial.
         <CatalogView
-          key={`${q ?? ''}|${activeGame ?? ''}|${serializeGameFilters(gameFilters)}`}
+          key={`${q ?? ''}|${activeGame ?? ''}`}
           items={items}
           initialQuery={q}
           activeGame={activeGame}

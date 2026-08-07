@@ -33,7 +33,7 @@ export function OrderSummary({
   const money = formatMoneyCents(subtotalCents, locale)
 
   return (
-    <aside className="sticky top-20">
+    <aside className="sticky top-[calc(var(--header-h)+1rem)]">
       <div className="clip-tile relative overflow-hidden border border-line bg-panel-2 p-[22px]">
         <div className="mb-4 font-display text-base font-bold uppercase tracking-[0.08em] text-white">
           {t('summary')}

@@ -2,11 +2,10 @@
 
 import type { CatalogGameCount, Condition, InventoryItem, Tcg } from '@thepubmarket/shared'
 import { useTranslations } from 'next-intl'
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { NoResultsState } from '@/components/states/NoResultsState'
 import { useRouter } from '@/i18n/navigation'
 import { applyFilters, type CatalogFilters } from '@/lib/catalog/data'
-import { TCG_META } from '@/lib/catalog/display'
 import {
   countConditions,
   countFoil,
@@ -15,7 +14,8 @@ import {
   type FacetCountFilters,
 } from '@/lib/catalog/facet-counts'
 import { accentFor } from '@/lib/catalog/facet-presentation'
-import { facetsFor, type GameFacet } from '@/lib/catalog/game-filters'
+import { buildFilterModel } from '@/lib/catalog/filter-model'
+import { facetsFor, type GameFacet, serializeGameFilters } from '@/lib/catalog/game-filters'
 import {
   applyLocalFiltersToSearchParams,
   EMPTY_LOCAL_FILTERS,
@@ -24,7 +24,9 @@ import {
 } from '@/lib/catalog/local-filters'
 import { type ActiveChip, ActiveChips } from './ActiveChips'
 import { CardGrid } from './CardGrid'
-import { FilterSidebar, type FilterState } from './FilterSidebar'
+import type { FilterHandlers } from './controls/FilterControl'
+import { FilterConsole } from './FilterConsole'
+import { GameTabs } from './GameTabs'
 import { MobileFilterSheet } from './MobileFilterSheet'
 
 function toggle<T>(arr: T[], value: T): T[] {
@@ -128,6 +130,25 @@ export function CatalogView({
     () => initialLocalFilters ?? EMPTY_LOCAL_FILTERS,
   )
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false)
+
+  /**
+   * Re-sincroniza las facetas de juego cuando la URL cambia SIN remontar este
+   * componente. Desde TASK-057 el `key` de `catalog/page.tsx` ya no incluye
+   * las facetas (no cambian el fetch del servidor, así que remontar por ellas
+   * solo destruía foco, estado de popover y animaciones), de modo que este
+   * efecto es lo único que cubre la navegación del historial: Back/Forward
+   * entre dos URLs que solo difieren en facetas.
+   *
+   * En el camino normal (`updateGameFilterValues`) el estado ya se actualizó
+   * antes de navegar, así que el serializado coincide, `setGameFilters`
+   * devuelve el mismo objeto y React descarta el re-render.
+   */
+  useEffect(() => {
+    const next = initialGameFilters ?? {}
+    setGameFilters((current) =>
+      serializeGameFilters(current) === serializeGameFilters(next) ? current : next,
+    )
+  }, [initialGameFilters])
   /** Botón "Filtros" (trigger de `MobileFilterSheet`, TASK-055): recibe el
    * foco de vuelta cuando el sheet se cierra por cualquier vía. */
   const filtersTriggerRef = useRef<HTMLButtonElement>(null)
@@ -182,7 +203,7 @@ export function CatalogView({
    * el router interno de Next esté sincronizado con mutaciones directas de
    * `history` hechas por `writeLocalFilters`.
    */
-  function navigate(nextGame: Tcg | undefined, nextGameFilters: Record<string, string[]>) {
+  function buildUrl(nextGame: Tcg | undefined, nextGameFilters: Record<string, string[]>): string {
     const params = new URLSearchParams()
     if (q.trim()) params.set('q', q.trim())
     if (nextGame) {
@@ -193,7 +214,14 @@ export function CatalogView({
     }
     applyLocalFiltersToSearchParams(params, localFilters)
     const qs = params.toString()
-    router.push(qs ? `/catalog?${qs}` : '/catalog')
+    return qs ? `/catalog?${qs}` : '/catalog'
+  }
+
+  function navigate(nextGame: Tcg | undefined, nextGameFilters: Record<string, string[]>) {
+    // `scroll: false`: sin esto App Router salta al top en cada faceta, lo que
+    // con la consola sticky (TASK-057) tira al usuario fuera de la zona del
+    // grid que estaba mirando.
+    router.push(buildUrl(nextGame, nextGameFilters), { scroll: false })
   }
 
   /**
@@ -229,16 +257,14 @@ export function CatalogView({
     }
   }
 
-  /**
-   * El juego es navegación, no estado local: cambia la URL para que la lista
-   * se vuelva a pedir ya filtrada por el servidor. Tocar el juego activo lo
-   * quita. La búsqueda del header se conserva; las facetas del juego anterior
-   * NO se conservan (AC#3): un dominio de Riftbound no significa nada en MTG.
+  /*
+   * El juego ya no tiene handler propio: `GameTabs` navega con `<Link>` a la
+   * URL que construye `buildUrl(tcg, {})`. Como el `key` de `catalog/page.tsx`
+   * SÍ incluye el juego (cambia el fetch del servidor), cambiar de juego
+   * remonta este componente y `gameFilters` se reinicializa desde la URL
+   * destino — que no trae facetas del juego anterior (AC#3): un dominio de
+   * Riftbound no significa nada en MTG.
    */
-  function goToGame(tcg: Tcg) {
-    setGameFilters({})
-    navigate(tcg === activeGame ? undefined : tcg, {})
-  }
 
   /** Reemplaza los valores seleccionados de una faceta y navega. */
   function updateGameFilterValues(param: string, values: string[]) {
@@ -311,40 +337,86 @@ export function CatalogView({
     return sortItems(filtered, localFilters.sort, q)
   }, [items, countFilters, localFilters.sort, q])
 
-  const gameFilterCount = Object.values(gameFilters).reduce((n, values) => n + values.length, 0)
-
-  const activeFilterCount =
-    (activeGame ? 1 : 0) +
-    localFilters.conditions.length +
-    localFilters.languages.length +
-    (localFilters.foilOnly ? 1 : 0) +
-    (localFilters.minPesos || localFilters.maxPesos ? 1 : 0) +
-    gameFilterCount +
-    (q ? 1 : 0)
+  /**
+   * Modelo declarativo de los filtros (TASK-057): decide qué controles
+   * existen, con qué se pintan, en qué zona van y cuáles caben inline en la
+   * consola. Consume los conteos de arriba tal cual, sin recomputar nada.
+   */
+  const filterModel = useMemo(
+    () =>
+      buildFilterModel({
+        activeGame,
+        gameFacets: activeFacets,
+        local: localFilters,
+        gameSelections: gameFilters,
+        conditionCounts,
+        languageCounts,
+        foilCount,
+        gameFacetCounts,
+        freeTextOptions,
+      }),
+    [
+      activeGame,
+      activeFacets,
+      localFilters,
+      gameFilters,
+      conditionCounts,
+      languageCounts,
+      foilCount,
+      gameFacetCounts,
+      freeTextOptions,
+    ],
+  )
 
   /**
-   * Limpia TODO en un solo paso (AC#5): estado local (búsqueda, filtros
-   * locales, facetas de juego) y la URL — siempre navega a `/catalog`
-   * (antes solo lo hacía si había un juego activo, dejando `cond`/`lang`/…
-   * huérfanos en la barra de direcciones cuando no lo había).
+   * Cablea los tres gestos de un control a los DOS canales de URL de
+   * TASK-053, según de dónde venga el filtro. Es el único punto donde se
+   * decide `history.replaceState` (sin remount) vs `router.push`; los
+   * controles no saben nada de esto.
+   */
+  const filterHandlers: FilterHandlers = {
+    onToggleValue: (descriptor, value) => {
+      if (descriptor.source === 'game') {
+        toggleGameFilterValue(descriptor.id, value)
+        return
+      }
+      if (descriptor.id === 'cond') {
+        writeLocalFilters({
+          ...localFilters,
+          conditions: toggle(localFilters.conditions, value as Condition),
+        })
+      } else if (descriptor.id === 'lang') {
+        writeLocalFilters({ ...localFilters, languages: toggle(localFilters.languages, value) })
+      } else if (descriptor.id === 'foil') {
+        writeLocalFilters({ ...localFilters, foilOnly: !localFilters.foilOnly })
+      }
+    },
+    onSetValue: (descriptor, value) => {
+      if (descriptor.source === 'game') setGameFilterValue(descriptor.id, value)
+    },
+    onPriceChange: (field, value) => writeLocalFilters({ ...localFilters, [field]: value }),
+  }
+
+  /**
+   * El juego NO cuenta como filtro activo desde TASK-057: es navegación, y
+   * vive en su propia tira de pestañas. Si siguiera sumando, el botón
+   * "Filtros" de mobile diría "(1)" sin que el usuario haya filtrado nada.
+   */
+  const activeFilterCount = filterModel.totalSelectedCount + (q ? 1 : 0)
+
+  /**
+   * Limpia todos los FILTROS en un solo paso, conservando el juego activo:
+   * las pestañas son navegación, así que "Limpiar filtros" no debe sacarte
+   * del juego que estás explorando (para eso está la pestaña "Todos").
    */
   function clearAll() {
     setQ('')
     setGameFilters({})
     setLocalFilters(EMPTY_LOCAL_FILTERS)
-    router.push('/catalog')
+    router.push(activeGame ? `/catalog?game=${activeGame}` : '/catalog', { scroll: false })
   }
 
   const chips: ActiveChip[] = [
-    ...(activeGame
-      ? [
-          {
-            key: `tcg-${activeGame}`,
-            label: TCG_META[activeGame].name,
-            onRemove: () => goToGame(activeGame),
-          },
-        ]
-      : []),
     ...localFilters.conditions.map((c) => ({
       key: `cond-${c}`,
       label: c,
@@ -394,19 +466,23 @@ export function CatalogView({
    * cuando no hay juego activo o no tiene identidad propia (`accentFor`). */
   const accent = accentFor(activeGame)
 
-  const filterState: FilterState = {
-    conditions: localFilters.conditions,
-    languages: localFilters.languages,
-    foilOnly: localFilters.foilOnly,
-    minPesos: localFilters.minPesos,
-    maxPesos: localFilters.maxPesos,
-    game: gameFilters,
-  }
+  const mobileFiltersTrigger = (
+    <button
+      ref={filtersTriggerRef}
+      type="button"
+      onClick={() => setMobileFiltersOpen((v) => !v)}
+      aria-haspopup="dialog"
+      aria-expanded={mobileFiltersOpen}
+      className="clip-btn min-h-9 border border-line-strong bg-panel px-3.5 font-display text-[13px] font-semibold uppercase tracking-[0.06em] text-ink transition duration-fast ease-standard active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/70"
+    >
+      {t('filters')} ({activeFilterCount})
+    </button>
+  )
 
   return (
-    <>
-      <div className="mb-4.5 flex flex-wrap items-end justify-between gap-3.5">
-        <div style={accent ? ({ '--game-accent': accent } as React.CSSProperties) : undefined}>
+    <div style={accent ? ({ '--game-accent': accent } as React.CSSProperties) : undefined}>
+      <div className="mb-3.5 flex flex-wrap items-end justify-between gap-3.5">
+        <div>
           <div className="mb-2 font-mono text-[10px] uppercase tracking-[0.2em] text-[color:var(--game-accent,var(--color-cyan))]">
             {t('eyebrow')}
           </div>
@@ -420,16 +496,6 @@ export function CatalogView({
           </div>
         </div>
         <div className="flex items-center gap-2.5">
-          <button
-            ref={filtersTriggerRef}
-            type="button"
-            onClick={() => setMobileFiltersOpen((v) => !v)}
-            aria-haspopup="dialog"
-            aria-expanded={mobileFiltersOpen}
-            className="clip-btn border border-line-strong bg-panel px-3.5 py-2 font-display text-[13px] font-semibold uppercase tracking-[0.06em] text-ink transition duration-fast ease-standard active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/70 md:hidden"
-          >
-            {t('filters')} ({activeFilterCount})
-          </button>
           <label className="flex items-center gap-2 border border-line bg-input px-3 py-2 transition-colors duration-fast ease-standard focus-within:border-primary">
             <span className="font-mono text-[9px] tracking-[0.1em] text-faint">{t('sort')}</span>
             <select
@@ -449,81 +515,34 @@ export function CatalogView({
         </div>
       </div>
 
-      <div className="md:grid md:grid-cols-[232px_1fr] md:items-start md:gap-6">
-        {/* Desktop: sidebar sticky sin semántica de dialog (no es overlay). */}
-        <aside className="hidden md:sticky md:top-[74px] md:block md:self-start">
-          <FilterSidebar
-            state={filterState}
-            tcgCounts={tcgCounts}
-            conditionCounts={conditionCounts}
-            languageCounts={languageCounts}
-            foilCount={foilCount}
-            activeCount={activeFilterCount}
-            resultCount={visible.length}
-            activeGame={activeGame}
-            onToggleTcg={goToGame}
-            onToggleCondition={(c: Condition) =>
-              writeLocalFilters({ ...localFilters, conditions: toggle(localFilters.conditions, c) })
-            }
-            onToggleLanguage={(l) =>
-              writeLocalFilters({ ...localFilters, languages: toggle(localFilters.languages, l) })
-            }
-            onToggleFoil={() =>
-              writeLocalFilters({ ...localFilters, foilOnly: !localFilters.foilOnly })
-            }
-            onPriceChange={(field, value) => writeLocalFilters({ ...localFilters, [field]: value })}
-            gameFacets={activeFacets}
-            gameFilterState={gameFilters}
-            freeTextOptions={freeTextOptions}
-            gameFacetCounts={gameFacetCounts}
-            onToggleGameFilterValue={toggleGameFilterValue}
-            onSetGameFilterValue={setGameFilterValue}
-            onClear={clearAll}
-          />
-        </aside>
+      <GameTabs
+        tcgCounts={tcgCounts}
+        activeGame={activeGame}
+        hrefFor={(tcg) => buildUrl(tcg, {})}
+      />
 
-        {/* Mobile: bottom sheet con semántica de dialog (TASK-055). */}
-        <MobileFilterSheet
-          open={mobileFiltersOpen}
-          onClose={() => setMobileFiltersOpen(false)}
-          triggerRef={filtersTriggerRef}
-          state={filterState}
-          tcgCounts={tcgCounts}
-          conditionCounts={conditionCounts}
-          languageCounts={languageCounts}
-          foilCount={foilCount}
-          activeCount={activeFilterCount}
-          resultCount={visible.length}
-          activeGame={activeGame}
-          onToggleTcg={goToGame}
-          onToggleCondition={(c: Condition) =>
-            writeLocalFilters({ ...localFilters, conditions: toggle(localFilters.conditions, c) })
-          }
-          onToggleLanguage={(l) =>
-            writeLocalFilters({ ...localFilters, languages: toggle(localFilters.languages, l) })
-          }
-          onToggleFoil={() =>
-            writeLocalFilters({ ...localFilters, foilOnly: !localFilters.foilOnly })
-          }
-          onPriceChange={(field, value) => writeLocalFilters({ ...localFilters, [field]: value })}
-          gameFacets={activeFacets}
-          gameFilterState={gameFilters}
-          freeTextOptions={freeTextOptions}
-          gameFacetCounts={gameFacetCounts}
-          onToggleGameFilterValue={toggleGameFilterValue}
-          onSetGameFilterValue={setGameFilterValue}
-          onClear={clearAll}
-        />
+      <FilterConsole
+        model={filterModel}
+        handlers={filterHandlers}
+        activeGame={activeGame}
+        mobileTrigger={mobileFiltersTrigger}
+      />
 
-        <div>
-          <ActiveChips chips={chips} onClearAll={clearAll} />
-          {visible.length > 0 ? (
-            <CardGrid items={visible} />
-          ) : (
-            <NoResultsState onClear={clearAll} />
-          )}
-        </div>
-      </div>
-    </>
+      {/* Mobile: bottom sheet con semántica de dialog (TASK-055). */}
+      <MobileFilterSheet
+        open={mobileFiltersOpen}
+        onClose={() => setMobileFiltersOpen(false)}
+        triggerRef={filtersTriggerRef}
+        model={filterModel}
+        handlers={filterHandlers}
+        activeGame={activeGame}
+        activeCount={activeFilterCount}
+        resultCount={visible.length}
+        onClear={clearAll}
+      />
+
+      <ActiveChips chips={chips} onClearAll={clearAll} />
+      {visible.length > 0 ? <CardGrid items={visible} /> : <NoResultsState onClear={clearAll} />}
+    </div>
   )
 }

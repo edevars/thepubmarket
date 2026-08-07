@@ -67,8 +67,12 @@ export const FACET_PRESENTATION: Partial<Record<Tcg, Record<string, FacetPresent
     },
   },
   riftbound: {
-    // Hexes oficiales extraídos del bundle de riftbound.gg.
+    // Hexes oficiales extraídos del bundle de riftbound.gg. `layout: 'pips'`
+    // (TASK-057) marca esta faceta como la IDENTIDAD del juego: es la que la
+    // consola de filtros saca del popover y renderiza inline y a color. Los 7
+    // dominios ya traen icono + hex, así que no hace falta ningún asset nuevo.
     domain: {
+      layout: 'pips',
       values: {
         Fury: { icon: '/symbols/riftbound/domain/fury.svg', hex: '#c13b3b' },
         Calm: { icon: '/symbols/riftbound/domain/calm.svg', hex: '#4fae6b' },
