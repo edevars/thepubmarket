@@ -3,9 +3,11 @@ id: TASK-058.02
 title: >-
   Add 10%-flat variant, explicit Stripe account types and IVA obligations to
   /fees next steps
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - claude
 created_date: '2026-08-07 22:47'
+updated_date: '2026-08-07 22:47'
 labels:
   - 'epic:pricing'
   - pitch
@@ -56,3 +58,14 @@ Extend the /fees analysis page with three additions requested by the operator.
 - [ ] #5 Fiscal content is marked as analysis and not formal tax advice, with the 2026 reform flagged for re-verification
 - [ ] #6 Plain language maintained throughout; build, curl smoke and deploy pass; deck routes untouched
 <!-- AC:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+Branch task/TASK-058.02-accounts-iva.
+1. scripts/fee-model.mjs: add cfg 'C' (Standard — seller pays processing, platform pays no Connect account/payout fee), add bundles P5 (B 10/10) and P5c (C 10/10); keep existing tables stable so prior numbers still reproduce.
+2. fees.js: mirror cfg C, add P5 to BUNDLES (sixth card + table row), make the simulator config control three-way (tú / vendedor Express / vendedor Standard), keep whoPays() labels plain.
+3. index.html: (a) sealed-risk note on P5; (b) rewrite next steps into an explicit configuration section — owner account requirements, then a seller account-type comparison table (Standard vs Express legacy vs current Express-controller) with cost, who carries negative balances, dashboard, onboarding friction; (c) new IVA/fiscal section with the four obligations (18-J I/II/III, 18-K), the CFDI duties on both sides, the CLABE data gap, and the "no es asesoría fiscal" marker + 2026 reform caveat.
+4. fees.css: styles for the account-type table and the fiscal block, reusing existing tokens.
+5. Verify script/page parity in node, dry-run build, curl smoke dev, commit → merge → deploy → prod smoke, close.
+<!-- SECTION:PLAN:END -->
