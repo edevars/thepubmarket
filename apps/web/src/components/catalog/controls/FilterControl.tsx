@@ -1,12 +1,13 @@
 import type { Tcg } from '@thepubmarket/shared'
 import { useTranslations } from 'next-intl'
-import { CONDITION_HEX } from '@/lib/catalog/display'
 import { FACET_PRESENTATION, presentationFor } from '@/lib/catalog/facet-presentation'
 import type { FilterDescriptor } from '@/lib/catalog/filter-model'
 import { FacetTile } from '../FacetTile'
 import { CONTROL_BASE, DISABLED_TILE } from '../filterControls'
 import { PipRow } from '../PipRow'
+import { ConditionTiles } from './ConditionTiles'
 import { FoilToggle } from './FoilToggle'
+import { LanguageTiles } from './LanguageTiles'
 import { PriceRange } from './PriceRange'
 
 /**
@@ -150,87 +151,22 @@ export function FilterControl({
     )
   }
 
-  // 'tiles': condición e idioma (filtros de oferta) y las facetas de juego sin
-  // layout propio. La condición se tiñe con su color canónico; el resto usa el
-  // acento del juego activo vía `FacetTile`.
+  // 'tiles': condición e idioma (filtros de oferta) tienen primitiva propia
+  // porque su presentación no es genérica — la condición es una rampa de
+  // color, el idioma no tiene color. El resto de facetas de juego cae en la
+  // tile genérica, que resuelve icono/hex desde el registro de presentación.
   if (descriptor.id === 'cond') {
     return (
-      <div className="grid grid-cols-5 gap-1.5">
-        {values.map(({ value, count, selected, disabled }) => {
-          const color = CONDITION_HEX[value as keyof typeof CONDITION_HEX]
-          return (
-            <button
-              key={value}
-              type="button"
-              onClick={() => toggle(value)}
-              disabled={disabled}
-              aria-pressed={selected}
-              aria-disabled={disabled}
-              title={tCondition(value.toLowerCase())}
-              className={`min-h-12 border px-1.5 py-1.5 text-center ${CONTROL_BASE} ${
-                disabled
-                  ? DISABLED_TILE
-                  : selected
-                    ? ''
-                    : 'border-line bg-input text-muted-2 hover:border-line-strong hover:text-ink-2'
-              }`}
-              style={
-                selected
-                  ? {
-                      borderColor: color,
-                      background: `color-mix(in srgb, ${color} 14%, transparent)`,
-                      color,
-                      boxShadow: `0 0 14px color-mix(in srgb, ${color} 33%, transparent)`,
-                    }
-                  : undefined
-              }
-            >
-              <span className="block font-mono text-[11px] font-semibold tracking-[0.06em]">
-                {value}
-              </span>
-              <span
-                className={`mt-0.5 block font-mono text-[9px] ${
-                  disabled ? '' : selected ? 'opacity-85' : 'text-faint'
-                }`}
-              >
-                {count}
-              </span>
-            </button>
-          )
-        })}
-      </div>
+      <ConditionTiles
+        values={values}
+        labelFor={(value) => tCondition(value.toLowerCase())}
+        onToggle={toggle}
+      />
     )
   }
 
   if (descriptor.id === 'lang') {
-    return (
-      <div className="grid grid-cols-3 gap-1.5">
-        {values.map(({ value, count, selected, disabled }) => (
-          <button
-            key={value}
-            type="button"
-            onClick={() => toggle(value)}
-            disabled={disabled}
-            aria-pressed={selected}
-            aria-disabled={disabled}
-            className={`min-h-12 border px-2.5 py-1.5 ${CONTROL_BASE} ${
-              disabled
-                ? DISABLED_TILE
-                : selected
-                  ? 'border-primary bg-primary/14 text-[#cfe0ff]'
-                  : 'border-line bg-input text-muted-2 hover:border-line-strong hover:text-ink-2'
-            }`}
-          >
-            <span className="block font-mono text-[11px] font-semibold tracking-[0.06em]">
-              {value.toUpperCase()}
-            </span>
-            <span className={`mt-0.5 block font-mono text-[9px] ${disabled ? '' : 'text-faint'}`}>
-              {count}
-            </span>
-          </button>
-        ))}
-      </div>
-    )
+    return <LanguageTiles values={values} onToggle={toggle} />
   }
 
   return (
