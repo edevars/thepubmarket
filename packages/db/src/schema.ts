@@ -298,6 +298,22 @@ export const orders = sqliteTable(
     shippingState: text('shipping_state'),
     shippingPostalCode: text('shipping_postal_code'),
     shippingCountry: text('shipping_country'),
+    // --- Cotejo de la dirección contra el corpus SEPOMEX (TASK-061.04) ---
+    // Descriptivo, NUNCA una compuerta: una dirección que no casa con el
+    // catálogo se cobra y se surte igual (hay colonias más nuevas que el
+    // catálogo, rancherías y domicilios sin número). Esto existe para que la
+    // tienda pueda llamar al comprador ANTES de imprimir la guía.
+    // NULL en toda orden anterior a esta migración y en las de recolección.
+    // Valores: 'exact' | 'corrected' | 'unlisted_settlement' | 'state_mismatch'
+    // | 'unknown_postal_code' | 'no_corpus'. Sin CHECK, mismo criterio que
+    // `delivery_method`.
+    shippingAddressMatch: text('shipping_address_match'),
+    // JSON con SOLO los campos cuya ortografía se sustituyó por la del
+    // catálogo, con el valor que escribió el comprador. Lo que él tecleó nunca
+    // se pierde: se guarda al lado, no encima.
+    shippingAddressOriginal: text('shipping_address_original'),
+    /** Vintage del corpus con el que se juzgó; sin esto el veredicto no es auditable. */
+    shippingCorpusVersion: text('shipping_corpus_version'),
     // Tienda aliada donde se recoge — solo cuando delivery_method = 'pickup'.
     // `set null` para no perder la orden si la tienda se da de baja; la vista
     // degrada a "tienda no disponible" en vez de romper.

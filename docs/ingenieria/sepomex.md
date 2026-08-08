@@ -111,7 +111,35 @@ Sin esto, "el corpus está cargado" no dice nada sobre qué tan viejo es.
 
 ---
 
-## 5. Cómo se refresca
+## 5. El cotejo de la dirección en el checkout
+
+`POST /checkout` compara la dirección contra el corpus antes de crear la orden y guarda el resultado en tres columnas: `shipping_address_match` (el veredicto), `shipping_address_original` (JSON con lo que escribió el comprador en los campos cuya ortografía se sustituyó) y `shipping_corpus_version`.
+
+**Es descriptivo, no una compuerta.** Ningún veredicto impide pagar. Validar estricto rechaza direcciones reales y entregables — colonias más nuevas que el catálogo, rancherías, gente que escribe el municipio vecino porque es donde de verdad le llega el correo. Lo que hace es avisarle a la tienda antes de imprimir la guía, que es cuando corregir todavía es gratis.
+
+| Veredicto | Qué pasó | ¿Se le avisa al vendedor? |
+|---|---|---|
+| `exact` | todo coincide | no |
+| `corrected` | mismo lugar, se guardó la ortografía del catálogo | no |
+| `unlisted_settlement` | el CP existe, su lista no trae esa colonia | **sí** |
+| `municipality_mismatch` | el municipio/ciudad no es el del CP | **sí** |
+| `state_mismatch` | el estado contradice al del CP | **sí** |
+| `unknown_postal_code` | CP bien formado que el catálogo no registra | **sí** |
+| `no_corpus` | el catálogo no está cargado en ese ambiente | no — es falla nuestra, no de la dirección |
+
+**Normalizar sí, reinterpretar no.** Se sustituye por la ortografía del catálogo solo cuando el valor normalizado coincide (mismo lugar, distintos acentos o mayúsculas), y lo que escribió el comprador queda guardado al lado. Cuando difiere de verdad **se conserva lo que él escribió**: si el dedazo estuvo en el CP y no en el estado, "corregirlo" mandaría el paquete al otro lado del país.
+
+La localidad casa contra el municipio **o** contra la ciudad del CP: en zonas metropolitanas mucha gente escribe la ciudad, y las dos son ciertas. El municipio es el que se prefiere, porque es lo que va en la guía.
+
+Encontrar órdenes que alguien debería revisar:
+
+```bash
+npx wrangler d1 execute thepubmarket-db --remote --command "SELECT id, shipping_postal_code, shipping_city, shipping_state, shipping_address_match, shipping_address_original FROM orders WHERE shipping_address_match IN ('unlisted_settlement','municipality_mismatch','state_mismatch','unknown_postal_code') ORDER BY created_at DESC LIMIT 50"
+```
+
+---
+
+## 6. Cómo se refresca
 
 Correos publica actualizaciones cada pocas semanas. **Es una operación manual y
 deliberadamente manual:** el catálogo se mueve lento y un cron no paga su
@@ -148,7 +176,7 @@ mezclada pero **nunca vacía**, y la siguiente converge.
 
 ---
 
-## 6. Verificar una carga
+## 7. Verificar una carga
 
 ```bash
 npx wrangler d1 execute thepubmarket-db --local --command "SELECT (SELECT COUNT(*) FROM sepomex_settlements) AS filas, (SELECT COUNT(DISTINCT postal_code) FROM sepomex_settlements) AS cps, (SELECT COUNT(DISTINCT corpus_version) FROM sepomex_settlements) AS versiones, (SELECT version FROM sepomex_corpus_meta) AS vintage"
@@ -166,7 +194,7 @@ que valen para cualquier otro:
 
 ---
 
-## 7. Cuando se rompa
+## 8. Cuando se rompa
 
 | Síntoma | Causa probable |
 |---|---|

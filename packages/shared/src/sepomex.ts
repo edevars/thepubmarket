@@ -260,3 +260,37 @@ export interface PostalCodeLookupResponse {
   /** Vintage del catálogo cargado (ISO). null = corpus aún no importado. */
   corpusVersion: string | null
 }
+
+/**
+ * Veredicto del cotejo de una dirección de envío contra el corpus
+ * (TASK-061.04). Descriptivo, nunca una compuerta: ninguno de estos valores
+ * impide pagar.
+ *
+ *   - `exact`                 todo coincide con el catálogo
+ *   - `corrected`             mismo lugar, se guardó la ortografía del catálogo
+ *   - `unlisted_settlement`   el CP existe pero su lista no trae esa colonia
+ *   - `municipality_mismatch` el municipio/ciudad no es el del CP
+ *   - `state_mismatch`        el estado contradice al del CP — casi siempre un typo
+ *   - `unknown_postal_code`   CP bien formado que el catálogo no registra
+ *   - `no_corpus`             el catálogo no estaba cargado; no dice nada de la dirección
+ */
+export type ShippingAddressMatch =
+  | 'exact'
+  | 'corrected'
+  | 'unlisted_settlement'
+  | 'municipality_mismatch'
+  | 'state_mismatch'
+  | 'unknown_postal_code'
+  | 'no_corpus'
+
+/** Cotejo de la dirección de una orden, para las vistas. */
+export interface OrderAddressCheck {
+  verdict: ShippingAddressMatch
+  /**
+   * Lo que escribió el comprador en los campos cuya ortografía se sustituyó.
+   * Nunca se pierde lo que tecleó: se guarda al lado, no encima.
+   */
+  original: { city?: string | null; state?: string | null; neighborhood?: string | null } | null
+  /** Vintage del catálogo con el que se juzgó. */
+  corpusVersion: string | null
+}

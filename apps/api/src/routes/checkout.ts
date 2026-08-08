@@ -9,11 +9,19 @@
  * NO CUSTODIA: el cargo se crea en la cuenta del seller; la plataforma solo
  * cobra `application_fee_amount`.
  */
-import { inventory, orderItems, orders, sellers } from '@thepubmarket/db'
+import {
+  inventory,
+  orderItems,
+  orders,
+  sellers,
+  sepomexCorpusMeta,
+  sepomexSettlements,
+} from '@thepubmarket/db'
 import type { CheckoutResponse } from '@thepubmarket/shared'
 import { eq, inArray } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { z } from 'zod'
+import { checkShippingAddress } from '../lib/address-check'
 import {
   addressColumns,
   deliverySchema,
@@ -22,6 +30,7 @@ import {
   toPickupPoint,
 } from '../lib/delivery'
 import { computePlatformFeeCents } from '../lib/orders'
+import { lookupPostalCode } from '../lib/postal-codes'
 import { createCheckoutSession, createStripe } from '../lib/stripe'
 import { buyerAuth } from '../middleware/buyer-auth'
 import { turnstileGuard } from '../middleware/turnstile'
@@ -137,6 +146,45 @@ checkout.post('/', turnstileGuard, buyerAuth, async (c) => {
   }
   const shippingCents = shippingCentsFor(delivery.method)
 
+  // Cotejo de la dirección contra el corpus SEPOMEX (TASK-061.04). Es
+  // DESCRIPTIVO: ningún resultado impide pagar. Reutiliza el mismo lookup
+  // cacheado que consultó el navegador del comprador, así que el veredicto se
+  // calcula contra exactamente lo que él vio en el formulario.
+  let addressCheckColumns: {
+    shippingCity?: string
+    shippingState?: string
+    shippingNeighborhood?: string | null
+    shippingAddressMatch: string
+    shippingAddressOriginal: string | null
+    shippingCorpusVersion: string | null
+  } | null = null
+  if (delivery.method === 'shipping') {
+    const lookup = await lookupPostalCode(
+      {
+        kv: c.env.SESSIONS,
+        loadSettlements: (cp) =>
+          db.select().from(sepomexSettlements).where(eq(sepomexSettlements.postalCode, cp)),
+        loadCorpusVersion: async () => {
+          const [meta] = await db
+            .select({ version: sepomexCorpusMeta.version })
+            .from(sepomexCorpusMeta)
+            .limit(1)
+          return meta?.version ?? null
+        },
+      },
+      delivery.address.postalCode,
+    )
+    const check = checkShippingAddress(delivery.address, lookup.response)
+    addressCheckColumns = {
+      shippingCity: check.city,
+      shippingState: check.state,
+      shippingNeighborhood: check.neighborhood,
+      shippingAddressMatch: check.verdict,
+      shippingAddressOriginal: check.original ? JSON.stringify(check.original) : null,
+      shippingCorpusVersion: check.corpusVersion,
+    }
+  }
+
   const orderId = crypto.randomUUID()
 
   // Reserva atómica por item (Durable Object). Si alguno falla, libera lo reservado.
@@ -194,7 +242,7 @@ checkout.post('/', turnstileGuard, buyerAuth, async (c) => {
       deliveryMethod: delivery.method,
       shippingCents,
       ...(delivery.method === 'shipping'
-        ? addressColumns(delivery.address)
+        ? { ...addressColumns(delivery.address), ...addressCheckColumns }
         : { pickupSellerId: delivery.pickupSellerId }),
     })
     await db.insert(orderItems).values(itemRows)

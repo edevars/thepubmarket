@@ -1,6 +1,6 @@
 'use client'
 
-import type { SellerOrder } from '@thepubmarket/shared'
+import type { OrderAddressCheck, SellerOrder } from '@thepubmarket/shared'
 import { useLocale, useTranslations } from 'next-intl'
 import { useState } from 'react'
 import { artTintForId, formatMoneyCents } from '@/lib/catalog/display'
@@ -212,7 +212,7 @@ function OrderRow({
 function DeliveryBlock({ order }: { order: SellerOrder }) {
   const t = useTranslations('panel')
   const { me } = usePanel()
-  const { method, address, pickupPoint } = order.delivery
+  const { method, address, pickupPoint, addressCheck } = order.delivery
 
   const title =
     method === 'pickup' ? t('deliveryPickup') : method === 'shipping' ? t('deliveryShipping') : null
@@ -231,18 +231,21 @@ function DeliveryBlock({ order }: { order: SellerOrder }) {
       </div>
 
       {method === 'shipping' && address ? (
-        <address className="not-italic text-[12.5px] leading-relaxed text-ink-2">
-          <div className="font-semibold text-white">{address.recipient}</div>
-          <div>
-            {address.line1}
-            {address.line2 ? `, ${address.line2}` : ''}
-          </div>
-          {address.neighborhood && <div>{address.neighborhood}</div>}
-          <div>
-            {address.postalCode} · {address.city}, {address.state}
-          </div>
-          <div className="mt-1 font-mono text-[11px] text-muted">{address.phone}</div>
-        </address>
+        <>
+          <address className="not-italic text-[12.5px] leading-relaxed text-ink-2">
+            <div className="font-semibold text-white">{address.recipient}</div>
+            <div>
+              {address.line1}
+              {address.line2 ? `, ${address.line2}` : ''}
+            </div>
+            {address.neighborhood && <div>{address.neighborhood}</div>}
+            <div>
+              {address.postalCode} · {address.city}, {address.state}
+            </div>
+            <div className="mt-1 font-mono text-[11px] text-muted">{address.phone}</div>
+          </address>
+          {addressCheck && <AddressWarning check={addressCheck} />}
+        </>
       ) : method === 'pickup' && pickupPoint ? (
         <div className="text-[12.5px] leading-relaxed text-ink-2">
           <div className="font-semibold text-white">{pickupPoint.name}</div>
@@ -259,6 +262,48 @@ function DeliveryBlock({ order }: { order: SellerOrder }) {
     </div>
   )
 }
+
+/**
+ * Aviso cuando la dirección no casó limpio con el catálogo SEPOMEX
+ * (TASK-061.04).
+ *
+ * No es un error de la orden ni bloquea nada: la orden ya está pagada y se
+ * surte igual. Está aquí para que la tienda pueda llamarle al comprador ANTES
+ * de imprimir la guía, que es cuando corregir todavía es gratis. Muestra lo
+ * que él escribió cuando difiere de lo guardado, porque esa es justamente la
+ * pista para la llamada.
+ *
+ * Los veredictos limpios (`exact`, `corrected`) y `no_corpus` no pintan nada:
+ * el primero porque no hay nada que revisar y el segundo porque es una falla de
+ * nuestra operación, no algo que el vendedor pueda resolver.
+ */
+function AddressWarning({ check }: { check: OrderAddressCheck }) {
+  const t = useTranslations('panel')
+  if (!ADDRESS_REVIEW_VERDICTS.has(check.verdict)) return null
+
+  const typed = [check.original?.state, check.original?.city, check.original?.neighborhood].filter(
+    Boolean,
+  )
+
+  return (
+    <p className="mt-2.5 border border-amber-500/40 bg-amber-500/10 px-2.5 py-2 text-[12px] leading-relaxed text-amber-300">
+      {t(`addressCheck.${check.verdict}`)}
+      {typed.length > 0 && (
+        <span className="mt-1 block text-amber-300/80">
+          {t('addressCheck.buyerTyped', { values: typed.join(', ') })}
+        </span>
+      )}
+    </p>
+  )
+}
+
+/** Veredictos que ameritan confirmar la dirección antes de enviar. */
+const ADDRESS_REVIEW_VERDICTS: ReadonlySet<string> = new Set([
+  'unlisted_settlement',
+  'municipality_mismatch',
+  'state_mismatch',
+  'unknown_postal_code',
+])
 
 function OrderDetail({ order }: { order: SellerOrder }) {
   const t = useTranslations('panel')
