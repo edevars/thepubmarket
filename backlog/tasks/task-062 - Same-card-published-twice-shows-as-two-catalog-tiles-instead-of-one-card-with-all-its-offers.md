@@ -7,6 +7,7 @@ status: In Progress
 assignee:
   - '@claude'
 created_date: '2026-08-08 04:40'
+updated_date: '2026-08-08 04:42'
 labels:
   - 'epic:catalog-filter-console'
   - web
@@ -54,3 +55,16 @@ Scope covers the catalog grid, the store (seller) inventory grid, home rows, rel
 - [ ] #9 API-side lookup of every offer for a printing is covered by tests in the catalog route suite
 - [ ] #10 docs/ingenieria catalog documentation describes the card-identity rule and the representative-offer rule
 <!-- AC:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+1. API (`apps/api/src/routes/catalog.ts`): add a `catalogId` query param to `GET /catalog` that matches the printing id against `catalog_id` or the legacy `scryfall_id` column (both indexed), so the card page can pull every offer of a printing without the 200-row page truncation. Parsing helper stays pure and unit-tested in `catalog.test.ts`.
+2. Web data layer: new pure module `lib/catalog/grouping.ts` with the card identity key (`tcg | catalogId | language | finish`, falling back to the listing id when the printing id is missing so unrelated rows never merge), `groupByCard`, `dedupeByCard` and `pickRepresentative` (closest to the mean price; ties → lower price → lower id). Unit tests alongside.
+3. `lib/api.ts` + `lib/catalog/data.ts`: forward `catalogId`; rewrite `getPurchaseOptions` to fetch the printing's offers from the API and keep only those sharing the card key; dedupe `getFeatured`/`getNewArrivals`/`getHeroCards`/`getRelated`.
+4. `CatalogView` / `SellerInventory`: group after filtering, render one tile per card, and pass the group to `CardGrid` → `ProductCard` so a card with several offers shows "N ofertas · desde $X".
+5. `facet-counts.ts`: count distinct cards instead of listings so the sidebar numbers match the grid.
+6. `CardDetailView`: render the offers block only when the card has more than one offer, list them price-ascending with quantity, and mark the one being viewed.
+7. i18n keys in `messages/es.json` + `messages/en.json`; docs in `docs/ingenieria/`.
+8. Checks: vitest (web + api), `pnpm typecheck`, `pnpm lint`, and a local curl pass against the new API param.
+<!-- SECTION:PLAN:END -->
