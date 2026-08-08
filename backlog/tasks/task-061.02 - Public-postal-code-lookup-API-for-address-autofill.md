@@ -5,7 +5,7 @@ status: In Progress
 assignee:
   - '@claude'
 created_date: '2026-08-08 01:24'
-updated_date: '2026-08-08 01:54'
+updated_date: '2026-08-08 01:56'
 labels:
   - 'epic:sepomex-address'
 milestone: m-2
@@ -47,6 +47,46 @@ The response shape is shared contract: put the types in `packages/shared` so the
 - [ ] #8 Tests cover: known multi-colonia CP, known single-colonia CP, CP with empty ciudad, unlisted CP, malformed input, and a cache hit
 - [ ] #9 No buyer address data is sent to or logged by this endpoint — only the postal code
 <!-- AC:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+## Contexto verificado
+
+- La API corre en `api.thepubmarket.com` (dominio propio), montada en `apps/api/src/index.ts`. Rutas públicas ya existentes sin auth: `/catalog`, `/sellers`, `/photos`, `/card-images`.
+- No hay ningún uso del Cache API en el Worker; el único patrón de cache que existe es **KV** (`scryfall.ts`). Se sigue ese, no se inventa otro.
+- `checkRateLimit(kv, bucket, id, limit, windowSeconds)` + `clientIp(c)` ya existen en `lib/rate-limit.ts` sobre el binding `SESSIONS`.
+- vitest en apps/api solo cubre módulos "puros" (`vitest.config.ts` lo dice explícito); hay un `createFakeKV()` en `src/test/fake-kv.ts`. No hay fake de Drizzle.
+- **Producción todavía no tiene el corpus** (TASK-061.01 quedó bloqueada en el paso remoto). El endpoint tiene que degradar a "no encontrado" con `corpusVersion: null` en vez de reventar.
+
+## Forma de la respuesta
+
+Estado y municipio van a nivel CP (ningún CP cruza dos, verificado sobre las 159,006 filas). **Ciudad va por asentamiento**, porque 324 CPs tienen asentamientos en más de una ciudad; a nivel CP solo se expone cuando es única.
+
+```
+{ postalCode, found, state, stateCode, municipality, municipalityCode,
+  city,                       // solo si es única entre los asentamientos
+  settlements: [{ id, name, type, city, zone }],
+  corpusVersion }
+```
+
+CP inexistente → **200** con `found: false` y `settlements: []`. CP mal formado → **400 `invalid_postal_code`** sin tocar D1.
+
+## Pasos
+
+1. **`packages/shared`** — tipos `PostalCodeSettlement` y `PostalCodeLookupResponse` en `sepomex.ts` (donde ya vive `isValidPostalCode`, que el Worker reusa para validar).
+2. **`apps/api/src/lib/postal-codes.ts`** — la lógica, con las dependencias inyectadas (`loadSettlements`, `loadCorpusVersion`, `kv`) en vez de un `Db`: así es testeable con el fake de KV y un loader falso, sin fake de Drizzle, y respeta la regla de vitest de este repo. Expone también la función pura fila→respuesta.
+3. **Cache en KV, llaveado por versión del corpus**: `sepomex:ver` (TTL corto) guarda el vintage; `sepomex:<ver>:<cp>` guarda el payload. Un refresh del corpus cambia el prefijo, así que **invalida solo**; las llaves viejas expiran por TTL. Hit = 2 lecturas de KV y **cero** D1.
+4. **`apps/api/src/routes/address.ts`** — `GET /address/postal-codes/:postalCode`, montado en `/address`. Valida, aplica rate limit por IP y responde con `Cache-Control` para el CDN/browser.
+5. **Rate limit** — generoso para un comprador (llena un formulario: unas cuantas consultas) y estrecho para un scraper: enumerar los 31,877 CPs le costaría días. Es además la mitigación práctica al tema de términos de uso: el endpoint sirve un CP a la vez, nunca a granel.
+6. **`apps/web/src/lib/client-api.ts`** — `lookupPostalCode()` tipado consumiendo el tipo compartido (AC #7); lo usa TASK-061.03.
+7. **Tests** en `apps/api/src/lib/postal-codes.test.ts`: CP con varios asentamientos, CP de uno solo, CP con ciudad vacía, CP con dos ciudades distintas (que la ciudad de nivel CP salga null), CP inexistente, hit de cache sin tocar el loader, invalidación al cambiar la versión, y corpus ausente.
+8. **Docs** — sección del endpoint en `docs/ingenieria/sepomex.md`.
+
+## Decisión sobre términos de uso, asumida
+
+El usuario dijo "continua" sin cerrar el punto de licencia. Se avanza con el diseño que no cierra ninguna puerta: **una consulta = un CP**, sin endpoint de volcado ni de búsqueda por nombre, y rate limit que hace inviable reconstruir el catálogo. Si más adelante se decide restringirlo a sesión de checkout, es agregar un middleware, no rehacer nada.
+<!-- SECTION:PLAN:END -->
 
 ## Comments
 
