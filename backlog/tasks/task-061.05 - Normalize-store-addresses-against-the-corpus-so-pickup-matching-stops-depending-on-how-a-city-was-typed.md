@@ -3,11 +3,11 @@ id: TASK-061.05
 title: >-
   Normalize store addresses against the corpus so pickup matching stops
   depending on how a city was typed
-status: In Progress
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-08-08 01:27'
-updated_date: '2026-08-08 02:54'
+updated_date: '2026-08-08 03:01'
 labels:
   - 'epic:sepomex-address'
 milestone: m-2
@@ -39,13 +39,13 @@ Depends on the corpus being loaded (TASK-061.01). Sequence it after the buyer-fa
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Stores carry a postal code and corpus-derived estado, municipio and ciudad, added by an additive Drizzle migration
-- [ ] #2 The admin or seller flow that sets a store's address resolves these fields from the corpus by CP, and a store whose CP is not in the corpus can still be saved with manually entered values
-- [ ] #3 Same-city pickup matching uses the canonical corpus values rather than string comparison of free text, and a store recorded as 'CDMX' matches one recorded as 'Ciudad de Mexico'
+- [x] #1 Stores carry a postal code and corpus-derived estado, municipio and ciudad, added by an additive Drizzle migration
+- [x] #2 The admin or seller flow that sets a store's address resolves these fields from the corpus by CP, and a store whose CP is not in the corpus can still be saved with manually entered values
+- [x] #3 Same-city pickup matching uses the canonical corpus values rather than string comparison of free text, and a store recorded as 'CDMX' matches one recorded as 'Ciudad de Mexico'
 - [ ] #4 Existing stores are backfilled, with any address the corpus contradicts reported for human review instead of being overwritten automatically
-- [ ] #5 Stores with no postal code and no corpus match keep working: pickup matching falls back to the current behaviour rather than dropping them from checkout
-- [ ] #6 Tests cover CDMX/Ciudad de Mexico equivalence, two stores in different municipios of the same metro area, and a store with no corpus match
-- [ ] #7 Public seller profile and pickup point rendering still show the same human-readable address to buyers
+- [x] #5 Stores with no postal code and no corpus match keep working: pickup matching falls back to the current behaviour rather than dropping them from checkout
+- [x] #6 Tests cover CDMX/Ciudad de Mexico equivalence, two stores in different municipios of the same metro area, and a store with no corpus match
+- [x] #7 Public seller profile and pickup point rendering still show the same human-readable address to buyers
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -85,3 +85,53 @@ Así que la llave de emparejamiento es **estado + ciudad del catálogo, con el m
 
 El perfil público del vendedor y el render de los pickup points siguen mostrando el mismo texto legible (`city`, `neighborhood`, `address` libres): las columnas nuevas son para emparejar, no para pintar (AC #7).
 <!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+**El plan decía municipio; medir el catálogo lo cambió.** Las 5 tiendas sembradas están todas en "CDMX" pero en alcaldías distintas (Cuauhtémoc, Benito Juárez, Coyoacán). Emparejar por municipio las habría dejado de juntar y los pickup points habrían desaparecido — justo el bug que la task quiere arreglar. La llave quedó en **estado + ciudad**, con el municipio de respaldo cuando el CP no trae ciudad.
+
+Tres hechos medidos sobre las 159,006 filas que sostienen esa decisión:
+- "Ciudad de México" es el **único** nombre de ciudad del país que abarca más de un municipio (sus 16 alcaldías).
+- `c_cve_ciudad` **no** es una llave de ciudad: la CDMX tiene 16 valores distintos para la misma ciudad. El nombre sí sirve; el código no.
+- SEPOMEX **no modela zonas metropolitanas**: Zapopan y Guadalajara son ciudades distintas, igual que San Pedro y Monterrey. Por eso la comparación de texto libre se conserva en paralelo en vez de sustituirse.
+
+**Un error de mi propio script, encontrado al correrlo con datos reales.** La primera versión aplicaba cualquier candidato único. Para "Eldrazi Corner — Coyoacán, CDMX" encontró exactamente un CP… **64510, Monterrey, Nuevo León**: en la CDMX Coyoacán es alcaldía, no colonia, así que la búsqueda por nombre solo pega en Monterrey. Con `--apply` le habría escrito un CP de otro estado. Ahora se exige que el candidato único **además** concuerde con la ciudad que la tienda ya tenía registrada. Un candidato único no es un candidato correcto.
+
+**Verificación end-to-end contra la D1 local**, reproduciendo el bug y su arreglo:
+
+| Escenario | `/checkout/pickup-points` |
+|---|---|
+| Eldrazi con ciudad "Ciudad de México" (las demás "CDMX") y **sin** llave | **desaparece** de la lista |
+| misma tienda, con `locality_key` resuelta del corpus | **vuelve** a aparecer |
+
+Endpoint admin probado: CP válido → `resolved: true` con llave `09:ciudad de mexico` (Cuauhtémoc **y** Coyoacán dan la misma llave); CP fuera del catálogo → `resolved: false` y la tienda **se guarda igual**; CP mal formado → 400.
+
+10 tests nuevos, 266 de API y 163 de web en verde, typecheck, lint y `wrangler deploy --dry-run` limpios.
+
+**AC #4 queda a medias, a propósito.** El mecanismo de backfill está entregado y probado, pero **no inventé códigos postales**: ninguna de las 5 tiendas tenía CP registrado, la ciudad que traen es "CDMX" (que el catálogo no usa) y The Pub Game Store es un negocio real. Una dirección incorrecta en el sistema es más difícil de detectar que una ausente. Las 5 quedan reportadas para revisión humana y **ninguna deja de funcionar**: siguen emparejando por su ciudad de texto libre. Para cerrarlo hace falta que una persona confirme el CP de cada tienda y lo fije con `PATCH /admin/sellers/:id/address`.
+<!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Las tiendas ya pueden llevar código postal y una localidad resuelta del catálogo, y el emparejamiento de recolección dejó de depender de cómo se tecleó la ciudad. Mergeado a main (`4bdf046`).
+
+**El bug que cierra** estaba documentado en el propio comentario de `normalizeCity`: la recolección se ofrece entre tiendas de la misma ciudad, y esa comparación era texto libre. "CDMX" y "Ciudad de México" no empataban, así que un punto de recolección legítimo desaparecía del checkout sin que nadie se enterara.
+
+**La llave es estado + ciudad, no municipio** — el plan decía municipio y medir el catálogo lo cambió. "Ciudad de México" es el único nombre de ciudad del país que abarca más de un municipio (sus 16 alcaldías); emparejar por municipio habría dejado de juntar una tienda de la Condesa con una de Coyoacán.
+
+**La comparación suma, no sustituye.** Dos tiendas empatan por la llave del corpus **o** por su ciudad de texto libre. Ninguna tienda que hoy aparece deja de aparecer — ni las que no tienen CP, ni una de Zapopan que escribió "Guadalajara". Eso último importa porque SEPOMEX no modela zonas metropolitanas: agrupar Zapopan con Guadalajara es una decisión de producto, no un dato derivable.
+
+**Qué cambió**
+
+| Archivo | Qué hace |
+|---|---|
+| `apps/api/src/lib/store-locality.ts` | Deriva la llave del CP y compara dos tiendas. Puro y probado. |
+| `apps/api/src/lib/delivery.ts` | `isEligiblePickupPoint` usa la llave y conserva el texto libre como respaldo. |
+| `apps/api/migrations/0016_rare_slyde.sql` | Cuatro columnas nullable en `sellers`. Aditiva. |
+| `PATCH /admin/sellers/:id/address` | **No existía ninguna ruta para fijar la dirección de una tienda** (solo `seed.sql`), que es parte de por qué nadie las corregía. |
+| `scripts/backfill-seller-localities.mjs` | Reporta candidatos; solo escribe cuando es único **y** concuerda con la ciudad registrada. |
+
+**Pendiente y consciente:** las 5 tiendas quedan sin CP, reportadas para revisión. No inventé códigos postales para negocios reales — hace falta que una persona confirme cada uno. Ninguna deja de funcionar mientras tanto.
+<!-- SECTION:FINAL_SUMMARY:END -->
