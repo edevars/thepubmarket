@@ -21,8 +21,17 @@ import {
 } from '@thepubmarket/shared'
 import { useLocale, useTranslations } from 'next-intl'
 import { useEffect, useId, useState } from 'react'
+import { ShippingAddressForm } from '@/components/checkout/ShippingAddressForm'
 import { Spinner } from '@/components/ui/Spinner'
 import { formatMoneyCents } from '@/lib/catalog/display'
+import {
+  type AddressFormValue,
+  EMPTY_ADDRESS,
+  firstInvalidField,
+  isPostalCodeInvalid,
+  missingFields,
+  toShippingAddress,
+} from '@/lib/checkout/address-form'
 import { fetchPickupPoints } from '@/lib/client-api'
 
 type Method = 'shipping' | 'pickup'
@@ -39,22 +48,6 @@ interface DeliveryStepProps {
   errorMessage?: string | null
 }
 
-const EMPTY_ADDRESS = {
-  recipient: '',
-  phone: '',
-  line1: '',
-  line2: '',
-  neighborhood: '',
-  city: '',
-  state: '',
-  postalCode: '',
-}
-
-type AddressForm = typeof EMPTY_ADDRESS
-
-/** Fields the buyer must fill for a courier to find them. */
-const REQUIRED_FIELDS = ['recipient', 'phone', 'line1', 'city', 'state', 'postalCode'] as const
-
 export function DeliveryStep({
   sellerId,
   subtotalCents,
@@ -68,7 +61,7 @@ export function DeliveryStep({
   const formId = useId()
 
   const [method, setMethod] = useState<Method | null>(null)
-  const [address, setAddress] = useState<AddressForm>(EMPTY_ADDRESS)
+  const [address, setAddress] = useState<AddressFormValue>(EMPTY_ADDRESS)
   const [pickupPoints, setPickupPoints] = useState<PickupPoint[] | null>(null)
   const [pickupId, setPickupId] = useState<string | null>(null)
   const [showErrors, setShowErrors] = useState(false)
@@ -97,29 +90,23 @@ export function DeliveryStep({
 
   const shippingCents = method === 'shipping' ? SHIPPING_FLAT_CENTS : 0
   const totalCents = subtotalCents + shippingCents
-  const missing = REQUIRED_FIELDS.filter((f) => address[f].trim() === '')
-  const postalCodeInvalid = address.postalCode.trim() !== '' && !/^\d{5}$/.test(address.postalCode)
+  const missing = missingFields(address)
+  const postalCodeInvalid = isPostalCodeInvalid(address.postalCode)
 
   function confirm() {
     if (method === 'shipping') {
       if (missing.length > 0 || postalCodeInvalid) {
         setShowErrors(true)
+        // El foco va al primer campo que falta: con teclado o lector de
+        // pantalla, "completa los datos faltantes" sin decir cuál obliga a
+        // recorrer el formulario entero.
+        const target = firstInvalidField(missing, postalCodeInvalid)
+        if (target) {
+          requestAnimationFrame(() => document.getElementById(`${formId}-${target}`)?.focus())
+        }
         return
       }
-      onConfirm({
-        method: 'shipping',
-        address: {
-          recipient: address.recipient.trim(),
-          phone: address.phone.trim(),
-          line1: address.line1.trim(),
-          line2: address.line2.trim() || null,
-          neighborhood: address.neighborhood.trim() || null,
-          city: address.city.trim(),
-          state: address.state.trim(),
-          postalCode: address.postalCode.trim(),
-          country: 'MX',
-        },
-      })
+      onConfirm({ method: 'shipping', address: toShippingAddress(address) })
       return
     }
     if (method === 'pickup' && pickupId) onConfirm({ method: 'pickup', pickupSellerId: pickupId })
@@ -151,7 +138,7 @@ export function DeliveryStep({
           />
 
           {method === 'shipping' && (
-            <AddressForm
+            <ShippingAddressForm
               value={address}
               onChange={setAddress}
               showErrors={showErrors}
@@ -306,86 +293,6 @@ function MethodCard({
       </span>
     </label>
   )
-}
-
-interface AddressFormProps {
-  value: AddressForm
-  onChange: (next: AddressForm) => void
-  showErrors: boolean
-  missing: readonly string[]
-  postalCodeInvalid: boolean
-  formId: string
-}
-
-function AddressForm({
-  value,
-  onChange,
-  showErrors,
-  missing,
-  postalCodeInvalid,
-  formId,
-}: AddressFormProps) {
-  const t = useTranslations('delivery')
-
-  const field = (key: keyof AddressForm, opts?: { optional?: boolean; wide?: boolean }) => {
-    const invalid =
-      showErrors &&
-      ((missing as readonly string[]).includes(key) || (key === 'postalCode' && postalCodeInvalid))
-    return (
-      <div className={opts?.wide ? 'sm:col-span-2' : ''}>
-        <label
-          htmlFor={`${formId}-${key}`}
-          className="mb-1.5 block font-mono text-[10.5px] uppercase tracking-[0.14em] text-muted-2"
-        >
-          {t(`field.${key}`)}
-          {opts?.optional && <span className="ml-1.5 normal-case text-faint">{t('optional')}</span>}
-        </label>
-        <input
-          id={`${formId}-${key}`}
-          value={value[key]}
-          onChange={(e) => onChange({ ...value, [key]: e.target.value })}
-          aria-invalid={invalid || undefined}
-          autoComplete={AUTOCOMPLETE[key]}
-          inputMode={key === 'postalCode' || key === 'phone' ? 'numeric' : undefined}
-          className={`w-full border bg-[#080d18] px-3 py-2.5 text-sm text-ink outline-none transition placeholder:text-faint focus:border-primary ${
-            invalid ? 'border-red-500/60' : 'border-line'
-          }`}
-        />
-      </div>
-    )
-  }
-
-  return (
-    <div className="border border-line bg-panel-2 p-[18px]">
-      <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2">
-        {field('recipient', { wide: true })}
-        {field('phone')}
-        {field('postalCode')}
-        {field('line1', { wide: true })}
-        {field('line2', { optional: true, wide: true })}
-        {field('neighborhood', { optional: true })}
-        {field('city')}
-        {field('state', { wide: true })}
-      </div>
-      {showErrors && (missing.length > 0 || postalCodeInvalid) && (
-        <p className="mt-3.5 text-[12.5px] text-red-400">
-          {postalCodeInvalid && missing.length === 0 ? t('errorPostalCode') : t('errorIncomplete')}
-        </p>
-      )}
-    </div>
-  )
-}
-
-/** Browser autofill hints — a delivery address is exactly what these are for. */
-const AUTOCOMPLETE: Record<keyof AddressForm, string> = {
-  recipient: 'name',
-  phone: 'tel',
-  line1: 'address-line1',
-  line2: 'address-line2',
-  neighborhood: 'address-level3',
-  city: 'address-level2',
-  state: 'address-level1',
-  postalCode: 'postal-code',
 }
 
 interface PickupPickerProps {
