@@ -139,7 +139,33 @@ npx wrangler d1 execute thepubmarket-db --remote --command "SELECT id, shipping_
 
 ---
 
-## 6. Cómo se refresca
+## 6. La localidad de las tiendas (recolección)
+
+La recolección en tienda aliada se ofrece solo entre tiendas de la misma ciudad, y esa comparación era texto libre: `"CDMX"` y `"Ciudad de México"` no empataban, así que un punto de recolección legítimo desaparecía del checkout sin que nadie se enterara. Desde TASK-061.05 cada tienda puede llevar un CP y una `locality_key` derivada del catálogo.
+
+**La llave es estado + ciudad, no municipio**, y la razón es medible: **"Ciudad de México" es el único nombre de ciudad del país que abarca más de un municipio** — sus 16 alcaldías. Comparar por municipio dejaría de juntar una tienda de la Condesa con una de Coyoacán, que es lo contrario de lo que el checkout promete. Fuera de la CDMX ciudad ≈ municipio, así que la llave es igual de precisa. Cuando el CP no trae ciudad (dos de cada tres asentamientos), se usa el municipio.
+
+**La comparación suma, no sustituye.** Dos tiendas empatan si coincide la llave del corpus **o** su ciudad de texto libre. Ninguna tienda que hoy aparece deja de aparecer: ni las que no tienen CP, ni una de Zapopan que escribió "Guadalajara". Eso último importa porque **SEPOMEX no modela zonas metropolitanas** — Zapopan y Guadalajara son ciudades distintas para el catálogo, igual que San Pedro y Monterrey. Agruparlas es una decisión de producto, no un dato que se pueda derivar.
+
+Fijar la dirección de una tienda (administrativo, modelo por invitación):
+
+```bash
+curl -X PATCH -H "x-admin-key: $ADMIN_KEY" -H "content-type: application/json" -d '{"postalCode":"06140"}' https://api.thepubmarket.com/admin/sellers/<id>/address
+```
+
+Un CP fuera del catálogo responde `resolved: false` y **se guarda igual**: la tienda sigue emparejando por su ciudad de texto libre.
+
+Para ver qué tiendas siguen sin CP y qué candidatos hay:
+
+```bash
+node scripts/backfill-seller-localities.mjs
+```
+
+El script **no adivina**. Solo escribe (con `--apply`) cuando hay un único candidato *y* concuerda con la ciudad que la tienda ya tenía registrada. La razón es un caso real que apareció probándolo: buscar la colonia "Coyoacán" da un único CP… en Monterrey, porque en la CDMX Coyoacán es alcaldía y no colonia. Un candidato único no es un candidato correcto.
+
+---
+
+## 7. Cómo se refresca
 
 Correos publica actualizaciones cada pocas semanas. **Es una operación manual y
 deliberadamente manual:** el catálogo se mueve lento y un cron no paga su
@@ -176,7 +202,7 @@ mezclada pero **nunca vacía**, y la siguiente converge.
 
 ---
 
-## 7. Verificar una carga
+## 8. Verificar una carga
 
 ```bash
 npx wrangler d1 execute thepubmarket-db --local --command "SELECT (SELECT COUNT(*) FROM sepomex_settlements) AS filas, (SELECT COUNT(DISTINCT postal_code) FROM sepomex_settlements) AS cps, (SELECT COUNT(DISTINCT corpus_version) FROM sepomex_settlements) AS versiones, (SELECT version FROM sepomex_corpus_meta) AS vintage"
@@ -194,7 +220,7 @@ que valen para cualquier otro:
 
 ---
 
-## 8. Cuando se rompa
+## 9. Cuando se rompa
 
 | Síntoma | Causa probable |
 |---|---|

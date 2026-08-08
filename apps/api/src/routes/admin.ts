@@ -22,6 +22,8 @@ import {
   inventoryPhotos,
   sellerInvitations,
   sellers,
+  sepomexCorpusMeta,
+  sepomexSettlements,
   users,
 } from '@thepubmarket/db'
 import {
@@ -41,7 +43,9 @@ import { CatalogError } from '../lib/catalog'
 import { catalogProviderFor, supportedTcgs } from '../lib/catalog-providers'
 import { createListing, type ListingInput, rowToInventoryItem } from '../lib/inventory'
 import { loadPhotosByInventoryId } from '../lib/photos'
+import { lookupPostalCode } from '../lib/postal-codes'
 import { clientIp } from '../lib/rate-limit'
+import { resolveStoreLocality } from '../lib/store-locality'
 import type { AppEnv } from '../types'
 
 const createSchema = z.object({
@@ -197,6 +201,92 @@ admin.post('/sellers/:id/link', async (c) => {
   })
 
   return c.json({ ok: true, sellerId, userId: user.id, email, invitationId, invitedBy })
+})
+
+/**
+ * PATCH /admin/sellers/:id/address — fija la dirección de una tienda y resuelve
+ * su localidad contra el corpus SEPOMEX (TASK-061.05).
+ *
+ * Antes de esto la dirección de una tienda solo se podía poner en `seed.sql`,
+ * lo que en la práctica significaba que nadie la corregía. Sigue siendo
+ * administrativo a propósito: el modelo es de vendedores por invitación, no hay
+ * auto-registro y una tienda no edita sus propios datos de vitrina.
+ *
+ * El CP es lo único obligatorio: de ahí salen estado, municipio y la llave con
+ * la que se decide qué tiendas comparten ciudad para recolección. Un CP que el
+ * catálogo no registre NO es un error — la tienda se guarda igual con lo que
+ * venga y sigue emparejando por su ciudad de texto libre, como hasta hoy.
+ */
+const sellerAddressSchema = z.object({
+  postalCode: z
+    .string()
+    .trim()
+    .regex(/^\d{5}$/, 'invalid_postal_code'),
+  /** Texto libre de vitrina; si no viene, se conserva el que ya tenía. */
+  address: z.string().trim().max(200).nullish(),
+  city: z.string().trim().max(120).nullish(),
+  neighborhood: z.string().trim().max(120).nullish(),
+})
+
+admin.patch('/sellers/:id/address', async (c) => {
+  const sellerId = c.req.param('id')
+  const parsed = sellerAddressSchema.safeParse(await c.req.json().catch(() => null))
+  if (!parsed.success) {
+    return c.json({ error: 'invalid_body', issues: parsed.error.issues }, 400)
+  }
+  const db = c.get('db')
+
+  const seller = await db.select().from(sellers).where(eq(sellers.id, sellerId)).get()
+  if (!seller) return c.json({ error: 'not_found' }, 404)
+
+  const { response } = await lookupPostalCode(
+    {
+      kv: c.env.SESSIONS,
+      loadSettlements: (cp) =>
+        db.select().from(sepomexSettlements).where(eq(sepomexSettlements.postalCode, cp)),
+      loadCorpusVersion: async () => {
+        const [meta] = await db
+          .select({ version: sepomexCorpusMeta.version })
+          .from(sepomexCorpusMeta)
+          .limit(1)
+        return meta?.version ?? null
+      },
+    },
+    parsed.data.postalCode,
+  )
+  const locality = resolveStoreLocality(response)
+
+  await db
+    .update(sellers)
+    .set({
+      postalCode: parsed.data.postalCode,
+      localityKey: locality?.localityKey ?? null,
+      municipality: locality?.municipality ?? null,
+      state: locality?.state ?? null,
+      ...(parsed.data.address !== undefined && parsed.data.address !== null
+        ? { address: parsed.data.address }
+        : {}),
+      ...(parsed.data.city !== undefined && parsed.data.city !== null
+        ? { city: parsed.data.city }
+        : {}),
+      ...(parsed.data.neighborhood !== undefined && parsed.data.neighborhood !== null
+        ? { neighborhood: parsed.data.neighborhood }
+        : {}),
+      updatedAt: sql`(unixepoch())`,
+    })
+    .where(eq(sellers.id, sellerId))
+
+  return c.json({
+    ok: true,
+    sellerId,
+    postalCode: parsed.data.postalCode,
+    // `resolved: false` = el catálogo no conoce ese CP. La tienda quedó
+    // guardada; solo sigue emparejando por texto libre.
+    resolved: locality !== null,
+    localityKey: locality?.localityKey ?? null,
+    municipality: locality?.municipality ?? null,
+    state: locality?.state ?? null,
+  })
 })
 
 /**
