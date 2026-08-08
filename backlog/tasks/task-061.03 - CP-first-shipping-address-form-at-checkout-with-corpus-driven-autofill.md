@@ -1,9 +1,11 @@
 ---
 id: TASK-061.03
 title: CP-first shipping address form at checkout with corpus-driven autofill
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - '@claude'
 created_date: '2026-08-08 01:25'
+updated_date: '2026-08-08 02:10'
 labels:
   - 'epic:sepomex-address'
 milestone: m-2
