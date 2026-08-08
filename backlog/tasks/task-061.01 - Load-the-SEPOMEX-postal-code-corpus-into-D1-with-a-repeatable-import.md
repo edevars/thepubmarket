@@ -1,9 +1,11 @@
 ---
 id: TASK-061.01
 title: Load the SEPOMEX postal-code corpus into D1 with a repeatable import
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - '@claude'
 created_date: '2026-08-08 01:24'
+updated_date: '2026-08-08 01:32'
 labels:
   - 'epic:sepomex-address'
 milestone: m-2
