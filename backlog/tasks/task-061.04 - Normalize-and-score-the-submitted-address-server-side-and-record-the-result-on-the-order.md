@@ -3,11 +3,11 @@ id: TASK-061.04
 title: >-
   Normalize and score the submitted address server-side, and record the result
   on the order
-status: In Progress
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-08-08 01:26'
-updated_date: '2026-08-08 02:40'
+updated_date: '2026-08-08 02:49'
 labels:
   - 'epic:sepomex-address'
 milestone: m-2
@@ -40,15 +40,15 @@ Regulatory: no money-flow change. Shipping fee, application fee and the direct c
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 The checkout API matches the submitted address against the corpus by CP and stores canonical estado, municipio and ciudad on the order when the submitted values refer to the same place, ignoring accents and case
-- [ ] #2 The submitted colonia is matched against the settlements of that CP, and the match outcome (exact, corrected, or not found) is persisted on the order via an additive Drizzle migration
-- [ ] #3 An address that does not match the corpus — unknown CP, unlisted colonia, or a municipio the corpus does not have — still completes checkout and creates a paid order
-- [ ] #4 The buyer-facing address stored on the order never loses information the buyer typed: corrections are recorded alongside the original, not on top of it
-- [ ] #5 A CP whose estado contradicts the submitted estado is flagged distinctly from an ordinary mismatch, and the behaviour chosen for that case is documented in the task notes
-- [ ] #6 The seller panel order detail shows when a shipping address did not match the corpus cleanly, so the store can verify before shipping
-- [ ] #7 Orders created before this change keep rendering correctly in buyer and seller views, with no match data
-- [ ] #8 Tests cover: exact match, accent- and case-only differences, unlisted colonia, unknown CP, estado contradiction, and an address posted directly to the API bypassing the form
-- [ ] #9 Existing checkout, delivery and post-payment tests still pass and no change is made to how shipping or application fees are computed
+- [x] #1 The checkout API matches the submitted address against the corpus by CP and stores canonical estado, municipio and ciudad on the order when the submitted values refer to the same place, ignoring accents and case
+- [x] #2 The submitted colonia is matched against the settlements of that CP, and the match outcome (exact, corrected, or not found) is persisted on the order via an additive Drizzle migration
+- [x] #3 An address that does not match the corpus — unknown CP, unlisted colonia, or a municipio the corpus does not have — still completes checkout and creates a paid order
+- [x] #4 The buyer-facing address stored on the order never loses information the buyer typed: corrections are recorded alongside the original, not on top of it
+- [x] #5 A CP whose estado contradicts the submitted estado is flagged distinctly from an ordinary mismatch, and the behaviour chosen for that case is documented in the task notes
+- [x] #6 The seller panel order detail shows when a shipping address did not match the corpus cleanly, so the store can verify before shipping
+- [x] #7 Orders created before this change keep rendering correctly in buyer and seller views, with no match data
+- [x] #8 Tests cover: exact match, accent- and case-only differences, unlisted colonia, unknown CP, estado contradiction, and an address posted directly to the API bypassing the form
+- [x] #9 Existing checkout, delivery and post-payment tests still pass and no change is made to how shipping or application fees are computed
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -92,3 +92,55 @@ Un solo campo queryable, `shipping_address_match`, en orden de precedencia:
 
 No se toca el flujo de dinero. Ni el envío, ni la comisión, ni el direct charge cambian; esta task solo escribe columnas descriptivas en la orden.
 <!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+**AC #5 — qué se hace con un estado que contradice al CP, y por qué.**
+
+Se marca `state_mismatch`, distinto de cualquier otro desajuste, **no bloquea el pago** y **se conserva lo que escribió el comprador**. El razonamiento: desde el servidor no hay forma de saber cuál de los dos campos trae el dedazo. Si el error estuvo en el código postal y no en el estado, "corregir" el estado con el del CP mandaría el paquete al otro lado del país — el daño de adivinar mal es peor que el de no adivinar. Y rechazar el pago descarta también las direcciones raras pero entregables que `delivery.ts` ya documenta. El panel del vendedor lo muestra antes de imprimir guía, que es cuando corregir todavía es gratis.
+
+**Un veredicto de más respecto al plan.** Se agregó `municipality_mismatch`: sin él, un CP de Iztapalapa con "Coyoacán" al lado caía en `unlisted_settlement` o incluso en `exact` si la colonia casaba por casualidad, y esa es justo una de las direcciones que el AC #3 nombra. La localidad se acepta contra el municipio **o** contra la ciudad del CP: en zonas metropolitanas mucha gente escribe la ciudad y las dos son ciertas.
+
+**Reutiliza el lookup cacheado de TASK-061.02** en vez de consultar D1 aparte. Dos efectos: el veredicto se calcula contra exactamente lo que vio el navegador del comprador, y el cache suele estar caliente porque el formulario acaba de pedir ese mismo CP.
+
+**Verificación:** 18 tests nuevos — 14 del cotejo (coincidencia exacta, solo acentos/mayúsculas, ciudad en vez de municipio, colonia fuera de lista, sin colonia, municipio ajeno, estado contradictorio, precedencia del estado sobre todo lo demás, CP desconocido, corpus ausente) y 4 del DTO (órdenes anteriores a la task sin veredicto, órdenes de recolección, JSON de originales, blob ilegible que no debe tumbar la vista). 256 tests de API y 163 de web en verde, `typecheck`, `lint`, `wrangler deploy --dry-run` y `next build` limpios. Migración aplicada en la D1 local.
+
+**Sin cambio en el flujo de dinero:** ni el envío, ni la comisión, ni el direct charge se tocaron. La task solo escribe columnas descriptivas.
+<!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+El servidor ya coteja la dirección de envío contra el corpus antes de crear la orden. Mergeado a main (`9d5d0cf`).
+
+**El problema que cierra.** El formulario CP-first ayuda al comprador honesto, pero `POST /checkout` acepta el JSON que le manden: postear el CP de Coyoacán junto a "Monterrey, Yucatán" creaba la orden tal cual. Lo que queda congelado en la orden es lo que lee el mensajero.
+
+**Descriptivo, nunca una compuerta.** Ningún veredicto impide pagar. Existe para que la tienda pueda llamarle al comprador **antes de imprimir la guía**, que es cuando corregir todavía es gratis.
+
+| Veredicto | Qué pasó | ¿Se le avisa al vendedor? |
+|---|---|---|
+| `exact` | todo coincide | no |
+| `corrected` | mismo lugar, se guardó la ortografía del catálogo | no |
+| `unlisted_settlement` | el CP existe, su lista no trae esa colonia | sí |
+| `municipality_mismatch` | el municipio/ciudad no es el del CP | sí |
+| `state_mismatch` | el estado contradice al del CP | sí |
+| `unknown_postal_code` | CP que el catálogo no registra | sí |
+| `no_corpus` | catálogo sin cargar en ese ambiente | no — es falla nuestra |
+
+**Normalizar sí, reinterpretar no.** Se adopta la ortografía del catálogo solo cuando el valor normalizado coincide, y lo que escribió el comprador se guarda al lado, nunca encima. Cuando difiere de verdad se conserva lo suyo.
+
+**Qué cambió**
+
+| Archivo | Qué hace |
+|---|---|
+| `apps/api/src/lib/address-check.ts` | La función pura del veredicto. Reutiliza el lookup cacheado de TASK-061.02, así que juzga contra exactamente lo que vio el navegador del comprador. |
+| `apps/api/migrations/0015_dizzy_thena.sql` | Tres columnas nullable: veredicto, JSON de lo que escribió el comprador donde se corrigió, y el vintage que juzgó. Aditiva. |
+| `apps/api/src/routes/checkout.ts` | Consulta el CP y mezcla el resultado antes del insert. Ni un cambio en montos ni en el flujo de Stripe. |
+| `apps/api/src/lib/orders.ts` | `OrderDelivery.addressCheck`, `null` en órdenes viejas y de recolección. |
+| `apps/web/.../OrdersView.tsx` | Aviso ámbar en el panel con lo que escribió el comprador, solo en los veredictos que la tienda puede accionar. |
+
+**Regulatorio:** sin cambio en el flujo de fondos. Envío, application fee y direct charge intactos.
+
+**Pendiente operativo:** la migración remota, la carga del corpus y el deploy siguen sin correr. Hasta entonces producción escribiría `no_corpus` en cada orden de envío — que es exactamente el veredicto diseñado para ese caso y no le avisa nada a nadie.
+<!-- SECTION:FINAL_SUMMARY:END -->
