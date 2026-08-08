@@ -89,6 +89,27 @@ export const sellers = sqliteTable(
     yearsInHobby: integer('years_in_hobby'),
     funFact: text('fun_fact'),
     address: text('address'),
+    // --- Localidad resuelta contra el corpus SEPOMEX (TASK-061.05) ---
+    // `city`/`neighborhood`/`address` de arriba son texto libre de vitrina y
+    // siguen siendo lo que ve el comprador. Estas columnas son SOLO para
+    // emparejar tiendas de la misma ciudad al ofrecer recolección, que con
+    // texto libre dependía de cómo se hubiera tecleado ("CDMX" vs "Ciudad de
+    // México" no empataban). Nullable: una tienda sin CP registrado sigue
+    // funcionando con la comparación de texto libre de siempre.
+    postalCode: text('postal_code'),
+    /**
+     * Llave de emparejamiento derivada del CP: estado + ciudad del catálogo,
+     * con el municipio de respaldo cuando el CP no trae ciudad. La ciudad y no
+     * el municipio porque "Ciudad de México" es el único nombre del país que
+     * abarca varios municipios (sus 16 alcaldías) — comparar por municipio
+     * dejaría de emparejar Condesa con Coyoacán, que es justo lo contrario de
+     * lo que promete el checkout.
+     */
+    localityKey: text('locality_key'),
+    /** Municipio/alcaldía canónico del catálogo. Para que una persona verifique. */
+    municipality: text('municipality'),
+    /** Estado canónico del catálogo. */
+    state: text('state'),
     hours: text('hours', { mode: 'json' }).$type<SellerHours[]>(),
     whatsapp: text('whatsapp'),
     instagram: text('instagram'),

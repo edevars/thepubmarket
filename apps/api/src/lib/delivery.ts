@@ -17,6 +17,7 @@
 import type { SellerRow } from '@thepubmarket/db'
 import { type DeliveryMethod, type PickupPoint, SHIPPING_FLAT_CENTS } from '@thepubmarket/shared'
 import { z } from 'zod'
+import { isSameLocality } from './store-locality'
 
 /**
  * Address fields. Kept deliberately loose beyond "present and plausible":
@@ -64,9 +65,13 @@ export function shippingCentsFor(method: DeliveryMethod): number {
  *
  * `sellers.city` is free text typed by whoever onboarded the store, so
  * "Ciudad de México", "ciudad de mexico" and " CDMX " all show up. Strips
- * accents and case so same-city matching survives that. It does NOT know that
- * CDMX and Ciudad de México are the same place — that is a data problem, and
- * the fix is normalising the seller records, not adding aliases here.
+ * accents and case so same-city matching survives that.
+ *
+ * It still does NOT know that CDMX and Ciudad de México are the same place —
+ * and it no longer has to. Since TASK-061.05 stores carry a corpus-derived
+ * `locality_key` and `isSameLocality` matches on that FIRST; this stays as the
+ * fallback for stores with no postal code on file, which is why it can afford
+ * to be a plain heuristic.
  */
 export function normalizeCity(city: string | null | undefined): string {
   if (!city) return ''
@@ -88,12 +93,12 @@ export function isEligiblePickupPoint(candidate: SellerRow, sellingStore: Seller
   if (candidate.status !== 'active') return false
   if (candidate.id === sellingStore.id) return true
 
-  const city = normalizeCity(sellingStore.city)
-  // A selling store with no city recorded has no "same city" to compare
-  // against; offering every store on the platform would be worse than
-  // offering none, so only the selling store itself remains eligible.
-  if (!city) return false
-  return normalizeCity(candidate.city) === city
+  // A selling store with neither a resolved locality nor a city recorded has no
+  // "same city" to compare against; offering every store on the platform would
+  // be worse than offering none, so only the selling store itself remains
+  // eligible.
+  if (!sellingStore.localityKey && !normalizeCity(sellingStore.city)) return false
+  return isSameLocality(candidate, sellingStore)
 }
 
 /** Maps an eligible store row to the public pickup-point DTO. */
