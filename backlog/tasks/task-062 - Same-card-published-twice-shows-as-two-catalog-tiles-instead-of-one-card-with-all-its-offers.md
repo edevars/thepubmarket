@@ -7,7 +7,7 @@ status: In Progress
 assignee:
   - '@claude'
 created_date: '2026-08-08 04:40'
-updated_date: '2026-08-08 04:42'
+updated_date: '2026-08-08 04:59'
 labels:
   - 'epic:catalog-filter-console'
   - web
@@ -25,6 +25,27 @@ references:
   - apps/web/src/components/detail/CardDetailView.tsx
   - apps/api/src/routes/catalog.ts
   - apps/web/src/lib/api.ts
+modified_files:
+  - apps/api/src/lib/inventory.ts
+  - apps/api/src/routes/catalog.ts
+  - apps/api/src/routes/catalog.test.ts
+  - apps/api/src/routes/sellers.ts
+  - apps/web/src/lib/catalog/grouping.ts
+  - apps/web/src/lib/catalog/grouping.test.ts
+  - apps/web/src/lib/catalog/data.ts
+  - apps/web/src/lib/catalog/data.test.ts
+  - apps/web/src/lib/catalog/facet-counts.ts
+  - apps/web/src/lib/catalog/facet-counts.test.ts
+  - apps/web/src/lib/api.ts
+  - apps/web/src/components/catalog/CatalogView.tsx
+  - apps/web/src/components/catalog/CardGrid.tsx
+  - apps/web/src/components/catalog/ProductCard.tsx
+  - apps/web/src/components/detail/CardDetailView.tsx
+  - apps/web/src/components/sellers/SellerInventory.tsx
+  - 'apps/web/src/app/[locale]/catalog/[id]/page.tsx'
+  - apps/web/messages/es.json
+  - apps/web/messages/en.json
+  - docs/ingenieria/catalogo-multijuego.md
 priority: high
 type: bug
 ordinal: 70000
@@ -44,16 +65,16 @@ Scope covers the catalog grid, the store (seller) inventory grid, home rows, rel
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 A card published more than once by the same store appears exactly once in the catalog grid, with the remaining offers reachable from its card page
-- [ ] #2 Two listings of the same printing that differ in finish or language remain separate tiles, each showing its own finish and language badge truthfully
-- [ ] #3 The offer shown in the grid for a card is the one whose price is closest to the average price of that card's offers; ties resolve deterministically and the rule is documented
-- [ ] #4 The card page lists every active offer for that exact card (printing + language + finish) with its price, condition, quantity and store, including offers outside the first page of the catalog fetch
-- [ ] #5 The card page's offer list no longer includes listings of other printings or other games that merely share a name or oracle id
-- [ ] #6 Home rows, related cards and the store inventory grid show one tile per card under the same rule
-- [ ] #7 Result counts and facet counts stay coherent with what the grid shows, and filtering by condition, language, finish or price still selects the matching offers
-- [ ] #8 Grouping and representative-offer selection are covered by unit tests, including the tie case and listings with a missing catalog id
-- [ ] #9 API-side lookup of every offer for a printing is covered by tests in the catalog route suite
-- [ ] #10 docs/ingenieria catalog documentation describes the card-identity rule and the representative-offer rule
+- [x] #1 A card published more than once by the same store appears exactly once in the catalog grid, with the remaining offers reachable from its card page
+- [x] #2 Two listings of the same printing that differ in finish or language remain separate tiles, each showing its own finish and language badge truthfully
+- [x] #3 The offer shown in the grid for a card is the one whose price is closest to the average price of that card's offers; ties resolve deterministically and the rule is documented
+- [x] #4 The card page lists every active offer for that exact card (printing + language + finish) with its price, condition, quantity and store, including offers outside the first page of the catalog fetch
+- [x] #5 The card page's offer list no longer includes listings of other printings or other games that merely share a name or oracle id
+- [x] #6 Home rows, related cards and the store inventory grid show one tile per card under the same rule
+- [x] #7 Result counts and facet counts stay coherent with what the grid shows, and filtering by condition, language, finish or price still selects the matching offers
+- [x] #8 Grouping and representative-offer selection are covered by unit tests, including the tie case and listings with a missing catalog id
+- [x] #9 API-side lookup of every offer for a printing is covered by tests in the catalog route suite
+- [x] #10 docs/ingenieria catalog documentation describes the card-identity rule and the representative-offer rule
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -68,3 +89,35 @@ Scope covers the catalog grid, the store (seller) inventory grid, home rows, rel
 7. i18n keys in `messages/es.json` + `messages/en.json`; docs in `docs/ingenieria/`.
 8. Checks: vitest (web + api), `pnpm typecheck`, `pnpm lint`, and a local curl pass against the new API param.
 <!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Card identity lives in one place: `cardKey` in `apps/web/src/lib/catalog/grouping.ts` — `tcg | catalogId | language | finish`, with a per-row fallback (`listing:<id>`) when the printing id is missing so two unidentifiable rows never merge. The API mirrors the same rule in SQL through `distinctCardCount` (`apps/api/src/lib/inventory.ts`) for the storefront's `singlesCount`.
+
+Representative offer: closest to the arithmetic mean of the card's offer prices, ties resolved by lower price then lower id. With exactly two offers the tie is the rule, not the exception, so the cheaper one wins — which is also the one that does not disappoint when the buyer opens the card page.
+
+Order of operations matters and is asserted in comments at both call sites: filter listings first, group second. Grouping first would drop cards from the grid because of an offer the buyer never asked to see, and could elect a representative that fails the active filters.
+
+Facet counts now count distinct cards. A card with NM and HP offers counts 1 under each value — same semantics the multi-valued game facets already had — so the sidebar number equals the number of tiles that appear when the value is selected.
+
+The card page fetches offers through the new `GET /catalog?catalogId=` instead of scanning the loaded catalog page, which is what made the old lookup blind past the first 200 listings. The param matches `catalog_id` OR the legacy `scryfall_id` column, both indexed, because the client sends whichever id the API already resolved for it.
+
+Testing note on AC#9: `apps/api` has no Workers-runtime test harness (documented in `apps/api/vitest.config.ts` — route handlers are out of scope there), so the route suite covers `parseCatalogIdParam` and the endpoint itself was verified live against a local `wrangler dev` + D1: a seeded second offer of the same printing returned both offers, an unknown id returned 0, and a blank param stayed unfiltered.
+
+Verified end to end against local API + web dev with a duplicate row seeded into D1 (Birds of Paradise, NM $180 and HP $90): catalog grid rendered 20 tiles for 21 listings with the badge "2 ofertas · desde $90"; both card pages showed "Ofertas de esta carta (2)", each linking to its sibling and marking itself "Viendo"; related cards excluded the sibling; store grid collapsed to 3 tiles and its header count matched. The seeded row was deleted afterwards.
+
+UI audited with web-design-guidelines: added focus-visible rings on the offer-row links, `tabular-nums` on the price column (the block exists to compare prices), `aria-current` on the offer being viewed, and truncation on the grid badge.
+<!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+One tile per card in the catalog, and a card page that lists every price and condition published for that exact card.
+
+Card identity is printing + language + finish, so the reported duplicate (Rengar - Pridestalker UNL-183 es/foil, HP $700 and LP $1400) collapses into a single tile, while foil vs non-foil and en vs es of the same printing stay separate products. The tile shows the offer whose price is closest to the average of that card's offers and announces the rest as "N ofertas · desde $X".
+
+The card page's offer list is now fetched from the API by printing id (new `GET /catalog?catalogId=`) instead of scanning the first page of the catalog, which fixes two bugs at once: siblings past the 200-row page were invisible, and matching on oracle id or name pulled in other printings and other sets. The block only renders when a card actually has more than one offer.
+
+Grouping is applied after filtering everywhere it appears — catalog grid, store inventory grid, home rows, related cards — and facet counts plus the public `singlesCount` now count cards, so every number on screen matches the tiles a buyer can see.
+<!-- SECTION:FINAL_SUMMARY:END -->
