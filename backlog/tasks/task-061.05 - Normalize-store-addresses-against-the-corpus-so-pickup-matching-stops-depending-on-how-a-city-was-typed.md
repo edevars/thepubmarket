@@ -3,9 +3,11 @@ id: TASK-061.05
 title: >-
   Normalize store addresses against the corpus so pickup matching stops
   depending on how a city was typed
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - '@claude'
 created_date: '2026-08-08 01:27'
+updated_date: '2026-08-08 02:52'
 labels:
   - 'epic:sepomex-address'
 milestone: m-2
