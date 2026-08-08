@@ -5,7 +5,7 @@ status: In Progress
 assignee:
   - '@claude'
 created_date: '2026-08-08 01:24'
-updated_date: '2026-08-08 01:32'
+updated_date: '2026-08-08 01:37'
 labels:
   - 'epic:sepomex-address'
 milestone: m-2
@@ -47,3 +47,40 @@ Do not commit the raw multi-MB catalogue file into git history.
 - [ ] #7 docs/ingenieria/ documents where the catalogue comes from, its terms of use, the vintage loaded, and the exact steps to refresh it in production
 - [ ] #8 Automated tests cover parsing of the catalogue format, including rows with empty ciudad and colonia names containing commas or quotes
 <!-- AC:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+## Source verified before planning
+
+The official export at correosdemexico.gob.mx works today and is current ("Última Actualización de Información: Agosto 6 de 2026"). It is an ASP.NET postback: GET the page, replay `__VIEWSTATE` / `__VIEWSTATEGENERATOR` / `__EVENTVALIDATION` in a POST with `cboEdo=00` (all states), `rblTipo=txt`, `btnDescarga.x/y`. Response is `CPdescargatxt.zip` (2.1 MB) holding `CPdescarga.txt` (15.7 MB, **ISO-8859-1**, CRLF).
+
+Measured shape of the file (159,008 lines):
+- line 1 = license notice, line 2 = header, 159,006 data rows, all with exactly 15 pipe-separated fields
+- 31,877 distinct CPs; largest is 85203 with 291 settlements
+- `(d_codigo, id_asenta_cpcons)` is unique across the whole file — 0 duplicates. That is the primary key.
+- a CP never spans two estados or two municipios (verified), but **324 CPs span more than one ciudad**, so ciudad belongs to the settlement row, not to the CP
+- `d_ciudad` is empty on 104,045 rows; `c_CP` is empty on every row (dropped)
+- 46 settlement names contain commas, 16 contain double quotes → SQL escaping and parser tests need these
+
+## Steps
+
+1. **Schema** in `packages/db/src/schema.ts`, migration via `pnpm --filter @thepubmarket/api db:generate`:
+   - `sepomex_settlements` — PK `(postal_code, settlement_id)`, plus settlement, settlement_type, municipality, state, city (nullable), zone, state_code, municipality_code, city_code, four accent/case-folded `*_norm` columns, and `corpus_version`. Index on `(state_norm, municipality_norm)` for the store-matching work in TASK-061.05.
+   - `sepomex_corpus_meta` — single row (`id = 1` CHECK), version, source_url, published_label, row_count, file_sha256, loaded_at. This is what answers "how stale is the corpus".
+   - Additive only; no existing table is touched.
+2. **`packages/shared/src/sepomex.ts`** — the corpus format lives in one place: expected header field list (abort loudly if SEPOMEX renames a column, same rule as `import-riftbound.mjs`), `parseSepomexCatalog()`, and `normalizeAddressPart()` (NFD, strip diacritics, fold case, collapse whitespace). TASK-061.04 needs the same normalizer at runtime, so it must not live in the script.
+3. **`scripts/import-sepomex.mjs`** — download (or `--file` a local copy), extract the single-entry zip with `zlib.inflateRawSync`, decode latin1, parse via the shared module (Node 24 strips the TS types on import, no build step), emit SQL to a gitignored `.tmp/`, and run `wrangler d1 execute --local|--remote`.
+4. **Idempotency** — the emitted SQL is `INSERT OR REPLACE` batches all stamped with the same `corpus_version`, then `DELETE FROM sepomex_settlements WHERE corpus_version <> <this one>` to sweep settlements the catalogue dropped, then the meta upsert. Re-running converges; a failed run never leaves an empty table.
+5. **Tests** — `apps/api/src/lib/sepomex-corpus.test.ts` (the repo's only vitest project) against the shared parser: header mismatch, license/header lines skipped, empty ciudad → NULL, names with commas / quotes / apostrophes, accents and ñ preserved, wrong field count rejected, normalizer output.
+6. **Docs** — `docs/ingenieria/sepomex-corpus.md`: source, terms of use, vintage loaded, refresh procedure for local and production, and the verification queries.
+7. **Verify** — apply local, import, spot-check 01000 (multi-colonia CDMX), a single-settlement CP and a rural CP with empty ciudad against the raw file; run the import twice and compare counts; then apply the migration and the import to production D1.
+
+## Deviation from the task description, recorded
+
+The description says to reuse the `import-riftbound.mjs` pattern (admin endpoint + batched HTTP). Not doing that here: that pattern exists because cards need R2 image mirroring and per-row business logic. This is inert reference data with no images and no logic, and D1 caps bound parameters per statement (~100, the cause of TASK-047), which would force ~6 rows per statement and ~26k HTTP round-trips. `wrangler d1 execute --file` with literal-value multi-row inserts is one command, no new authenticated write surface, and far less to maintain. The script still owns download, parsing and SQL generation, so the refresh is still one command.
+
+## Flag for the user — terms of use
+
+The file's own first line: the catalogue is provided free for particular use, with commercialisation and distribution to third parties not permitted. Using it internally to validate our own shipping addresses is one thing; TASK-061.02 exposes a public lookup endpoint, which is closer to redistribution. Documenting it here and raising it before that task starts; this is not legal advice.
+<!-- SECTION:PLAN:END -->
