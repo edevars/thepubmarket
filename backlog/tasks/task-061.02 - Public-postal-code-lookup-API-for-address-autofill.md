@@ -1,10 +1,11 @@
 ---
 id: TASK-061.02
 title: Public postal-code lookup API for address autofill
-status: To Do
-assignee: []
+status: In Progress
+assignee:
+  - '@claude'
 created_date: '2026-08-08 01:24'
-updated_date: '2026-08-08 01:49'
+updated_date: '2026-08-08 01:54'
 labels:
   - 'epic:sepomex-address'
 milestone: m-2
