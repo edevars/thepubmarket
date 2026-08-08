@@ -3,7 +3,7 @@ id: TASK-062
 title: >-
   Same card published twice shows as two catalog tiles instead of one card with
   all its offers
-status: In Progress
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-08-08 04:40'
