@@ -1,6 +1,11 @@
 import type { OrderRow } from '@thepubmarket/db'
 import { describe, expect, it } from 'vitest'
-import { computePlatformFeeCents, deriveSellerOrderStatus, maskBuyer } from './orders'
+import {
+  computePlatformFeeCents,
+  deriveSellerOrderStatus,
+  maskBuyer,
+  orderToDelivery,
+} from './orders'
 
 /** Minimal order row; only the fields the derivation actually reads. */
 function order(over: Partial<OrderRow> = {}): OrderRow {
@@ -73,5 +78,53 @@ describe('maskBuyer', () => {
     expect(maskBuyer('Ana Rodríguez', 'ana@example.com')).toBe('Ana R.')
     expect(maskBuyer(null, 'ana.rodriguez@example.com')).toBe('ana.rodri…')
     expect(maskBuyer(null, 'ana@example.com')).toBe('ana…')
+  })
+})
+
+describe('orderToDelivery — cotejo de dirección (TASK-061.04)', () => {
+  const shipped = (over: Partial<OrderRow> = {}) =>
+    order({
+      deliveryMethod: 'shipping',
+      shippingLine1: 'Av. Río Churubusco 500',
+      shippingCity: 'Iztapalapa',
+      shippingState: 'Ciudad de México',
+      shippingPostalCode: '09630',
+      ...over,
+    })
+
+  it('devuelve null en órdenes anteriores a la task, que no tienen veredicto', () => {
+    // Existen en producción y tienen que seguir renderizando.
+    expect(orderToDelivery(shipped(), undefined).addressCheck).toBeNull()
+  })
+
+  it('devuelve null en órdenes de recolección: no hay dirección que cotejar', () => {
+    const pickup = order({ deliveryMethod: 'pickup', shippingAddressMatch: null })
+    expect(orderToDelivery(pickup, undefined).addressCheck).toBeNull()
+  })
+
+  it('expone el veredicto, el vintage y lo que escribió el comprador', () => {
+    const delivery = orderToDelivery(
+      shipped({
+        shippingAddressMatch: 'corrected',
+        shippingAddressOriginal: JSON.stringify({ city: 'IZTAPALAPA' }),
+        shippingCorpusVersion: '2026-08-06',
+      }),
+      undefined,
+    )
+
+    expect(delivery.addressCheck).toEqual({
+      verdict: 'corrected',
+      original: { city: 'IZTAPALAPA' },
+      corpusVersion: '2026-08-06',
+    })
+  })
+
+  it('un blob ilegible no tumba la vista de una orden pagada', () => {
+    const delivery = orderToDelivery(
+      shipped({ shippingAddressMatch: 'corrected', shippingAddressOriginal: '{roto' }),
+      undefined,
+    )
+    expect(delivery.addressCheck?.verdict).toBe('corrected')
+    expect(delivery.addressCheck?.original).toBeNull()
   })
 })

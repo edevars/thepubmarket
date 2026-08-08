@@ -560,7 +560,14 @@
     "photoCameraCta": "Usar cámara",
     "photoCameraCapture": "Capturar",
     "photoCameraClose": "Cerrar cámara",
-    "cameraErrorAccess": "No se pudo acceder a la cámara. Revisa los permisos del navegador."
+    "cameraErrorAccess": "No se pudo acceder a la cámara. Revisa los permisos del navegador.",
+    "addressCheck": {
+      "unlisted_settlement": "La colonia no aparece en el catálogo postal de este CP. Confirma con quien compró antes de imprimir la guía.",
+      "municipality_mismatch": "El municipio no corresponde al código postal. Confirma con quien compró antes de imprimir la guía.",
+      "state_mismatch": "El estado no corresponde al código postal. Casi siempre es un dedazo: confirma antes de enviar.",
+      "unknown_postal_code": "Ese código postal no está en el catálogo. Confirma la dirección completa antes de enviar.",
+      "buyerTyped": "Escribió: {values}"
+    }
   },
   "purchases": {
     "eyebrow": "The Pub Market · Cuenta",

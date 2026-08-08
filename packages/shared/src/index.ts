@@ -9,6 +9,9 @@
 // Node (que solo borra los tipos, no resuelve el árbol de este índice).
 export * from './sepomex'
 
+// Importado además de reexportado: los tipos de este archivo lo usan por nombre.
+import type { OrderAddressCheck } from './sepomex'
+
 /** Estado de un subsistema verificado por el health check. */
 export type HealthStatus = 'ok' | 'error'
 
@@ -510,6 +513,12 @@ export interface OrderDelivery {
   address: ShippingAddress | null
   /** Presente solo cuando `method === 'pickup'`: tienda donde se recoge. */
   pickupPoint: { id: string; name: string; slug: string; address: string } | null
+  /**
+   * Cotejo de la dirección contra el corpus SEPOMEX (TASK-061.04). `null` en
+   * órdenes de recolección y en las anteriores a esa task, que existen en
+   * producción y deben seguir renderizando.
+   */
+  addressCheck: OrderAddressCheck | null
 }
 
 /** Respuesta de `POST /checkout`: a dónde redirigir para pagar. */

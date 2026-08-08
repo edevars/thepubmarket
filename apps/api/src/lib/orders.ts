@@ -7,12 +7,14 @@ import type {
   BuyerOrder,
   Condition,
   DeliveryMethod,
+  OrderAddressCheck,
   OrderDelivery,
   OrderItemSummary,
   OrderStatus,
   OrderSummary,
   SellerOrder,
   SellerOrderStatus,
+  ShippingAddressMatch,
 } from '@thepubmarket/shared'
 
 /** Comisión de la plataforma en centavos a partir de los puntos básicos (bps). */
@@ -85,7 +87,32 @@ export function orderToDelivery(
             address: pickupStore.address ?? '',
           }
         : null,
+    addressCheck: toAddressCheck(order),
   }
+}
+
+/**
+ * Cotejo de la dirección contra el corpus, para las vistas (TASK-061.04).
+ *
+ * NULL en órdenes de recolección y en todas las anteriores a esa task, que
+ * existen en producción: por eso la ausencia se devuelve como `null` en vez de
+ * un veredicto inventado.
+ */
+function toAddressCheck(order: OrderRow): OrderAddressCheck | null {
+  const verdict = order.shippingAddressMatch as ShippingAddressMatch | null
+  if (!verdict) return null
+
+  let original: OrderAddressCheck['original'] = null
+  if (order.shippingAddressOriginal) {
+    try {
+      original = JSON.parse(order.shippingAddressOriginal) as OrderAddressCheck['original']
+    } catch {
+      // Un blob ilegible no puede tumbar la vista de una orden pagada.
+      original = null
+    }
+  }
+
+  return { verdict, original, corpusVersion: order.shippingCorpusVersion }
 }
 
 /**

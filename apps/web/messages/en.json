@@ -560,7 +560,14 @@
     "photoCameraCta": "Use camera",
     "photoCameraCapture": "Capture",
     "photoCameraClose": "Close camera",
-    "cameraErrorAccess": "Couldn't access the camera. Check your browser's permissions."
+    "cameraErrorAccess": "Couldn't access the camera. Check your browser's permissions.",
+    "addressCheck": {
+      "unlisted_settlement": "This neighborhood isn't in the postal catalogue for this ZIP. Confirm with the buyer before printing the label.",
+      "municipality_mismatch": "The municipality doesn't match the postal code. Confirm with the buyer before printing the label.",
+      "state_mismatch": "The state doesn't match the postal code. It's almost always a typo — confirm before shipping.",
+      "unknown_postal_code": "That postal code isn't in the catalogue. Confirm the full address before shipping.",
+      "buyerTyped": "They typed: {values}"
+    }
   },
   "purchases": {
     "eyebrow": "The Pub Market · Account",
