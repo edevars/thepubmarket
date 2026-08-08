@@ -37,9 +37,11 @@ hace el importer. La respuesta es `CPdescargatxt.zip` (~2 MB) con
 > bajo ningún concepto"*.
 >
 > Usarlo internamente para validar nuestras propias direcciones es una cosa;
-> exponerlo en un endpoint público (TASK-061.02) se acerca más a
-> redistribución. Pendiente de resolver antes de esa task. **Esto no es asesoría
-> legal.**
+> exponerlo en un endpoint público se acerca más a redistribución. El endpoint
+> de la sección 4 se diseñó para quedar del lado de "consulta": sirve **un CP
+> por petición**, no tiene volcado ni búsqueda por nombre de colonia, y el rate
+> limit vuelve inviable reconstruir el catálogo. Si se decide cerrarlo más, es
+> agregar un middleware de sesión, no rehacerlo. **Esto no es asesoría legal.**
 
 El archivo crudo **no se commitea**: son 16 MB que se regeneran con un comando.
 El SQL generado tampoco (28 MB, va a `apps/api/.tmp/`, gitignoreado).
@@ -61,7 +63,7 @@ Hechos medidos del vintage 2026-08-06, útiles para no diseñar sobre supuestos:
 | Filas sin ciudad (`city IS NULL`) | 104,045 |
 | CP con más asentamientos | 85203 → 291 |
 | ¿Un CP cruza dos estados o municipios? | **Nunca** |
-| ¿Un CP cruza dos ciudades? | **Sí, 324 CPs** |
+| ¿Un CP cruza dos ciudades distintas? | **No.** 324 CPs sí mezclan asentamientos con ciudad y sin ella |
 
 Ese último renglón es la razón de que `city` viva en la fila del asentamiento y
 no en una tabla por CP.
@@ -82,7 +84,34 @@ Sin esto, "el corpus está cargado" no dice nada sobre qué tan viejo es.
 
 ---
 
-## 4. Cómo se refresca
+## 4. El endpoint de consulta
+
+`GET /address/postal-codes/:cp` — público, sin auth (TASK-061.02).
+
+```json
+{
+  "postalCode": "01000", "found": true,
+  "state": "Ciudad de México", "stateCode": "09",
+  "municipality": "Álvaro Obregón", "municipalityCode": "010",
+  "city": "Ciudad de México",
+  "settlements": [{ "id": "0001", "name": "San Ángel", "type": "Colonia", "city": "Ciudad de México", "zone": "Urbano" }],
+  "corpusVersion": "2026-08-06"
+}
+```
+
+- **CP inexistente → 200 con `found: false`**, no un error. Es un desenlace normal (fraccionamiento nuevo, errata) y el formulario lo trata como "escríbelo a mano".
+- **CP mal formado → 400 `invalid_postal_code`**, sin tocar KV ni D1.
+- **Corpus sin importar → `found: false` y `corpusVersion: null`.** Un ambiente recién migrado no revienta: el checkout sigue con captura manual.
+- Estado y municipio van a nivel CP (ninguno cruza dos). La **ciudad** se resuelve ignorando los asentamientos que no la traen: 324 CPs mezclan colonias urbanas con rancherías sin ciudad, y contar el vacío como valor dejaría sin autocompletar a quien sí la tiene. Si algún día hubiera dos ciudades distintas en un CP, la ciudad de nivel CP sale `null` y cada asentamiento conserva la suya.
+- Las colonias vienen ordenadas alfabéticamente (`localeCompare` con `es`), no por el consecutivo interno de SEPOMEX.
+
+**Cache.** KV, con llave `sepomex:s<contrato>:<vintage>:<cp>`. Las dos versiones están ahí porque cambian por motivos distintos: el vintage al reimportar el catálogo, el número de contrato al cambiar la forma de la respuesta. Un import nuevo invalida solo —cambia el prefijo— y las entradas viejas se recogen por TTL; **si cambias la forma del JSON, sube `RESPONSE_SCHEMA_VERSION` en `lib/postal-codes.ts`** o se seguirá sirviendo el payload anterior por semanas. Un hit no toca D1. Al browser/CDN se le manda `Cache-Control: public, max-age=3600`.
+
+**Rate limit.** 120 consultas por IP y hora (`cp:ip`, sobre `SESSIONS`). Un comprador llenando un formulario ni lo roza; enumerar los 31,877 CPs tomaría casi dos semanas. Es también la contención práctica al punto de licencia: el endpoint sirve un CP a la vez, sin volcado ni búsqueda por nombre.
+
+---
+
+## 5. Cómo se refresca
 
 Correos publica actualizaciones cada pocas semanas. **Es una operación manual y
 deliberadamente manual:** el catálogo se mueve lento y un cron no paga su
@@ -119,7 +148,7 @@ mezclada pero **nunca vacía**, y la siguiente converge.
 
 ---
 
-## 5. Verificar una carga
+## 6. Verificar una carga
 
 ```bash
 npx wrangler d1 execute thepubmarket-db --local --command "SELECT (SELECT COUNT(*) FROM sepomex_settlements) AS filas, (SELECT COUNT(DISTINCT postal_code) FROM sepomex_settlements) AS cps, (SELECT COUNT(DISTINCT corpus_version) FROM sepomex_settlements) AS versiones, (SELECT version FROM sepomex_corpus_meta) AS vintage"
@@ -137,7 +166,7 @@ que valen para cualquier otro:
 
 ---
 
-## 6. Cuando se rompa
+## 7. Cuando se rompa
 
 | Síntoma | Causa probable |
 |---|---|
