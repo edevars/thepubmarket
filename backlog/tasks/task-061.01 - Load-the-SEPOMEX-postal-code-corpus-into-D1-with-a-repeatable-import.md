@@ -5,7 +5,7 @@ status: In Progress
 assignee:
   - '@claude'
 created_date: '2026-08-08 01:24'
-updated_date: '2026-08-08 01:37'
+updated_date: '2026-08-08 01:48'
 labels:
   - 'epic:sepomex-address'
 milestone: m-2
@@ -39,13 +39,13 @@ Do not commit the raw multi-MB catalogue file into git history.
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
 - [ ] #1 A versioned Drizzle migration creates the corpus table(s) in packages/db, applies cleanly to a fresh local D1 and to the existing production database, and is additive only (no destructive change to existing tables)
-- [ ] #2 Lookup by 5-digit postal code is indexed and returns every settlement of that CP together with its tipo de asentamiento, municipio, estado and ciudad
-- [ ] #3 A documented import script loads the full catalogue end to end and is re-runnable: running it twice leaves the same row count and the same data, with no duplicates
-- [ ] #4 The loaded vintage is recorded and readable (catalogue source and load/publication date), so any consumer can report how stale the corpus is
-- [ ] #5 Row counts and a handful of spot-checked CPs (one single-colonia CP, one multi-colonia CD MX CP, one rural CP with empty ciudad) are verified against the source file after import
-- [ ] #6 Accents and n-tilde survive the import intact, and a lookup key that is insensitive to accents and case is available for matching
-- [ ] #7 docs/ingenieria/ documents where the catalogue comes from, its terms of use, the vintage loaded, and the exact steps to refresh it in production
-- [ ] #8 Automated tests cover parsing of the catalogue format, including rows with empty ciudad and colonia names containing commas or quotes
+- [x] #2 Lookup by 5-digit postal code is indexed and returns every settlement of that CP together with its tipo de asentamiento, municipio, estado and ciudad
+- [x] #3 A documented import script loads the full catalogue end to end and is re-runnable: running it twice leaves the same row count and the same data, with no duplicates
+- [x] #4 The loaded vintage is recorded and readable (catalogue source and load/publication date), so any consumer can report how stale the corpus is
+- [x] #5 Row counts and a handful of spot-checked CPs (one single-colonia CP, one multi-colonia CD MX CP, one rural CP with empty ciudad) are verified against the source file after import
+- [x] #6 Accents and n-tilde survive the import intact, and a lookup key that is insensitive to accents and case is available for matching
+- [x] #7 docs/ingenieria/ documents where the catalogue comes from, its terms of use, the vintage loaded, and the exact steps to refresh it in production
+- [x] #8 Automated tests cover parsing of the catalogue format, including rows with empty ciudad and colonia names containing commas or quotes
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -84,3 +84,34 @@ The description says to reuse the `import-riftbound.mjs` pattern (admin endpoint
 
 The file's own first line: the catalogue is provided free for particular use, with commercialisation and distribution to third parties not permitted. Using it internally to validate our own shipping addresses is one thing; TASK-061.02 exposes a public lookup endpoint, which is closer to redistribution. Documenting it here and raising it before that task starts; this is not legal advice.
 <!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+**Verificación local (vintage 2026-08-06, medido contra el TXT crudo):**
+
+| Comprobación | Fuente | D1 local |
+|---|---|---|
+| Asentamientos | 159,006 | 159,006 |
+| CPs distintos | 31,877 | 31,877 |
+| Filas sin ciudad | 104,045 | 104,045 |
+| CP 09630 (varios asentamientos) | 15 | 15 |
+| CP 20174 (rural, ciudad vacía) | 14, El Rocío sin ciudad | 14, `city IS NULL`, `zone='Rural'` |
+| CP 01000 (acentos) | San Ángel / Álvaro Obregón | idéntico, `settlement_norm='san angel'` |
+
+`EXPLAIN QUERY PLAN` sobre la consulta caliente: `SEARCH sepomex_settlements USING INDEX sqlite_autoindex_sepomex_settlements_1 (postal_code=?)` — la PK sirve la búsqueda por CP, sin scan.
+
+**Idempotencia y barrido, probados en 4 corridas:**
+1. carga completa → 159,006 filas / 1 sola `corpus_version`
+2. misma versión otra vez → mismas 159,006, sin duplicados
+3. `--limit=100 --version=2026-01-01-prueba-barrido` → quedan **100** filas: el barrido eliminó las 159,006 de la versión anterior y `sepomex_corpus_meta` se actualizó
+4. carga completa de nuevo → 159,006 restauradas
+
+Tests: 18 nuevos en `sepomex-corpus.test.ts`; suite completa de apps/api en verde (225/225). `pnpm typecheck` y `pnpm lint` limpios (los 2 warnings de `noImgElement` en apps/web son previos y ajenos).
+
+**Hallazgo que afecta a TASK-061.02:** 324 CPs tienen asentamientos en más de una ciudad, así que el endpoint no puede devolver una sola `ciudad` por CP — la ciudad va por asentamiento, y a nivel CP solo cuando es única. En cambio ningún CP cruza dos estados ni dos municipios (verificado sobre las 159,006 filas), así que esos sí pueden ir a nivel CP.
+
+**Desviación menor del plan:** la ñ se pliega a n en `normalizeAddressPart` (NFD la descompone). Se conservó a propósito — la llave normalizada solo sirve para emparejar y el comprador rara vez teclea la ñ; lo que se muestra sale de la columna sin normalizar. Coincide con el `normalizeCity` que ya existe en `delivery.ts`. Documentado en el módulo y en un test.
+
+**Pendiente, bloqueado:** aplicar la migración y cargar el corpus en la D1 de **producción**. `pnpm db:migrate:remote` lo bloqueó el clasificador de permisos de la sesión; no se intentó rodear. Es AC #1 y son dos comandos (ver Final Summary).
+<!-- SECTION:NOTES:END -->
