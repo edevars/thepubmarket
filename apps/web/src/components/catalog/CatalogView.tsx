@@ -16,6 +16,7 @@ import {
 import { accentFor } from '@/lib/catalog/facet-presentation'
 import { buildFilterModel } from '@/lib/catalog/filter-model'
 import { facetsFor, type GameFacet, serializeGameFilters } from '@/lib/catalog/game-filters'
+import { dedupeByCard, groupByCard, indexByRepresentative } from '@/lib/catalog/grouping'
 import {
   applyLocalFiltersToSearchParams,
   EMPTY_LOCAL_FILTERS,
@@ -335,14 +336,36 @@ export function CatalogView({
     return byParam
   }, [items, countFilters, activeFacets])
 
-  const visible = useMemo(() => {
+  /**
+   * Cartas visibles: se filtra por PUBLICACIÓN y se agrupa por CARTA después
+   * (TASK-062). El orden importa — agrupar antes de filtrar dejaría cartas
+   * fuera del grid por el precio o la condición de una oferta que el
+   * comprador ni siquiera pidió ver, y podría elegir como representante una
+   * oferta que no pasa los filtros. Filtrando primero, una carta aparece si
+   * le queda alguna oferta compatible, y la representante sale de entre esas.
+   */
+  const groups = useMemo(() => {
     // Las facetas de juego (TASK-053) ya no llegan filtradas del servidor —
     // `items` trae TODO el inventario del `tcg` activo — así que se aplican
     // aquí igual que el resto de filtros locales (ver comentario de cabecera
     // de `applyFilters` en `catalog/data.ts`).
-    const filtered = applyFilters(items, countFilters as CatalogFilters)
-    return sortItems(filtered, localFilters.sort, q)
-  }, [items, countFilters, localFilters.sort, q])
+    return groupByCard(applyFilters(items, countFilters as CatalogFilters))
+  }, [items, countFilters])
+
+  const visible = useMemo(
+    () =>
+      sortItems(
+        groups.map((group) => group.representative),
+        localFilters.sort,
+        q,
+      ),
+    [groups, localFilters.sort, q],
+  )
+
+  const offersByCard = useMemo(() => indexByRepresentative(groups), [groups])
+
+  /** Cartas publicadas en total (sin filtrar), para la línea de resultados. */
+  const onlineCards = useMemo(() => dedupeByCard(items).length, [items])
 
   /**
    * Modelo declarativo de los filtros (TASK-057): decide qué controles
@@ -482,7 +505,7 @@ export function CatalogView({
 
   const resultLine =
     t('resultsCount', { count: visible.length }) +
-    (q ? '' : ` · ${t('onlineCount', { count: items.length })}`)
+    (q ? '' : ` · ${t('onlineCount', { count: onlineCards })}`)
 
   /** Acento del juego activo (TASK-052/054) — con fallback al cian de marca
    * cuando no hay juego activo o no tiene identidad propia (`accentFor`). */
@@ -564,7 +587,11 @@ export function CatalogView({
       />
 
       <ActiveChips chips={chips} onClearAll={clearAll} />
-      {visible.length > 0 ? <CardGrid items={visible} /> : <NoResultsState onClear={clearAll} />}
+      {visible.length > 0 ? (
+        <CardGrid items={visible} offers={offersByCard} />
+      ) : (
+        <NoResultsState onClear={clearAll} />
+      )}
     </div>
   )
 }

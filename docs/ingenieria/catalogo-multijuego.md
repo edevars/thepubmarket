@@ -430,6 +430,68 @@ puede vivir dentro del scroller horizontal de mobile; y el riel necesita
 `z-10` explícito, porque las tarjetas del grid son `relative` y si no
 pintarían por encima de los paneles abiertos.
 
+### Una tarjeta por carta: identidad y oferta representativa (TASK-062)
+
+El inventario es una lista de **publicaciones** (una fila por oferta); el
+catálogo se navega por **carta**. Sin agrupar, una tienda que publica la misma
+carta en dos condiciones aparecía dos veces en el grid, con dos fichas
+separadas y ninguna mencionando a la otra (en producción: *Rengar -
+Pridestalker* UNL-183 es/foil, HP $700 y LP $1400).
+
+**Qué es "la misma carta": impresión + idioma + acabado.** La clave la calcula
+`cardKey` en `apps/web/src/lib/catalog/grouping.ts`:
+
+```
+`${tcg}|${card.catalogId}|${language}|${finish}`
+```
+
+- La **impresión** es el id canónico del catálogo del juego (`UNL-183`, el UUID
+  de Scryfall). El nombre y el `oracleId` NO sirven como identidad: en MTG el
+  `oracleId` es el mismo para todas las reimpresiones en todos los sets, así
+  que agrupar por él juntaba cartas de sets distintos bajo un mismo precio.
+- **Idioma y acabado entran en la identidad** porque cambian lo que el
+  comprador recibe y se cotizan distinto (*Dark Ritual* msc: $60 no-foil contra
+  $231 foil). Además mantienen honestos los badges de la tarjeta y coherentes
+  los filtros de idioma/foil.
+- Lo que **varía dentro de una carta**: condición, precio, existencias y
+  vendedor. Eso es lo que la ficha lista como ofertas.
+- Una fila **sin `catalogId`** cae a una clave por fila (`listing:<id>`): sin id
+  de impresión no hay con qué demostrar que dos filas son la misma carta, y
+  fusionar por nombre sería peor que no fusionar.
+
+**Cuál oferta se publica en el grid: la de precio más cercano al promedio** de
+esa carta (`pickRepresentative`, media aritmética simple, sin ponderar por
+cantidad). Mostrar la más barata invita a publicar una copia HP de regalo para
+ganar la portada; mostrar la primera que ordene la base es arbitrario y cambia
+sola. Desempates, en orden: precio menor, luego id menor — con dos ofertas el
+empate es la regla (ambas quedan a la misma distancia de la media), y gana la
+barata. La tarjeta anuncia el resto con `N ofertas · desde $X`.
+
+**Se filtra por publicación y se agrupa después.** `CatalogView` y
+`SellerInventory` llaman a `applyFilters` y recién entonces a `groupByCard`.
+Agrupar antes dejaría cartas fuera del grid por el precio o la condición de una
+oferta que el comprador no pidió ver, y podría elegir como representante una
+oferta que no pasa los filtros. Por lo mismo, `facet-counts.ts` cuenta **cartas
+distintas** (no publicaciones): el número del sidebar es el de tarjetas que se
+verán al seleccionar el valor. Una carta con ofertas NM y HP suma 1 en cada
+valor, igual que ya pasaba con las facetas multivaluadas.
+
+**La ficha pide las ofertas a la API por id de impresión**
+(`GET /catalog?catalogId=…`, que compara contra `catalog_id` y contra el
+`scryfall_id` legacy; ambas columnas están indexadas). Buscarlas dentro del
+catálogo ya cargado no funciona por el caveat de `FETCH_LIMIT` de arriba: con
+más de mil publicaciones activas y páginas de 200 por título, las hermanas de
+una carta que ordene tarde nunca caen en la página traída — la misma clase de
+bug que TASK-059. Lo que la API devuelva de más (misma impresión, otro idioma o
+acabado) lo descarta `offersOfSameCard`. El bloque de ofertas solo se pinta
+cuando hay más de una; con una sola sería repetir la buy box.
+
+`singlesCount` del escaparate público (`GET /sellers`) también cuenta cartas,
+vía `distinctCardCount` en `apps/api/src/lib/inventory.ts` — es el número que
+el comprador puede verificar contando tarjetas en el grid de la tienda. El
+panel del propio vendedor sigue contando publicaciones, que es lo que ahí se
+administra.
+
 ---
 
 ## 7. Distinguir impresiones en el panel

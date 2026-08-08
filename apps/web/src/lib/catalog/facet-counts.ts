@@ -16,6 +16,7 @@
 import { CONDITIONS, type Condition, type InventoryItem } from '@thepubmarket/shared'
 import { applyFilters, type CatalogFilters } from './data'
 import type { GameFacet } from './game-filters'
+import { cardKey } from './grouping'
 
 /** Set de filtros activos sobre el que se calculan los conteos (self-exclusion). */
 export interface FacetCountFilters {
@@ -45,14 +46,41 @@ function toCatalogFilters(
   }
 }
 
+/**
+ * Cuenta CARTAS, no publicaciones (TASK-062): dos ofertas de la misma carta
+ * suman 1, igual que ocupan un solo tile del grid. Sin esto el sidebar diría
+ * "2" para una condición que al seleccionarse muestra una sola tarjeta.
+ *
+ * Una carta puede sumar en varios valores de una misma faceta (una con ofertas
+ * NM y HP cuenta en las dos), igual que ya pasaba con las facetas
+ * multivaluadas: el conteo responde "cuántas cartas tienen alguna oferta con
+ * este valor", que es justo lo que se ve al seleccionarlo.
+ */
+function countCardsByValue(
+  pool: InventoryItem[],
+  valuesOf: (item: InventoryItem) => Iterable<string>,
+): Record<string, number> {
+  const cardsByValue = new Map<string, Set<string>>()
+  for (const item of pool) {
+    const key = cardKey(item)
+    for (const value of valuesOf(item)) {
+      const cards = cardsByValue.get(value)
+      if (cards) cards.add(key)
+      else cardsByValue.set(value, new Set([key]))
+    }
+  }
+  return Object.fromEntries([...cardsByValue].map(([value, cards]) => [value, cards.size]))
+}
+
 /** Conteo por condición, excluyendo el propio filtro de condición. */
 export function countConditions(
   items: InventoryItem[],
   filters: FacetCountFilters,
 ): Record<Condition, number> {
   const pool = applyFilters(items, toCatalogFilters(filters, { conditions: [] }))
+  const byCondition = countCardsByValue(pool, (item) => [item.condition])
   const counts = Object.fromEntries(CONDITIONS.map((c) => [c, 0])) as Record<Condition, number>
-  for (const item of pool) counts[item.condition] += 1
+  for (const condition of CONDITIONS) counts[condition] = byCondition[condition] ?? 0
   return counts
 }
 
@@ -62,15 +90,13 @@ export function countLanguages(
   filters: FacetCountFilters,
 ): Record<string, number> {
   const pool = applyFilters(items, toCatalogFilters(filters, { languages: [] }))
-  const counts: Record<string, number> = {}
-  for (const item of pool) counts[item.language] = (counts[item.language] ?? 0) + 1
-  return counts
+  return countCardsByValue(pool, (item) => [item.language])
 }
 
-/** Conteo de items foil, excluyendo el propio filtro de foil. */
+/** Conteo de cartas foil, excluyendo el propio filtro de foil. */
 export function countFoil(items: InventoryItem[], filters: FacetCountFilters): number {
   const pool = applyFilters(items, toCatalogFilters(filters, { foilOnly: false }))
-  return pool.filter((item) => item.finish === 'foil').length
+  return countCardsByValue(pool, (item) => (item.finish === 'foil' ? ['foil'] : [])).foil ?? 0
 }
 
 /**
@@ -86,9 +112,5 @@ export function countGameFacetValues(
   const nextGame = { ...filters.game }
   delete nextGame[facet.param]
   const pool = applyFilters(items, toCatalogFilters(filters, { game: nextGame }))
-  const counts: Record<string, number> = {}
-  for (const item of pool) {
-    for (const value of facet.valuesOf(item)) counts[value] = (counts[value] ?? 0) + 1
-  }
-  return counts
+  return countCardsByValue(pool, (item) => facet.valuesOf(item))
 }

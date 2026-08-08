@@ -23,6 +23,13 @@ export interface CatalogQuery {
   set?: string
   /** Filtra por id de seller (inventario de una tienda). */
   seller?: string
+  /**
+   * Filtra por id de impresión (TASK-062): devuelve TODAS las ofertas activas
+   * de esa impresión. Lo usa la ficha de carta para listar precios y
+   * condiciones sin depender de que las hermanas hayan caído dentro de la
+   * primera página del catálogo.
+   */
+  catalogId?: string
   page?: number
   /** Tamaño de página explícito. Default `CATALOG_PAGE_SIZE`. La API topa en 200. */
   limit?: number
@@ -45,6 +52,7 @@ export async function fetchCatalog(query: CatalogQuery): Promise<CatalogListResp
   if (query.tcg) params.set('tcg', query.tcg)
   if (query.set) params.set('set', query.set)
   if (query.seller) params.set('seller', query.seller)
+  if (query.catalogId) params.set('catalogId', query.catalogId)
   if (query.gameFilters) {
     for (const [param, values] of Object.entries(query.gameFilters)) {
       for (const value of values) params.append(param, value)

@@ -13,6 +13,7 @@ import { CardGrid } from '@/components/catalog/CardGrid'
 import { NoResultsState } from '@/components/states/NoResultsState'
 import { applyFilters } from '@/lib/catalog/data'
 import { formatMoneyCents, TCG_META } from '@/lib/catalog/display'
+import { cardKey, groupByCard, indexByRepresentative } from '@/lib/catalog/grouping'
 
 function toggle<T>(arr: T[], value: T): T[] {
   return arr.includes(value) ? arr.filter((x) => x !== value) : [...arr, value]
@@ -46,12 +47,17 @@ export function SellerInventory({ items }: { items: InventoryItem[] }) {
   const [setCode, setSetCode] = useState('')
   const [maxPesos, setMaxPesos] = useState(maxBound)
 
+  /** Cartas por juego, no publicaciones (TASK-062): es lo que se ve en el grid. */
   const tcgCounts = useMemo(() => {
-    const counts = new Map<Tcg, number>()
-    for (const item of items) counts.set(item.tcg, (counts.get(item.tcg) ?? 0) + 1)
-    return TCGS.filter((tcg) => counts.has(tcg)).map((tcg) => ({
+    const cards = new Map<Tcg, Set<string>>()
+    for (const item of items) {
+      const bucket = cards.get(item.tcg)
+      if (bucket) bucket.add(cardKey(item))
+      else cards.set(item.tcg, new Set([cardKey(item)]))
+    }
+    return TCGS.filter((tcg) => cards.has(tcg)).map((tcg) => ({
       tcg,
-      count: counts.get(tcg) ?? 0,
+      count: cards.get(tcg)?.size ?? 0,
     }))
   }, [items])
 
@@ -63,7 +69,12 @@ export function SellerInventory({ items }: { items: InventoryItem[] }) {
       .sort((a, b) => a.name.localeCompare(b.name))
   }, [items])
 
-  const visible = useMemo(() => {
+  /**
+   * Igual que el catálogo (TASK-062): se filtra por publicación y se agrupa
+   * por carta después, así que la misma carta publicada en dos condiciones
+   * ocupa un solo tile en el escaparate de la tienda.
+   */
+  const groups = useMemo(() => {
     const filtered = applyFilters(items, {
       q,
       conditions,
@@ -72,11 +83,16 @@ export function SellerInventory({ items }: { items: InventoryItem[] }) {
     // Juego y set se filtran aquí y no en `applyFilters`: esta vista es
     // multi-selección sobre una lista ya cargada, mientras que el filtro de
     // juego del catálogo es de selección única y lo resuelve el servidor.
-    return filtered.filter(
-      (i) =>
-        (tcgs.length === 0 || tcgs.includes(i.tcg)) && (!setCode || i.card.setCode === setCode),
+    return groupByCard(
+      filtered.filter(
+        (i) =>
+          (tcgs.length === 0 || tcgs.includes(i.tcg)) && (!setCode || i.card.setCode === setCode),
+      ),
     )
   }, [items, q, tcgs, conditions, maxPesos, maxBound, setCode])
+
+  const visible = useMemo(() => groups.map((group) => group.representative), [groups])
+  const offersByCard = useMemo(() => indexByRepresentative(groups), [groups])
 
   function clearAll() {
     setQ('')
@@ -191,7 +207,11 @@ export function SellerInventory({ items }: { items: InventoryItem[] }) {
         </div>
       </div>
 
-      {visible.length > 0 ? <CardGrid items={visible} /> : <NoResultsState onClear={clearAll} />}
+      {visible.length > 0 ? (
+        <CardGrid items={visible} offers={offersByCard} />
+      ) : (
+        <NoResultsState onClear={clearAll} />
+      )}
     </section>
   )
 }

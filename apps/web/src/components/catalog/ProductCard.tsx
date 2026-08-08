@@ -5,10 +5,16 @@ import { FoilTag } from '@/components/ui/FoilTag'
 import { LangTag } from '@/components/ui/LangTag'
 import { Link } from '@/i18n/navigation'
 import { artTintFor, formatMoneyCents, setLine } from '@/lib/catalog/display'
+import type { CardOffers } from '@/lib/catalog/grouping'
 import { CardArt } from './CardArt'
 
 interface ProductCardProps {
   item: InventoryItem
+  /**
+   * Todas las ofertas de esta carta (TASK-062). Cuando hay más de una, la
+   * tarjeta lo dice: el precio que muestra es el representativo, no el único.
+   */
+  offers?: CardOffers
 }
 
 /**
@@ -18,10 +24,12 @@ interface ProductCardProps {
  * tarjeta entre con fade + rise cuando el grid cambia de contenido (juego o
  * filtros), en vez de aparecer con un corte seco.
  */
-export function ProductCard({ item }: ProductCardProps) {
+export function ProductCard({ item, offers }: ProductCardProps) {
   const locale = useLocale()
   const t = useTranslations('detail')
+  const tCatalog = useTranslations('catalog')
   const soldOut = item.quantity === 0
+  const offerCount = offers?.offers.length ?? 1
 
   return (
     <Link
@@ -78,6 +86,14 @@ export function ProductCard({ item }: ProductCardProps) {
           </div>
           <LangTag lang={item.language} />
         </div>
+        {offerCount > 1 && offers && (
+          <div className="truncate font-mono text-[10px] tabular-nums tracking-[0.04em] text-faint transition-colors duration-base ease-standard group-hover:text-[color:var(--game-accent,var(--color-cyan))]">
+            {tCatalog('offersFrom', {
+              count: offerCount,
+              price: formatMoneyCents(offers.minPriceCents, locale),
+            })}
+          </div>
+        )}
       </div>
     </Link>
   )

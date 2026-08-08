@@ -16,18 +16,11 @@ export default async function CatalogItemPage({ params }: ItemPageProps) {
   const item = await getItem(id)
   if (!item) notFound()
 
-  const [related, purchaseOptions, sellers] = await Promise.all([
+  const [related, offers, sellers] = await Promise.all([
     getRelated(item),
     getPurchaseOptions(item),
     getSellers(),
   ])
 
-  return (
-    <CardDetailView
-      item={item}
-      purchaseOptions={purchaseOptions}
-      related={related}
-      sellers={sellers}
-    />
-  )
+  return <CardDetailView item={item} offers={offers} related={related} sellers={sellers} />
 }
