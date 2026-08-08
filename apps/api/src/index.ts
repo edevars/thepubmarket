@@ -6,6 +6,7 @@ import { cors } from 'hono/cors'
 import { adminAuth } from './middleware/admin-auth'
 import { sellerAuth } from './middleware/seller-auth'
 import { sellerConnectAuth } from './middleware/seller-connect-auth'
+import { address } from './routes/address'
 import { admin } from './routes/admin'
 import { auth } from './routes/auth'
 import { cardImagesRoutes } from './routes/card-images'
@@ -71,6 +72,10 @@ app.route('/catalog', catalog)
 
 // Tiendas públicas (perfil de vendedor, solo lectura, sin auth).
 app.route('/sellers', sellersRoutes)
+
+// Consulta de códigos postales para el formulario de envío (TASK-061.02).
+// Sin auth: reference data pública, la petición no lleva datos del comprador.
+app.route('/address', address)
 
 // Fotos de inventario: streaming público de binarios desde R2 (TASK-025).
 // Sin auth — misma exposición que las URLs de Scryfall ya embebidas en cada

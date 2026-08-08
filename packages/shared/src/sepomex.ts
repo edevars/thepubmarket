@@ -219,3 +219,44 @@ export function parseSepomexCatalog(text: string): SepomexParseResult {
 
   return { settlements, headerLine: headerIndex + 1 }
 }
+
+// =====================================================================
+// Contrato del endpoint público de consulta por CP (TASK-061.02).
+// =====================================================================
+
+/** Un asentamiento como lo ve el cliente: sin claves internas ni columnas norm. */
+export interface PostalCodeSettlement {
+  /** Consecutivo dentro del CP; estable entre versiones del catálogo. */
+  id: string
+  name: string
+  /** Colonia, Pueblo, Fraccionamiento… Se muestra junto al nombre. */
+  type: string
+  /** null cuando SEPOMEX no la asigna (2 de cada 3 asentamientos del país). */
+  city: string | null
+  /** Urbano | Semiurbano | Rural. */
+  zone: string
+}
+
+/**
+ * Respuesta de `GET /address/postal-codes/:postalCode`.
+ *
+ * Estado y municipio viven a nivel CP porque ningún CP cruza dos (verificado
+ * sobre el catálogo completo). La ciudad se resuelve ignorando los
+ * asentamientos que no la traen —324 CPs mezclan mancha urbana con rancherías
+ * sin ciudad— y se omite si hubiera dos distintas. El valor por asentamiento
+ * siempre está en `settlements[].city`.
+ */
+export interface PostalCodeLookupResponse {
+  postalCode: string
+  /** false = CP bien formado pero ausente del catálogo. No es un error. */
+  found: boolean
+  state: string | null
+  stateCode: string | null
+  municipality: string | null
+  municipalityCode: string | null
+  /** Única ciudad no vacía del CP; null si no hay ninguna o si hubiera varias. */
+  city: string | null
+  settlements: PostalCodeSettlement[]
+  /** Vintage del catálogo cargado (ISO). null = corpus aún no importado. */
+  corpusVersion: string | null
+}

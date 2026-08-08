@@ -35,8 +35,19 @@ export function createFakeKV(pageSize = 1000): FakeKV {
   }
 
   const kv = {
-    async get(key: string) {
-      return alive(key)?.value ?? null
+    // El segundo argumento del KV real ('json' | 'text' | …) se honra: el
+    // código que cachea objetos usa `get(key, 'json')` y sin esto recibiría el
+    // string crudo, que pasa los tests por accidente o los rompe sin razón.
+    async get(key: string, type?: string) {
+      const raw = alive(key)?.value ?? null
+      if (raw === null) return null
+      if (type !== 'json') return raw
+      try {
+        return JSON.parse(raw)
+      } catch {
+        // El KV real devuelve null ante un JSON inválido en vez de lanzar.
+        return null
+      }
     },
 
     async put(key: string, value: string, options?: { expirationTtl?: number }) {

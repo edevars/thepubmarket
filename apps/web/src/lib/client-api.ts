@@ -19,6 +19,7 @@ import type {
   OrderSummary,
   PickupPoint,
   PickupPointsResponse,
+  PostalCodeLookupResponse,
   SellerOrder,
   SellerOrdersResponse,
   SellerPanelMe,
@@ -293,4 +294,35 @@ export async function requestOnboardingLink(token: string): Promise<string | nul
   })
   if (!res.ok) return null
   return ((await res.json()) as ConnectOnboardingLinkResponse).url
+}
+
+// =====================================================================
+// Direcciones — consulta de código postal (SEPOMEX)
+// =====================================================================
+
+/**
+ * Consulta un CP en el corpus SEPOMEX para autocompletar la dirección de
+ * envío. Sin auth: es reference data pública y solo viaja el CP.
+ *
+ * Devuelve `null` cuando la consulta no se pudo hacer (red caída, 429, CP mal
+ * formado): el formulario debe caer a captura manual, nunca bloquear el
+ * checkout. Un CP que simplemente no existe en el catálogo NO es este caso —
+ * llega como respuesta válida con `found: false`.
+ *
+ * `signal` permite cancelar la consulta en vuelo cuando el comprador sigue
+ * escribiendo.
+ */
+export async function lookupPostalCode(
+  postalCode: string,
+  signal?: AbortSignal,
+): Promise<PostalCodeLookupResponse | null> {
+  try {
+    const res = await fetch(`${API}/address/postal-codes/${encodeURIComponent(postalCode)}`, {
+      signal,
+    })
+    if (!res.ok) return null
+    return (await res.json()) as PostalCodeLookupResponse
+  } catch {
+    return null
+  }
 }
