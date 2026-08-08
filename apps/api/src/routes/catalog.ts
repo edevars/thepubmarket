@@ -9,7 +9,7 @@
 import { inventory, sellers } from '@thepubmarket/db'
 import type { CatalogGamesResponse, Tcg } from '@thepubmarket/shared'
 import { TCGS } from '@thepubmarket/shared'
-import { and, asc, count, desc, eq, gt, inArray, like, type SQL } from 'drizzle-orm'
+import { and, asc, count, desc, eq, gt, inArray, like, or, type SQL } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { getCardText } from '../lib/catalog-db'
 import { parseGameFilters } from '../lib/catalog-filters'
@@ -46,6 +46,16 @@ export function parseTcgParam(raw: string | undefined): { tcg?: Tcg; invalid: bo
   return TCGS.includes(value as Tcg) ? { tcg: value as Tcg, invalid: false } : { invalid: true }
 }
 
+/**
+ * Interpreta el filtro por id de impresión. Ausente/vacío = sin filtro; no se
+ * valida contra el catálogo del juego a propósito: un id inexistente devuelve
+ * cero ofertas, que es la respuesta correcta, no un error.
+ */
+export function parseCatalogIdParam(raw: string | undefined): string | undefined {
+  const value = raw?.trim()
+  return value ? value : undefined
+}
+
 export const catalog = new Hono<AppEnv>()
 
 /**
@@ -58,6 +68,11 @@ export const catalog = new Hono<AppEnv>()
  *     validación (los sets nuevos entran constantemente vía import, no hay
  *     enum estable que mantener).
  *   - seller: seller id exacto.
+ *   - catalogId: id de impresión exacto (TASK-062). Devuelve TODAS las ofertas
+ *     activas de esa impresión, que es lo que la ficha de carta necesita para
+ *     listar precios y condiciones sin depender de que las hermanas hayan
+ *     caído dentro de la primera página del catálogo (con >1000 publicaciones
+ *     y páginas de 200 ordenadas por título, casi nunca caen).
  *   - domain, type, supertype, energy, might, rarity: filtros propios de
  *     Riftbound (TASK-039); color, type, rarity: filtros propios de MTG
  *     (TASK-049) — `type` y `rarity` son nombres compartidos con Riftbound,
@@ -81,6 +96,7 @@ catalog.get('/', async (c) => {
   const q = c.req.query('q')?.trim()
   const set = c.req.query('set')?.trim()
   const seller = c.req.query('seller')?.trim()
+  const catalogId = parseCatalogIdParam(c.req.query('catalogId'))
   const { tcg, invalid } = parseTcgParam(c.req.query('tcg'))
   if (invalid) return c.json({ error: 'invalid_tcg', supported: TCGS }, 400)
 
@@ -99,6 +115,14 @@ catalog.get('/', async (c) => {
   if (tcg) filters.push(eq(inventory.tcg, tcg))
   if (set) filters.push(eq(inventory.setCode, set))
   if (seller) filters.push(eq(inventory.sellerId, seller))
+  // El id de impresión se compara contra las DOS columnas por la misma razón
+  // que `catalogIdOf` las lee en cascada: las filas previas a `catalog_id`
+  // solo tienen `scryfall_id`, y el cliente manda el id que le devolvió la API
+  // (ya resuelto), sin saber en cuál de las dos vive. Ambas están indexadas.
+  if (catalogId) {
+    const byPrinting = or(eq(inventory.catalogId, catalogId), eq(inventory.scryfallId, catalogId))
+    if (byPrinting) filters.push(byPrinting)
+  }
   filters.push(...gameFilters.conditions)
   const where = and(...filters)
 

@@ -18,6 +18,7 @@ import type {
   InventoryPhoto,
   Tcg,
 } from '@thepubmarket/shared'
+import { sql } from 'drizzle-orm'
 import { CatalogError } from './catalog'
 import { type CatalogContext, catalogProviderFor, supportedTcgs } from './catalog-providers'
 
@@ -46,6 +47,21 @@ function parseGameAttributes(raw: string | null): CardGameAttributes | null {
 export function catalogIdOf(row: InventoryRow): string {
   return row.catalogId ?? row.scryfallId ?? ''
 }
+
+/**
+ * Cuenta CARTAS distintas, no publicaciones (TASK-062). Una tienda que publica
+ * la misma carta en dos condiciones tiene dos filas de inventario pero una sola
+ * tarjeta en su escaparate, y el contador de la vitrina debe decir lo que se ve.
+ *
+ * La identidad es la misma que aplica la web en `lib/catalog/grouping.ts`:
+ * impresión + idioma + acabado, con la fila misma como último recurso cuando no
+ * hay id de impresión (así dos filas sin `catalog_id` nunca se fusionan).
+ *
+ * Sobre un LEFT JOIN sin coincidencias todas las columnas son NULL, la
+ * concatenación se propaga a NULL y `count(distinct …)` devuelve 0: una tienda
+ * sin stock sigue contando 0 en vez de desaparecer del listado.
+ */
+export const distinctCardCount = sql<number>`count(distinct ${inventory.tcg} || '|' || coalesce(${inventory.catalogId}, ${inventory.scryfallId}, ${inventory.id}) || '|' || coalesce(${inventory.cardLang}, '') || '|' || coalesce(${inventory.finish}, ''))`
 
 /**
  * Convierte una fila de Drizzle al contrato público `InventoryItem`.

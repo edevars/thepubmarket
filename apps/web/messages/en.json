@@ -259,15 +259,17 @@
     "resultsCount": "{count, plural, =0 {No results} one {# result} other {# results}}",
     "onlineCount": "{count} singles online",
     "loadError": "Could not load the catalog. Please try again.",
-    "available": "{count, plural, =0 {Sold out} one {# in stock} other {# in stock}}"
+    "available": "{count, plural, =0 {Sold out} one {# in stock} other {# in stock}}",
+    "offersFrom": "{count, plural, one {# offer} other {# offers}} · from {price}"
   },
   "detail": {
     "attributes": "Attributes",
-    "otherListings": "Other conditions available",
+    "offersTitle": "Offers for this card ({count})",
     "soldBy": "Sold by",
     "verified": "Verified",
     "related": "Related cards",
     "choose": "Choose",
+    "viewing": "Viewing",
     "attrSet": "Set",
     "attrNumber": "Collector number",
     "attrLang": "Language",

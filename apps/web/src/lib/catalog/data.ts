@@ -13,6 +13,7 @@
 import type { CatalogGameCount, Condition, InventoryItem, Tcg } from '@thepubmarket/shared'
 import { fetchCatalog, fetchCatalogGameCounts, fetchCatalogItem } from '@/lib/api'
 import { matchesGameFilters } from './game-filters'
+import { cardKey, dedupeByCard, offersOfSameCard } from './grouping'
 import { MOCK_LISTINGS } from './mock-data'
 
 /**
@@ -135,46 +136,70 @@ export async function getItem(id: string): Promise<InventoryItem | null> {
 }
 
 /**
+ * Catálogo con UNA publicación por carta (TASK-062): la representante de cada
+ * grupo, que es la de precio más cercano al promedio de esa carta. Es lo que
+ * alimenta cualquier grid que no calcule sus propias facetas — la home y las
+ * relacionadas. El catálogo y la tienda agrupan ellos mismos DESPUÉS de
+ * filtrar, porque una carta cuenta como resultado solo si le queda alguna
+ * oferta que pase los filtros.
+ */
+async function getCards(filters: CatalogFilters = {}): Promise<InventoryItem[]> {
+  return dedupeByCard(await getCatalog(filters))
+}
+
+/**
  * Destacados de la home. En Fase 1 son slices del inventario real; la curación
  * manual de destacados es un refinamiento posterior.
  */
 export async function getFeatured(): Promise<InventoryItem[]> {
-  return (await getCatalog()).slice(0, 5)
+  return (await getCards()).slice(0, 5)
 }
 
 /** Recién llegados de la home (slice del inventario real). */
 export async function getNewArrivals(): Promise<InventoryItem[]> {
-  return (await getCatalog()).slice(5, 10)
+  return (await getCards()).slice(5, 10)
 }
 
 /** Cartas en abanico del hero (3 del inventario real). */
 export async function getHeroCards(): Promise<InventoryItem[]> {
-  return (await getCatalog()).slice(0, 3)
+  return (await getCards()).slice(0, 3)
 }
 
-/** Cartas relacionadas a un item (mismo juego primero), hasta `limit`. */
+/**
+ * Cartas relacionadas a un item (mismo juego primero), hasta `limit`. Excluye
+ * la carta que se está viendo por IDENTIDAD, no por id de fila: sus otras
+ * ofertas ya se listan en la ficha y no son "relacionadas".
+ */
 export async function getRelated(item: InventoryItem, limit = 4): Promise<InventoryItem[]> {
-  const all = await getCatalog()
-  const sameGame = all.filter((i) => i.tcg === item.tcg && i.id !== item.id)
-  const rest = all.filter((i) => i.tcg !== item.tcg && i.id !== item.id)
+  const key = cardKey(item)
+  const all = (await getCards()).filter((i) => cardKey(i) !== key)
+  const sameGame = all.filter((i) => i.tcg === item.tcg)
+  const rest = all.filter((i) => i.tcg !== item.tcg)
   return [...sameGame, ...rest].slice(0, limit)
 }
 
-/** Ofertas reales de la misma carta para comparar condición/precio/tienda. */
-export async function getPurchaseOptions(item: InventoryItem, limit = 6): Promise<InventoryItem[]> {
-  const all = await getCatalog()
-  const sameCard = all.filter((i) => {
-    if (i.id === item.id) return false
-    if (item.card.oracleId && i.card.oracleId === item.card.oracleId) return true
-    return i.card.name.toLowerCase() === item.card.name.toLowerCase()
-  })
+/**
+ * TODAS las ofertas activas de la misma carta (incluida la que se está
+ * viendo), de menor a mayor precio, para comparar condición/precio/tienda.
+ *
+ * Se piden a la API por id de impresión en vez de buscarlas dentro del
+ * catálogo ya cargado: con más de mil publicaciones activas y páginas de 200
+ * ordenadas por título, las hermanas de una carta que ordene tarde en el
+ * alfabeto nunca caían en la página traída y la ficha las daba por
+ * inexistentes (misma clase de bug que TASK-059). Lo que la API devuelva de
+ * más —misma impresión pero otro idioma o acabado— lo descarta `cardKey`.
+ */
+export async function getPurchaseOptions(item: InventoryItem): Promise<InventoryItem[]> {
+  const printing = item.card.catalogId?.trim()
+  // Sin id de impresión no hay con qué buscar hermanas: la carta es esta fila.
+  if (!printing) return [item]
 
-  return [item, ...sameCard]
-    .filter((i) => i.status === 'active')
-    .sort((a, b) => {
-      if (a.id === item.id) return -1
-      if (b.id === item.id) return 1
-      return a.priceCents - b.priceCents
-    })
-    .slice(0, limit)
+  const candidates = USE_MOCKS
+    ? MOCK_LISTINGS
+    : (await fetchCatalog({ catalogId: printing, tcg: item.tcg, limit: FETCH_LIMIT })).items
+
+  return offersOfSameCard(
+    item,
+    candidates.filter((i) => i.status === 'active'),
+  )
 }

@@ -29,21 +29,27 @@ function ConditionDot({ condition }: { condition: Condition }) {
 }
 
 const sectionTitle = 'mb-3 font-display text-sm font-bold uppercase tracking-[0.1em] text-muted'
+const focusRing = 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/70'
 
 export function CardDetailView({
   item,
-  purchaseOptions,
+  offers,
   related,
   sellers,
 }: {
   item: InventoryItem
-  purchaseOptions: InventoryItem[]
+  /**
+   * TODAS las ofertas activas de esta carta, incluida la que se está viendo,
+   * de menor a mayor precio (TASK-062).
+   */
+  offers: InventoryItem[]
   related: InventoryItem[]
   sellers: Seller[]
 }) {
   const locale = useLocale()
   const t = useTranslations('detail')
   const tCommon = useTranslations('common')
+  const tCatalog = useTranslations('catalog')
   const gameLabel = TCG_META[item.tcg].name
   const langFull = (l: string) => tCommon(`lang.${l}`)
 
@@ -204,53 +210,73 @@ export function CardDetailView({
             </div>
           )}
 
-          {/* otras condiciones */}
-          <div className={sectionTitle}>{t('otherListings')}</div>
-          <div className="flex flex-col gap-2">
-            {purchaseOptions.map((option) => {
-              const seller = sellerById.get(option.sellerId)
-              const sellerLabel = seller?.name ?? option.sellerId
-              return (
-                <div
-                  key={option.id}
-                  className="flex flex-wrap items-center gap-3 border border-line-soft bg-input px-4 py-3"
-                >
-                  <ConditionDot condition={option.condition} />
-                  <span className="text-[12.5px] text-muted">{langFull(option.language)}</span>
-                  <span className="text-[11.5px] text-faint">
-                    {option.finish === 'foil' ? t('foil') : t('nonfoil')}
-                  </span>
-                  <span className="min-w-0 text-[12px] text-muted-2">
-                    {t('soldBy')}{' '}
-                    {seller?.slug ? (
-                      <Link
-                        href={`/tiendas/${seller.slug}`}
-                        className="font-semibold text-primary-hover hover:text-cyan"
-                      >
-                        {sellerLabel}
-                      </Link>
-                    ) : (
-                      <span className="font-semibold text-ink-2">{sellerLabel}</span>
-                    )}
-                    {seller?.verified && (
-                      <span className="ml-1.5 font-mono text-[10px] uppercase tracking-[0.06em] text-[#46c98a]">
-                        {t('verified')}
+          {/* Ofertas de ESTA carta (misma impresión, idioma y acabado): lo único
+              que cambia entre ellas es condición, precio, existencias y tienda.
+              Con una sola oferta el bloque sobra — sería repetir la buy box. */}
+          {offers.length > 1 && (
+            <>
+              <div className={sectionTitle}>{t('offersTitle', { count: offers.length })}</div>
+              <div className="flex flex-col gap-2">
+                {offers.map((option) => {
+                  const seller = sellerById.get(option.sellerId)
+                  const sellerLabel = seller?.name ?? option.sellerId
+                  const current = option.id === item.id
+                  return (
+                    <div
+                      key={option.id}
+                      aria-current={current ? 'true' : undefined}
+                      className={`flex flex-wrap items-center gap-3 border px-4 py-3 transition-colors duration-base ease-standard ${
+                        current
+                          ? 'border-primary/45 bg-primary/[0.07]'
+                          : 'border-line-soft bg-input hover:border-line-strong'
+                      }`}
+                    >
+                      <ConditionDot condition={option.condition} />
+                      <span className="font-mono text-[11px] text-faint">
+                        {tCatalog('available', { count: option.quantity })}
                       </span>
-                    )}
-                  </span>
-                  <span className="ml-auto text-[15px] font-bold text-white">
-                    {formatMoneyCents(option.priceCents, locale)}
-                  </span>
-                  <Link
-                    href={`/catalog/${option.id}`}
-                    className="border border-line-strong px-2.5 py-1.5 font-display text-[11px] font-semibold uppercase tracking-[0.06em] text-primary-hover hover:border-primary hover:text-ink"
-                  >
-                    {t('choose')}
-                  </Link>
-                </div>
-              )
-            })}
-          </div>
+                      <span className="min-w-0 text-[12px] text-muted-2">
+                        {t('soldBy')}{' '}
+                        {seller?.slug ? (
+                          <Link
+                            href={`/tiendas/${seller.slug}`}
+                            className={`font-semibold text-primary-hover hover:text-cyan ${focusRing}`}
+                          >
+                            {sellerLabel}
+                          </Link>
+                        ) : (
+                          <span className="font-semibold text-ink-2">{sellerLabel}</span>
+                        )}
+                        {seller?.verified && (
+                          <span className="ml-1.5 font-mono text-[10px] uppercase tracking-[0.06em] text-[#46c98a]">
+                            {t('verified')}
+                          </span>
+                        )}
+                      </span>
+                      {/* Columna de precios: `tabular-nums` para que los dígitos
+                          se alineen entre filas — todo el bloque existe para
+                          comparar precios de un vistazo. */}
+                      <span className="ml-auto text-[15px] font-bold tabular-nums text-white">
+                        {formatMoneyCents(option.priceCents, locale)}
+                      </span>
+                      {current ? (
+                        <span className="border border-primary/45 px-2.5 py-1.5 font-display text-[11px] font-semibold uppercase tracking-[0.06em] text-primary-hover">
+                          {t('viewing')}
+                        </span>
+                      ) : (
+                        <Link
+                          href={`/catalog/${option.id}`}
+                          className={`border border-line-strong px-2.5 py-1.5 font-display text-[11px] font-semibold uppercase tracking-[0.06em] text-primary-hover transition duration-fast ease-standard hover:border-primary hover:text-ink active:scale-[0.97] ${focusRing}`}
+                        >
+                          {t('choose')}
+                        </Link>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            </>
+          )}
         </div>
       </div>
 

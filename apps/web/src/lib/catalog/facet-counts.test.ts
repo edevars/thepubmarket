@@ -148,6 +148,52 @@ describe('countFoil (self-exclusion)', () => {
   })
 })
 
+/**
+ * TASK-062: los conteos son de CARTAS, porque el grid muestra una tarjeta por
+ * carta. Antes contaban publicaciones y el sidebar prometía más resultados de
+ * los que se veían al seleccionar el filtro.
+ */
+describe('conteos por carta, no por publicación', () => {
+  /** Dos ofertas de la MISMA carta: misma impresión, idioma y acabado. */
+  function twoOffersOfOneCard() {
+    const nm = mtgItem({ condition: 'NM', priceCents: 1000 })
+    const lp = mtgItem({ condition: 'LP', priceCents: 3000 })
+    lp.card.catalogId = nm.card.catalogId
+    return [nm, lp]
+  }
+
+  it('dos ofertas de la misma carta suman una sola carta por condición', () => {
+    const counts = countConditions(twoOffersOfOneCard(), { ...BASE_FILTERS, game: {} })
+    // La carta tiene oferta NM y oferta LP: cuenta 1 en cada valor, que es lo
+    // que se ve al seleccionar cualquiera de los dos — una tarjeta.
+    expect(counts.NM).toBe(1)
+    expect(counts.LP).toBe(1)
+  })
+
+  it('un idioma con dos ofertas de la misma carta cuenta una', () => {
+    expect(countLanguages(twoOffersOfOneCard(), { ...BASE_FILTERS, game: {} }).en).toBe(1)
+  })
+
+  it('foil cuenta cartas, no publicaciones', () => {
+    const [nm, lp] = twoOffersOfOneCard()
+    if (!nm || !lp) throw new Error('fixture')
+    nm.finish = 'foil'
+    lp.finish = 'foil'
+    expect(countFoil([nm, lp], { ...BASE_FILTERS, game: {} })).toBe(1)
+  })
+
+  it('una faceta de juego cuenta la carta una vez aunque tenga varias ofertas', () => {
+    const colorFacet = facetsFor('mtg').find((f) => f.param === 'color')
+    if (!colorFacet) throw new Error('MTG color facet not registered')
+    const counts = countGameFacetValues(
+      twoOffersOfOneCard(),
+      { ...BASE_FILTERS, game: {} },
+      colorFacet,
+    )
+    expect(counts.G).toBe(1)
+  })
+})
+
 describe('countGameFacetValues (self-exclusion, facetas de juego)', () => {
   const colorFacet = facetsFor('mtg').find((f) => f.param === 'color')
   const rarityFacet = facetsFor('mtg').find((f) => f.param === 'rarity')
