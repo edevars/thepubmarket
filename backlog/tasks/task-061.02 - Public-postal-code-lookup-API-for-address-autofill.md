@@ -1,11 +1,11 @@
 ---
 id: TASK-061.02
 title: Public postal-code lookup API for address autofill
-status: In Progress
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-08-08 01:24'
-updated_date: '2026-08-08 01:56'
+updated_date: '2026-08-08 02:07'
 labels:
   - 'epic:sepomex-address'
 milestone: m-2
@@ -37,15 +37,15 @@ The response shape is shared contract: put the types in `packages/shared` so the
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 A public API endpoint takes a 5-digit postal code and returns estado, municipio, ciudad (when known) and the list of colonias with their tipo de asentamiento
-- [ ] #2 A syntactically valid but unlisted CP returns a successful, explicitly empty result the client can render as 'not found', not an error status
-- [ ] #3 A malformed CP (wrong length, non-digits) is rejected with a validation error and never reaches the database
-- [ ] #4 Responses are cached at the edge and served without a database round-trip on repeat hits; the cache is invalidated or keyed so a corpus refresh does not keep serving stale settlements
-- [ ] #5 The endpoint is rate limited using the existing rate-limit helper, and the limit is high enough that a buyer filling one form is never throttled
-- [ ] #6 The response includes or exposes the corpus vintage so clients can tell how current the data is
-- [ ] #7 Request and response types live in packages/shared and are consumed by the web app rather than re-declared
-- [ ] #8 Tests cover: known multi-colonia CP, known single-colonia CP, CP with empty ciudad, unlisted CP, malformed input, and a cache hit
-- [ ] #9 No buyer address data is sent to or logged by this endpoint — only the postal code
+- [x] #1 A public API endpoint takes a 5-digit postal code and returns estado, municipio, ciudad (when known) and the list of colonias with their tipo de asentamiento
+- [x] #2 A syntactically valid but unlisted CP returns a successful, explicitly empty result the client can render as 'not found', not an error status
+- [x] #3 A malformed CP (wrong length, non-digits) is rejected with a validation error and never reaches the database
+- [x] #4 Responses are cached at the edge and served without a database round-trip on repeat hits; the cache is invalidated or keyed so a corpus refresh does not keep serving stale settlements
+- [x] #5 The endpoint is rate limited using the existing rate-limit helper, and the limit is high enough that a buyer filling one form is never throttled
+- [x] #6 The response includes or exposes the corpus vintage so clients can tell how current the data is
+- [x] #7 Request and response types live in packages/shared and are consumed by the web app rather than re-declared
+- [x] #8 Tests cover: known multi-colonia CP, known single-colonia CP, CP with empty ciudad, unlisted CP, malformed input, and a cache hit
+- [x] #9 No buyer address data is sent to or logged by this endpoint — only the postal code
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -88,6 +88,32 @@ CP inexistente → **200** con `found: false` y `settlements: []`. CP mal formad
 El usuario dijo "continua" sin cerrar el punto de licencia. Se avanza con el diseño que no cierra ninguna puerta: **una consulta = un CP**, sin endpoint de volcado ni de búsqueda por nombre, y rate limit que hace inviable reconstruir el catálogo. Si más adelante se decide restringirlo a sesión de checkout, es agregar un middleware, no rehacer nada.
 <!-- SECTION:PLAN:END -->
 
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+**Corrección a un dato reportado en TASK-061.01.** Ningún CP del catálogo tiene dos ciudades distintas — cero, medido sobre las 159,006 filas ignorando vacíos. Los 324 que había contado son CPs donde unos asentamientos traen ciudad y otros la traen vacía (mancha urbana + ranchderías en el mismo código). Consecuencia de diseño: la ciudad **sí** se resuelve a nivel CP, calculada sobre los valores no vacíos, y un comprador en uno de esos 324 CPs la recibe autocompletada en vez de en blanco. La rama que devuelve `null` ante dos ciudades distintas se conservó como defensa ante un cambio río arriba, con su test.
+
+**Trampa encontrada probando, y arreglada.** La llave del cache llevaba solo el vintage del corpus. Al cambiar la forma de la respuesta durante el desarrollo, el endpoint siguió sirviendo el payload viejo desde KV — mismos datos, forma anterior. En producción eso habría sido un deploy que "no hace nada" durante semanas. La llave ahora es `sepomex:s<contrato>:<vintage>:<cp>` y `RESPONSE_SCHEMA_VERSION` se sube al tocar la forma; documentado en el módulo y en `docs/ingenieria/sepomex.md`.
+
+**Prueba de humo contra el Worker local con la D1 real** (`wrangler dev`, corpus 2026-08-06):
+
+| Caso | Resultado |
+|---|---|
+| `01000` | 200, San Ángel / Álvaro Obregón / CDMX, acentos intactos, `Cache-Control: public, max-age=3600` |
+| `09630` | 200, 15 asentamientos, ordenados alfabéticamente |
+| `20174` | 200, ciudad de nivel CP = Aguascalientes, `El Rocío` conserva `city: null` y `zone: Rural` |
+| `99999` | **200** con `found: false` |
+| `1234`, `123456`, `abcde`, `01a00` | **400** `invalid_postal_code` |
+| 120+ consultas desde la misma IP | **429** `rate_limited` |
+| 2ª consulta al mismo CP | ~5 ms, servida de KV |
+
+Tests: 13 nuevos en `postal-codes.test.ts`; suite completa en verde (238/238). Typecheck y lint limpios.
+
+De paso: `createFakeKV()` ignoraba el segundo argumento de `get()`, así que `get(key, 'json')` devolvía el string crudo. Se corrigió en el fake — cualquier test futuro que cachee objetos habría tropezado con lo mismo.
+
+**No desplegado.** El endpoint está en `main` pero no en producción, y producción aún no tiene el corpus (TASK-061.01 quedó bloqueada ahí). Desplegado sin corpus respondería `found: false` a todo — inofensivo, pero inútil. Conviene hacer las dos cosas juntas.
+<!-- SECTION:NOTES:END -->
+
 ## Comments
 
 <!-- COMMENTS:BEGIN -->
@@ -104,3 +130,30 @@ Los datos ya están en D1 local: `sepomex_settlements` (PK `(postal_code, settle
 **Pendiente antes de empezar:** el catálogo se publica "gratuito para uso particular, no estando permitida su comercialización… ni su distribución a terceros". Un endpoint público se acerca a redistribución. Vale resolverlo (o acotar el endpoint) antes de exponerlo. No es asesoría legal.
 ---
 <!-- COMMENTS:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Endpoint público de consulta por CP para autocompletar la dirección de envío. Mergeado a main (`6c1039f`, merge `931ed79`).
+
+`GET /address/postal-codes/:cp` → estado, municipio, ciudad y las colonias reales de ese CP, con su tipo de asentamiento y zona, más el vintage del catálogo.
+
+**Qué cambió**
+
+| Archivo | Qué hace |
+|---|---|
+| `apps/api/src/routes/address.ts` | La ruta: valida el CP antes de tocar KV o D1, rate limit por IP (120/h) y `Cache-Control` para browser/CDN. Sin auth, como `/catalog`. |
+| `apps/api/src/lib/postal-codes.ts` | La lógica, con dependencias inyectadas para que sea testeable sin fake de Drizzle. Cache en KV llaveado por vintage **y** por versión de contrato. |
+| `packages/shared/src/sepomex.ts` | `PostalCodeLookupResponse` / `PostalCodeSettlement`. |
+| `apps/web/src/lib/client-api.ts` | `lookupPostalCode()` tipado, con `AbortSignal`, que devuelve `null` ante fallo de red para que el formulario caiga a captura manual. Lo consume TASK-061.03. |
+| `apps/api/src/test/fake-kv.ts` | El fake ahora honra `get(key, 'json')` como el KV real. |
+
+**Decisiones que vale la pena conocer**
+
+- **Un CP inexistente es 200 con `found: false`**, no un error: fraccionamientos nuevos y erratas son desenlaces normales y el formulario los trata como "escríbelo a mano".
+- **Sin corpus cargado el endpoint degrada**, no revienta. Es el estado real de producción hoy.
+- **La llave del cache lleva dos versiones**: el vintage del catálogo y `RESPONSE_SCHEMA_VERSION`. Sin la segunda, un deploy que cambie la forma del JSON sigue sirviendo el payload anterior durante semanas — se descubrió probando en local, no en producción.
+- **Una consulta = un CP.** No hay volcado, listado ni búsqueda por nombre de colonia; sumado al rate limit, reconstruir el catálogo por esta vía tomaría semanas. Es la contención práctica al punto de términos de uso de la fuente, que sigue abierto como decisión de negocio.
+
+**Pendiente operativo:** desplegar el Worker y cargar el corpus en producción (los dos comandos de TASK-061.01). Conviene hacerlo junto.
+<!-- SECTION:FINAL_SUMMARY:END -->
