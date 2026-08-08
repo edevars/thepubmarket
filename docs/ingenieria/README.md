@@ -42,6 +42,7 @@ ponerse al día sin recargar todo el contexto.
 | ¿Cómo doy de alta un vendedor vetted nuevo? | [`invitacion-sellers.md`](./invitacion-sellers.md) |
 | ¿Cómo sube el vendedor fotos reales del ejemplar y cómo se sirven? | [`fotos-inventario.md`](./fotos-inventario.md) |
 | ¿De dónde salen los datos de carta y cómo agrego otro TCG? | [`catalogo-multijuego.md`](./catalogo-multijuego.md) |
+| ¿De dónde sale el catálogo de códigos postales y cómo lo actualizo? | [`sepomex.md`](./sepomex.md) |
 
 ---
 

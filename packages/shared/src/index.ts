@@ -4,6 +4,11 @@
  * Mantener este paquete mínimo y sin dependencias: es solo un contrato.
  */
 
+// Catálogo SEPOMEX: formato de la fuente y normalización de direcciones. En su
+// propio módulo porque `scripts/import-sepomex.mjs` lo importa directo desde
+// Node (que solo borra los tipos, no resuelve el árbol de este índice).
+export * from './sepomex'
+
 /** Estado de un subsistema verificado por el health check. */
 export type HealthStatus = 'ok' | 'error'
 
