@@ -1,11 +1,11 @@
 ---
 id: TASK-061.01
 title: Load the SEPOMEX postal-code corpus into D1 with a repeatable import
-status: In Progress
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-08-08 01:24'
-updated_date: '2026-08-08 01:49'
+updated_date: '2026-08-08 03:55'
 labels:
   - 'epic:sepomex-address'
 milestone: m-2
@@ -38,7 +38,7 @@ Do not commit the raw multi-MB catalogue file into git history.
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 A versioned Drizzle migration creates the corpus table(s) in packages/db, applies cleanly to a fresh local D1 and to the existing production database, and is additive only (no destructive change to existing tables)
+- [x] #1 A versioned Drizzle migration creates the corpus table(s) in packages/db, applies cleanly to a fresh local D1 and to the existing production database, and is additive only (no destructive change to existing tables)
 - [x] #2 Lookup by 5-digit postal code is indexed and returns every settlement of that CP together with its tipo de asentamiento, municipio, estado and ciudad
 - [x] #3 A documented import script loads the full catalogue end to end and is re-runnable: running it twice leaves the same row count and the same data, with no duplicates
 - [x] #4 The loaded vintage is recorded and readable (catalogue source and load/publication date), so any consumer can report how stale the corpus is
@@ -114,6 +114,14 @@ Tests: 18 nuevos en `sepomex-corpus.test.ts`; suite completa de apps/api en verd
 **Desviación menor del plan:** la ñ se pliega a n en `normalizeAddressPart` (NFD la descompone). Se conservó a propósito — la llave normalizada solo sirve para emparejar y el comprador rara vez teclea la ñ; lo que se muestra sale de la columna sin normalizar. Coincide con el `normalizeCity` que ya existe en `delivery.ts`. Documentado en el módulo y en un test.
 
 **Pendiente, bloqueado:** aplicar la migración y cargar el corpus en la D1 de **producción**. `pnpm db:migrate:remote` lo bloqueó el clasificador de permisos de la sesión; no se intentó rodear. Es AC #1 y son dos comandos (ver Final Summary).
+
+**Producción cerrada (2026-08-08).** Las tres migraciones pendientes (0014, 0015, 0016) se aplicaron a la D1 remota y el corpus se cargó completo:
+
+```
+filas 159,006 | cps 31,877 | versiones 1 | vintage 2026-08-06
+```
+
+Idénticas a las cifras del archivo crudo, así que el AC #1 queda verificado también contra producción. Worker y frontend desplegados; el endpoint de consulta responde con datos reales en `https://api.thepubmarket.com/address/postal-codes/:cp`.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
@@ -145,4 +153,8 @@ La D1 de producción pesa 2.15 MB hoy; el corpus la deja en ~40 MB, muy por deba
 **Dos cosas que el resto de la épica necesita saber:**
 1. **324 CPs tienen asentamientos en más de una ciudad**, así que TASK-061.02 no puede devolver una sola ciudad por CP. Estado y municipio sí son únicos por CP (verificado sobre las 159,006 filas).
 2. **Términos de uso de la fuente:** el catálogo se publica gratuito para uso particular, sin comercialización ni distribución a terceros. Exponerlo en un endpoint público (TASK-061.02) se acerca a redistribución; conviene resolverlo antes de esa task. No es asesoría legal.
+
+---
+
+**Cerrado en producción (2026-08-08).** Migraciones 0014/0015/0016 aplicadas y corpus cargado en la D1 remota: 159,006 asentamientos, 31,877 CPs, vintage 2026-08-06 — las mismas cifras que el archivo de Correos. El paso que quedaba bloqueado ya no lo está.
 <!-- SECTION:FINAL_SUMMARY:END -->
