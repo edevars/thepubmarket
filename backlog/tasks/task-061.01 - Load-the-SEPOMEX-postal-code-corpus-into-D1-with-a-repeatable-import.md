@@ -5,7 +5,7 @@ status: In Progress
 assignee:
   - '@claude'
 created_date: '2026-08-08 01:24'
-updated_date: '2026-08-08 01:48'
+updated_date: '2026-08-08 01:49'
 labels:
   - 'epic:sepomex-address'
 milestone: m-2
@@ -115,3 +115,34 @@ Tests: 18 nuevos en `sepomex-corpus.test.ts`; suite completa de apps/api en verd
 
 **Pendiente, bloqueado:** aplicar la migración y cargar el corpus en la D1 de **producción**. `pnpm db:migrate:remote` lo bloqueó el clasificador de permisos de la sesión; no se intentó rodear. Es AC #1 y son dos comandos (ver Final Summary).
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Corpus SEPOMEX cargado en D1, con refresh de un comando. Mergeado a main (`eae6577`, merge `5190a89`).
+
+**Qué cambió**
+
+| Archivo | Qué hace |
+|---|---|
+| `packages/db/src/schema.ts` + `apps/api/migrations/0014_milky_wolfpack.sql` | `sepomex_settlements` (PK `(postal_code, settlement_id)`, que además es el índice de la consulta caliente) y `sepomex_corpus_meta` (fila única con el vintage). Migración aditiva; no toca ninguna tabla existente. |
+| `packages/shared/src/sepomex.ts` | `parseSepomexCatalog()` + `normalizeAddressPart()`. El normalizador vive aquí, no en el script, porque el importer precalcula las columnas `*_norm` y el Worker consultará contra ellas: dos copias derivarían y romperían el match en silencio. |
+| `scripts/import-sepomex.mjs` | Descarga el export oficial (postback de ASP.NET), descomprime, decodifica latin1, valida la cabecera como contrato y carga con `wrangler d1 execute`. Idempotente por `corpus_version` + barrido. |
+| `apps/api/src/lib/sepomex-corpus.test.ts` | 18 tests del contrato del formato. |
+| `docs/ingenieria/sepomex.md` | Fuente, términos de uso, vintage, procedimiento de refresh y consultas de verificación. (El plan lo llamaba `sepomex-corpus.md`; quedó como `sepomex.md`.) |
+
+**Verificación:** las cifras de D1 coinciden exactamente con el TXT crudo (159,006 asentamientos, 31,877 CPs, 104,045 sin ciudad), acentos intactos, `EXPLAIN QUERY PLAN` confirma búsqueda por índice, y cuatro corridas prueban idempotencia y barrido de versiones viejas. 225/225 tests, typecheck y lint limpios.
+
+**Falta para cerrar (AC #1) — dos comandos contra producción**, bloqueados por el clasificador de permisos de la sesión:
+
+```
+pnpm --filter @thepubmarket/api db:migrate:remote
+node scripts/import-sepomex.mjs --remote
+```
+
+La D1 de producción pesa 2.15 MB hoy; el corpus la deja en ~40 MB, muy por debajo del límite. Hasta que corran, producción no tiene el catálogo y TASK-061.02 no puede consultarlo ahí.
+
+**Dos cosas que el resto de la épica necesita saber:**
+1. **324 CPs tienen asentamientos en más de una ciudad**, así que TASK-061.02 no puede devolver una sola ciudad por CP. Estado y municipio sí son únicos por CP (verificado sobre las 159,006 filas).
+2. **Términos de uso de la fuente:** el catálogo se publica gratuito para uso particular, sin comercialización ni distribución a terceros. Exponerlo en un endpoint público (TASK-061.02) se acerca a redistribución; conviene resolverlo antes de esa task. No es asesoría legal.
+<!-- SECTION:FINAL_SUMMARY:END -->
