@@ -4,6 +4,7 @@ title: Public postal-code lookup API for address autofill
 status: To Do
 assignee: []
 created_date: '2026-08-08 01:24'
+updated_date: '2026-08-08 01:49'
 labels:
   - 'epic:sepomex-address'
 milestone: m-2
@@ -45,3 +46,20 @@ The response shape is shared contract: put the types in `packages/shared` so the
 - [ ] #8 Tests cover: known multi-colonia CP, known single-colonia CP, CP with empty ciudad, unlisted CP, malformed input, and a cache hit
 - [ ] #9 No buyer address data is sent to or logged by this endpoint — only the postal code
 <!-- AC:END -->
+
+## Comments
+
+<!-- COMMENTS:BEGIN -->
+author: @claude (TASK-061.01)
+created: 2026-08-08 01:49
+---
+Dos hallazgos de TASK-061.01, medidos sobre las 159,006 filas del catálogo real, que cambian el diseño de este endpoint:
+
+1. **La ciudad no es función del CP.** 324 CPs tienen asentamientos en más de una ciudad, así que `ciudad` va **por asentamiento** en la respuesta; a nivel CP solo tiene sentido cuando es única. Estado y municipio sí son únicos por CP — ningún CP cruza dos, verificado — así que esos sí pueden ir a nivel CP como dice la descripción.
+2. **Tamaño de la respuesta:** el CP más grande (85203, Ciudad Obregón) trae 291 asentamientos. No es problema, pero el payload no es de tres colonias.
+
+Los datos ya están en D1 local: `sepomex_settlements` (PK `(postal_code, settlement_id)`, que ya sirve la búsqueda por CP sin scan) y `sepomex_corpus_meta` (fila única con el vintage para el AC #6 de esta task). Ver `docs/ingenieria/sepomex.md`.
+
+**Pendiente antes de empezar:** el catálogo se publica "gratuito para uso particular, no estando permitida su comercialización… ni su distribución a terceros". Un endpoint público se acerca a redistribución. Vale resolverlo (o acotar el endpoint) antes de exponerlo. No es asesoría legal.
+---
+<!-- COMMENTS:END -->
