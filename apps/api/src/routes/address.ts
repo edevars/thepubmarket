@@ -39,6 +39,14 @@ const LOOKUP_LIMIT_PER_HOUR = 120
  */
 const BROWSER_CACHE_SECONDS = 60 * 60
 
+/**
+ * Las respuestas de error se declaran NO cacheables explícitamente. Sin una
+ * directiva propia, el CDN aplica sus defaults y un error efímero —un 429, o
+ * un 404 de un deploy a medio propagar— se queda pegado a la URL durante
+ * minutos para todo el que la pida.
+ */
+const NO_CACHE = 'no-store'
+
 export const address = new Hono<AppEnv>()
 
 /**
@@ -54,11 +62,17 @@ address.get('/postal-codes/:postalCode', async (c) => {
   // Se valida antes de tocar KV o D1: un parámetro que no es un CP no llega
   // a la base.
   if (!isValidPostalCode(postalCode)) {
+    c.header('cache-control', NO_CACHE)
     return c.json({ error: 'invalid_postal_code' }, 400)
   }
 
   const ip = clientIp(c.req.header('cf-connecting-ip'))
   if (!(await checkRateLimit(c.env.SESSIONS, 'cp:ip', ip, LOOKUP_LIMIT_PER_HOUR, 60 * 60))) {
+    // Sin esto el edge puede guardar el 429 y servírselo a TODO el mundo que
+    // consulte ese CP: el límite es por IP, pero la llave de cache es la URL.
+    // Un rate limit cacheado estrangula a compradores que nunca lo dispararon
+    // y se diagnostica malísimo.
+    c.header('cache-control', NO_CACHE)
     return c.json({ error: 'rate_limited' }, 429)
   }
 
