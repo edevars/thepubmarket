@@ -14,6 +14,8 @@ import type {
   orders,
   sellerInvitations,
   sellers,
+  sepomexCorpusMeta,
+  sepomexSettlements,
   users,
   webhookEvents,
 } from './schema'
@@ -37,3 +39,7 @@ export type WebhookEventRow = typeof webhookEvents.$inferSelect
 export type NewWebhookEvent = typeof webhookEvents.$inferInsert
 export type CatalogCardRow = typeof catalogCards.$inferSelect
 export type NewCatalogCard = typeof catalogCards.$inferInsert
+export type SepomexSettlementRow = typeof sepomexSettlements.$inferSelect
+export type NewSepomexSettlement = typeof sepomexSettlements.$inferInsert
+export type SepomexCorpusMetaRow = typeof sepomexCorpusMeta.$inferSelect
+export type NewSepomexCorpusMeta = typeof sepomexCorpusMeta.$inferInsert

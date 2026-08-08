@@ -442,6 +442,80 @@ export const catalogCards = sqliteTable(
   ],
 )
 
+// =====================================================================
+// sepomex_settlements — Catálogo Nacional de Códigos Postales (SEPOMEX).
+// Reference data pura: la escribe SOLO el importer y el runtime únicamente
+// lee. No lleva created_at/updated_at porque la fila no tiene historia propia
+// — se reemplaza completa en cada corrida; la procedencia vive en
+// `sepomex_corpus_meta` y en `corpus_version`. Con 159 mil filas, dos enteros
+// por fila no son gratis y no responderían ninguna pregunta.
+// =====================================================================
+export const sepomexSettlements = sqliteTable(
+  'sepomex_settlements',
+  {
+    /** CP de 5 dígitos. Un CP nunca cruza estado ni municipio (verificado). */
+    postalCode: text('postal_code').notNull(),
+    /** Consecutivo del asentamiento dentro del CP (`id_asenta_cpcons`). */
+    settlementId: text('settlement_id').notNull(),
+    settlement: text('settlement').notNull(),
+    /** Colonia, Pueblo, Fraccionamiento, Zona industrial… */
+    settlementType: text('settlement_type').notNull(),
+    municipality: text('municipality').notNull(),
+    state: text('state').notNull(),
+    // NULL en ~2 de cada 3 filas, y NO es función del CP: 324 CPs tienen
+    // asentamientos en más de una ciudad. Por eso la ciudad vive aquí y no en
+    // una tabla por código postal.
+    city: text('city'),
+    /** Urbano | Semiurbano | Rural. */
+    zone: text('zone').notNull(),
+    // Claves numéricas de SEPOMEX. Sobreviven a los cambios de ortografía del
+    // nombre, así que son la llave estable para comparar dos direcciones.
+    stateCode: text('state_code').notNull(),
+    municipalityCode: text('municipality_code').notNull(),
+    cityCode: text('city_code'),
+    // Columnas plegadas (sin acentos, minúsculas) que produce
+    // normalizeAddressPart en @thepubmarket/shared. SQLite no sabe quitar
+    // acentos, así que el match insensible a acentos solo es posible si se
+    // precalcula aquí — y tiene que calcularlo la MISMA función que use el
+    // Worker al consultar, o el índice y la consulta hablan idiomas distintos.
+    settlementNorm: text('settlement_norm').notNull(),
+    municipalityNorm: text('municipality_norm').notNull(),
+    stateNorm: text('state_norm').notNull(),
+    cityNorm: text('city_norm'),
+    /** Vintage que escribió la fila; el importer barre las que no coinciden. */
+    corpusVersion: text('corpus_version').notNull(),
+  },
+  (t) => [
+    // La PK es también el índice de la consulta caliente (WHERE postal_code =
+    // ?), por prefijo izquierdo. No hace falta un índice aparte para el CP.
+    primaryKey({ columns: [t.postalCode, t.settlementId] }),
+    // Resolver "qué municipio es este" desde texto libre (TASK-061.05).
+    index('idx_sepomex_municipality').on(t.stateNorm, t.municipalityNorm),
+  ],
+)
+
+// =====================================================================
+// sepomex_corpus_meta — qué vintage del catálogo está cargado. Fila única.
+// Sin esto no hay forma de saber si las direcciones se están validando contra
+// un catálogo de hace dos años.
+// =====================================================================
+export const sepomexCorpusMeta = sqliteTable(
+  'sepomex_corpus_meta',
+  {
+    id: integer('id').primaryKey(),
+    /** Vintage cargado, en ISO (la fecha de publicación de la fuente). */
+    version: text('version').notNull(),
+    sourceUrl: text('source_url').notNull(),
+    /** Etiqueta literal que publica Correos ("Agosto 6 de 2026"). */
+    publishedLabel: text('published_label'),
+    rowCount: integer('row_count').notNull(),
+    /** SHA-256 del TXT crudo: identifica el archivo exacto que se importó. */
+    fileSha256: text('file_sha256').notNull(),
+    loadedAt: integer('loaded_at').notNull().default(sql`(unixepoch())`),
+  },
+  (t) => [check('sepomex_corpus_meta_singleton', sql`${t.id} = 1`)],
+)
+
 /** Todas las tablas, para pasarle el schema al cliente Drizzle. */
 export const schema = {
   users,
@@ -453,4 +527,6 @@ export const schema = {
   orderItems,
   webhookEvents,
   catalogCards,
+  sepomexSettlements,
+  sepomexCorpusMeta,
 }

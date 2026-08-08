@@ -9,6 +9,10 @@ dist/
 .turbo/
 out/
 
+# Artefactos intermedios de scripts (p.ej. el SQL de 30 MB que genera
+# scripts/import-sepomex.mjs). Se regeneran; nunca se commitean.
+.tmp/
+
 # Cloudflare / Wrangler
 .wrangler/
 .dev.vars
